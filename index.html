@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>名探偵コナン TCG デジタル対戦プロトタイプ</title>
+  <!-- Google Fonts for premium typography -->
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Noto+Sans+JP:wght@300;500;700;900&display=swap" rel="stylesheet">
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Game Container -->
+  <div class="game-container">
+    
+    <!-- Top Header Bar -->
+    <header class="game-header glass">
+      <div class="logo">
+        <span class="logo-eng">DETECTIVE CONAN</span>
+        <span class="logo-jp">カードゲーム PROTOTYPE</span>
+      </div>
+      
+      <div class="turn-indicator">
+        <span class="turn-label">TURN</span>
+        <span id="turn-number-val" class="turn-value">1</span>
+      </div>
+
+      <div class="player-turn-badge active-p1" id="current-player-badge">
+        <span id="current-player-name">Player 1</span>のターン
+      </div>
+
+      <div class="phase-display-container">
+        <span class="phase-badge active" id="phase-auto">AUTO</span>
+        <span class="phase-separator">➔</span>
+        <span class="phase-badge" id="phase-main">MAIN</span>
+        <span class="phase-separator">➔</span>
+        <span class="phase-badge" id="phase-guard">GUARD</span>
+        <span class="phase-separator">➔</span>
+        <span class="phase-badge" id="phase-end">END</span>
+      </div>
+
+      <div class="game-phase-display">
+        <span class="game-phase-label">ゲームフェーズ:</span>
+        <span class="game-phase-value" id="game-phase-value">事件編</span>
+      </div>
+      
+      <div class="header-actions">
+        <button id="btn-next-phase" class="btn btn-primary btn-glow">次のフェイズへ</button>
+        <button id="btn-solve-case" class="btn btn-gold btn-glow">事件解決 (勝利宣言)</button>
+      </div>
+    </header>
+
+    <!-- Main Game Board -->
+    <main class="game-board">
+      
+      <!-- LEFT COLUMN: System / Resource Zones -->
+      <section class="board-column left-column glass">
+        <div class="column-header">システム＆リソース</div>
+
+        <!-- Opponent Info Display -->
+        <div class="opponent-info-section">
+          <div class="opponent-info-header">相手の情報</div>
+          <div class="opponent-info-grid">
+            <div class="opponent-info-item">
+              <span class="opponent-info-label">FILE</span>
+              <span class="opponent-info-value" id="opp-file-count">0</span>
+            </div>
+            <div class="opponent-info-item">
+              <span class="opponent-info-label">証拠</span>
+              <span class="opponent-info-value" id="opp-evidence-count">0</span>
+            </div>
+            <div class="opponent-info-item">
+              <span class="opponent-info-label">手札</span>
+              <span class="opponent-info-value" id="opp-hand-count">0</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="resource-grid">
+          <!-- Case Card Slot -->
+          <div class="zone-wrapper">
+            <span class="zone-label">事件エリア (CASE)</span>
+            <div class="card-slot case-slot empty" id="zone-case" data-zone="caseCard">
+              <span class="slot-placeholder">事件カード</span>
+            </div>
+          </div>
+
+          <!-- Partner Card Slot -->
+          <div class="zone-wrapper">
+            <span class="zone-label">パートナーエリア</span>
+            <div class="card-slot partner-slot empty" id="zone-partner" data-zone="partner">
+              <span class="slot-placeholder">パートナー</span>
+            </div>
+          </div>
+
+          <!-- Deck Slot -->
+          <div class="zone-wrapper">
+            <span class="zone-label">山札 (DECK)</span>
+            <div class="card-slot pile-slot deck-pile" id="zone-deck" data-zone="deck">
+              <div class="pile-count" id="deck-count">0</div>
+              <span class="slot-text">DRAW</span>
+            </div>
+          </div>
+
+          <!-- Remove Area Slot -->
+          <div class="zone-wrapper">
+            <span class="zone-label">リムーブエリア</span>
+            <div class="card-slot pile-slot remove-pile empty" id="zone-remove" data-zone="removeArea">
+              <div class="pile-count" id="remove-count">0</div>
+              <span class="slot-placeholder">REMOVE</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- FILE Area (Resource) -->
+        <div class="file-area-section">
+          <div class="section-title-row">
+            <span class="zone-label">FILEエリア (コスト上限)</span>
+            <span class="file-count-badge" id="file-count">0枚</span>
+          </div>
+          <div class="file-slots-container" id="zone-file" data-zone="fileArea">
+            <!-- Cards stack horizontally here -->
+            <div class="file-empty-placeholder">FILEがありません</div>
+          </div>
+        </div>
+
+        <!-- Evidence Area (Score) -->
+        <div class="evidence-area-section">
+          <div class="section-title-row">
+            <span class="zone-label">証拠エリア (LP)</span>
+            <span class="evidence-count-badge" id="evidence-count">0枚</span>
+          </div>
+          <div class="evidence-slots-container" id="zone-evidence" data-zone="evidenceArea">
+            <div class="evidence-empty-placeholder">証拠がありません</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT COLUMN: Battle Field -->
+      <section class="board-column right-column glass">
+        <div class="column-header">現場 (FIELD) - キャラクター出撃枠</div>
+        
+        <div class="field-slots-container" id="zone-field">
+          <!-- 5 slots for Character cards -->
+          <div class="field-slot-wrapper" data-slot="0">
+            <span class="slot-idx">現場 1</span>
+            <div class="card-slot character-slot empty" data-slot-idx="0" data-zone="field">
+              <span class="slot-placeholder">空き</span>
+            </div>
+          </div>
+          <div class="field-slot-wrapper" data-slot="1">
+            <span class="slot-idx">現場 2</span>
+            <div class="card-slot character-slot empty" data-slot-idx="1" data-zone="field">
+              <span class="slot-placeholder">空き</span>
+            </div>
+          </div>
+          <div class="field-slot-wrapper" data-slot="2">
+            <span class="slot-idx">現場 3</span>
+            <div class="card-slot character-slot empty" data-slot-idx="2" data-zone="field">
+              <span class="slot-placeholder">空き</span>
+            </div>
+          </div>
+          <div class="field-slot-wrapper" data-slot="3">
+            <span class="slot-idx">現場 4</span>
+            <div class="card-slot character-slot empty" data-slot-idx="3" data-zone="field">
+              <span class="slot-placeholder">空き</span>
+            </div>
+          </div>
+          <div class="field-slot-wrapper" data-slot="4">
+            <span class="slot-idx">現場 5</span>
+            <div class="card-slot character-slot empty" data-slot-idx="4" data-zone="field">
+              <span class="slot-placeholder">空き</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sandbox & Game Control Bar -->
+        <div class="control-and-sandbox-panel">
+          <div class="panel-section game-controls">
+            <span class="panel-label">ゲーム操作:</span>
+            <button id="btn-next-hint" class="btn btn-action">ネクストヒント実行</button>
+            <button id="btn-skip-hint-play" class="btn btn-secondary btn-small hide">追加プレイ終了</button>
+            <button id="btn-skip-guard" class="btn btn-secondary btn-small hide">ガードしない</button>
+            <button id="btn-swap-player" class="btn btn-accent">プレイヤー切替 (P1 ⇄ P2)</button>
+          </div>
+          
+          <div class="panel-section sandbox-controls">
+            <span class="panel-label">サンドボックスツール:</span>
+            <button id="sb-btn-draw" class="btn btn-sb">山札ドロー</button>
+            <button id="sb-btn-add-file" class="btn btn-sb">FILE追加</button>
+            <button id="sb-btn-add-evidence" class="btn btn-sb">証拠追加</button>
+            <button id="sb-btn-reset" class="btn btn-danger">ゲームリセット</button>
+          </div>
+        </div>
+
+        <!-- Real-time Event Log Panel -->
+        <div class="log-panel-container">
+          <div class="log-header">
+            <span>アクションログ</span>
+            <button id="btn-clear-logs" class="btn-clear">クリア</button>
+          </div>
+          <div class="log-content" id="log-box">
+            <div class="log-entry system-msg">ゲームを初期化しています...</div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Bottom Hand Row -->
+    <footer class="game-hand-bar glass">
+      <div class="hand-header">
+        <span class="hand-title">手札 (HAND)</span>
+        <span class="hand-count-badge" id="hand-count">0枚</span>
+        <span class="play-indicator-text" id="play-status-msg">手札から1枚使用できます</span>
+      </div>
+      
+      <div class="hand-cards-scrollable" id="zone-hand" data-zone="hand">
+        <!-- Hand cards will render here dynamically -->
+        <div class="hand-empty-placeholder">手札がありません</div>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- Zoom Card Modal Overlay -->
+  <div class="modal-overlay hide" id="zoom-modal">
+    <div class="modal-card-container">
+      <div class="zoom-card-body glass" id="zoom-card-details">
+        <button class="modal-close" id="btn-close-modal">&times;</button>
+        <div class="zoom-flex">
+          <div class="zoom-card-visual" id="zoom-card-frame">
+            <div class="card-level-badge" id="zoom-level">0</div>
+            <div class="card-name-title" id="zoom-name">カード名</div>
+            <div class="card-type-bar" id="zoom-type-color">
+              <span id="zoom-type">Type</span> / <span id="zoom-color">Color</span>
+            </div>
+            <div class="card-illust-placeholder">
+              <span class="card-art-fallback" id="zoom-initials">DC</span>
+            </div>
+            <div class="card-bottom-specs">
+              <div class="spec-ap">AP <span id="zoom-ap">0</span></div>
+              <div class="spec-lp">LP <span id="zoom-lp">0</span></div>
+            </div>
+          </div>
+          <div class="zoom-card-info">
+            <h2 class="zoom-title" id="zoom-info-name">カード名</h2>
+            <div class="zoom-meta-tags">
+              <span class="tag-color" id="zoom-tag-color">Blue</span>
+              <span class="tag-type" id="zoom-tag-type">Character</span>
+            </div>
+            <div class="zoom-traits-row">
+              <strong>特徴:</strong> <span id="zoom-traits">探偵, 高校生</span>
+            </div>
+            <div class="zoom-ability-text">
+              <h3>【効果・テキスト】</h3>
+              <p id="zoom-ability">ここにテキストが入ります。</p>
+            </div>
+            <div class="zoom-contact-abilities" id="zoom-contact-abilities">
+              <h3>【コンタクト能力】</h3>
+              <div class="contact-ability-item" id="zoom-cutin" style="display: none;">
+                <strong>カットイン:</strong> <span id="zoom-cutin-text">-</span>
+              </div>
+              <div class="contact-ability-item" id="zoom-disguise" style="display: none;">
+                <strong>変装:</strong> <span>可能</span>
+              </div>
+            </div>
+            <div class="zoom-action-instructions">
+              <p class="zoom-tip">💡 400ms以上の長押し、またはダブルクリックでこの詳細表示が開きます。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Remove Area Detail Modal -->
+  <div class="modal-overlay hide" id="remove-area-modal">
+    <div class="modal-content glass">
+      <button class="modal-close" id="btn-close-remove-modal">&times;</button>
+      <h2>リムーブエリア</h2>
+      <div class="remove-card-list" id="remove-card-list"></div>
+    </div>
+  </div>
+
+  <!-- Context Menu for Card Actions -->
+  <div class="context-menu hide" id="card-context-menu">
+    <ul class="context-menu-list">
+      <!-- Options will load dynamically based on card and location -->
+      <li data-action="toggle-active">アクティブにする (起立)</li>
+      <li data-action="toggle-sleep">スリープにする (横倒)</li>
+      <li data-action="toggle-stun">スタンにする (逆倒)</li>
+      <li data-action="play-to-field">現場に登場させる (コスト確認)</li>
+      <li data-action="use-event">イベントを使用する</li>
+      <li data-action="reasoning">推理を行う (証拠獲得)</li>
+      <li data-action="action-menu">アクションを行う...</li>
+      <li data-action="move-to-file">FILEエリアへ移動</li>
+      <li data-action="move-to-evidence">証拠エリアへ移動</li>
+      <li data-action="move-to-remove">リムーブする</li>
+      <li data-action="move-to-hand">手札に戻す</li>
+    </ul>
+  </div>
+
+  <!-- Sub-menu for action targets -->
+  <div class="context-menu hide" id="card-action-target-menu">
+    <div class="submenu-title">アクション対象選択</div>
+    <ul class="context-menu-list" id="action-target-list">
+      <!-- targets go here -->
+    </ul>
+    <button class="btn btn-small btn-secondary btn-block" id="btn-cancel-action-target">キャンセル</button>
+  </div>
+
+  <!-- Scripts -->
+  <script src="cards.js?ver=1.1"></script>
+  <script src="state.js?ver=1.1"></script>
+  <script src="app.js?ver=1.1"></script>
+</body>
+</html>
