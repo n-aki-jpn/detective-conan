@@ -814,8 +814,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     cardContextMenu.classList.add("hide");
 
-    // Temporarily allow body overflow to show menu
-    document.body.style.overflow = "visible";
+    // Temporarily allow body overflow to show menu (only on desktop where body is overflow: hidden)
+    if (window.innerWidth > 768) {
+      document.body.style.overflow = "visible";
+    }
 
     cardActionTargetMenu.classList.remove("hide");
   }
@@ -823,8 +825,12 @@ document.addEventListener("DOMContentLoaded", () => {
   function closeAllMenus() {
     cardContextMenu.classList.add("hide");
     cardActionTargetMenu.classList.add("hide");
-    // Restore body overflow
-    document.body.style.overflow = "hidden";
+    // Restore body overflow appropriately
+    if (window.innerWidth > 768) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = ""; // Let CSS (overflow-y: auto) handle it on mobile
+    }
   }
 
   btnCancelActionTarget.addEventListener("click", closeAllMenus);
