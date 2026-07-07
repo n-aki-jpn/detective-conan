@@ -440,13 +440,13 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- CARD INTERACTION INTERACTION EVENTS ---
 
   function attachCardEvents(cardEl, card) {
-    // 1. Long press zoom (400ms)
+    // 1. Long press zoom (500ms)
     cardEl.addEventListener("pointerdown", (e) => {
-      if (e.button !== 0) return; // Only left click
+      if (e.button !== 0 && e.pointerType === "mouse") return; // Allow touch/pen pointers
       clearTimeout(zoomTimeout);
       zoomTimeout = setTimeout(() => {
         openZoomModal(card);
-      }, 400);
+      }, 500);
     });
 
     const clearZoomTimer = () => {
@@ -454,11 +454,14 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     cardEl.addEventListener("pointerup", clearZoomTimer);
+    cardEl.addEventListener("pointermove", clearZoomTimer); // Cancel on drag/move
     cardEl.addEventListener("pointerleave", clearZoomTimer);
     cardEl.addEventListener("dragstart", (e) => {
       clearZoomTimer();
       cardEl.classList.add("dragging");
-      e.dataTransfer.setData("text/plain", card.instanceId);
+      if (e.dataTransfer) {
+        e.dataTransfer.setData("text/plain", card.instanceId);
+      }
     });
     cardEl.addEventListener("dragend", () => {
       cardEl.classList.remove("dragging");
@@ -476,11 +479,12 @@ document.addEventListener("DOMContentLoaded", () => {
       openContextMenu(e, card.instanceId);
     });
 
-    // Tap support for mobile context menu (Left click triggers context menu if it is on the board to allow mobile interactions)
+    // Tap support: click/tap triggers context menu for ALL cards (including hand) to allow easy mobile play
     cardEl.addEventListener("click", (e) => {
       const cardLoc = state.findCard(card.instanceId);
-      if (cardLoc && (cardLoc.area !== "hand" || e.ctrlKey || e.metaKey)) {
+      if (cardLoc) {
         e.preventDefault();
+        e.stopPropagation();
         openContextMenu(e, card.instanceId);
       }
     });

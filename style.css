@@ -1301,3 +1301,205 @@ body {
 .zoom-card-visual.color-red { border-color: var(--color-red); box-shadow: var(--shadow-red); }
 .zoom-card-visual.color-yellow { border-color: var(--color-yellow); box-shadow: var(--shadow-yellow); }
 .zoom-card-visual.color-black { border-color: var(--color-black); box-shadow: var(--shadow-black); }
+
+/* ==========================================================================
+   Responsive Mobile Styling (Smartphone Support)
+   ========================================================================== */
+
+@media (max-width: 768px) {
+  :root {
+    /* Smaller Card Dimensions for Mobile Viewports */
+    --card-width: 62px;
+    --card-height: 87px;
+    --card-zoom-width: 200px;
+    --card-zoom-height: 280px;
+  }
+
+  body {
+    height: auto;
+    min-height: 100vh;
+    overflow-y: auto; /* Allow scrolling on mobile as grid overflows vertical space */
+  }
+
+  .game-container {
+    height: auto;
+    min-height: 100vh;
+    padding: 6px;
+    gap: 6px;
+  }
+
+  /* Game Header Adjustment */
+  .game-header {
+    flex-direction: column;
+    height: auto;
+    padding: 10px;
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .logo {
+    align-items: center;
+  }
+
+  .header-actions {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .header-actions .btn {
+    flex: 1;
+    font-size: 0.75rem;
+    padding: 6px 12px;
+  }
+
+  .turn-indicator,
+  .player-turn-badge,
+  .phase-display-container,
+  .game-phase-display {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0;
+    font-size: 0.7rem;
+    padding: 4px 10px;
+  }
+
+  /* Mobile Grid: System Zones at Top, Field below, Hand at bottom */
+  .game-board {
+    grid-template-columns: 1fr; /* Single column */
+    grid-template-rows: auto auto;
+    gap: 8px;
+  }
+
+  /* System Panel Column */
+  .left-column {
+    overflow-y: visible;
+  }
+
+  .resource-grid {
+    gap: 6px;
+  }
+
+  .card-slot {
+    border-width: 1px;
+  }
+
+  /* mini representations on mobile to fit nicely */
+  .file-card-mini, .evidence-card-mini {
+    width: 36px;
+    height: 48px;
+  }
+
+  .file-slots-container, .evidence-slots-container {
+    min-height: 58px;
+  }
+
+  /* Battle Field Column */
+  .field-slots-container {
+    gap: 6px;
+  }
+
+  .character-slot {
+    max-height: 110px;
+  }
+
+  /* Field details text sizes */
+  .slot-idx {
+    font-size: 0.55rem;
+  }
+
+  /* Control Panel & Sandbox */
+  .control-and-sandbox-panel {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .panel-section {
+    gap: 6px;
+    justify-content: center;
+  }
+
+  .panel-label {
+    width: 100%;
+    text-align: center;
+    margin-bottom: 2px;
+  }
+
+  .btn-sb, .btn-danger {
+    font-size: 0.65rem;
+    padding: 4px 8px;
+  }
+
+  /* Log Area */
+  .log-panel-container {
+    height: 90px;
+  }
+
+  /* Hand Row */
+  .game-hand-bar {
+    height: 140px;
+    padding: 6px;
+    gap: 4px;
+  }
+
+  .hand-cards-scrollable {
+    gap: 8px;
+    padding: 2px 4px;
+  }
+
+  /* Zoom Modal Responsive for touch screens */
+  .zoom-flex {
+    flex-direction: column;
+    gap: 16px;
+    align-items: center;
+  }
+
+  .modal-card-container {
+    max-width: 340px;
+    width: 95%;
+  }
+
+  .zoom-card-body {
+    padding: 16px;
+    max-height: 85vh;
+    overflow-y: auto;
+  }
+
+  .zoom-card-visual {
+    width: var(--card-zoom-width);
+    height: var(--card-zoom-height);
+  }
+
+  .card-level-badge {
+    width: 24px;
+    height: 24px;
+    font-size: 0.9rem;
+    top: 4px;
+    left: 4px;
+  }
+
+  .zoom-title {
+    font-size: 1.1rem;
+    margin-bottom: 4px;
+    text-align: center;
+  }
+
+  .zoom-traits-row, .zoom-ability-text {
+    margin-bottom: 8px;
+  }
+
+  .zoom-ability-text, .zoom-contact-abilities {
+    padding: 8px;
+  }
+
+  /* Larger touch targets for context menu on mobile */
+  .context-menu {
+    width: 240px; /* Wider to avoid truncation on mobile */
+  }
+
+  .context-menu-list li {
+    padding: 12px 18px; /* Taller touch targets */
+    font-size: 0.85rem; /* Larger font */
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  }
+}
