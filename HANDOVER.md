@@ -112,6 +112,13 @@
 **修正**:
 - `guardPhase`をリセットする前に`attackerPlayerIndex`をローカル変数に保存し、その保存した変数を使用して`turnOwner`を設定するように修正。
 
+### 問題13: createEmptyPlayerState が未定義による初期化エラー
+**原因**:
+- state.js の更新やマージの過程で、`createEmptyPlayerState` や `addLog`、`subscribe` などのコアなヘルパー関数が誤って削除されていたため、ゲーム状態のリセット時に `TypeError: this.createEmptyPlayerState is not a function` エラーが発生していた。
+
+**修正**:
+- state.js に失われていた `createEmptyPlayerState`、`addLog`、`triggerStateChange`、`findCard`、`drawCard`、`declareDefeat` などのヘルパー関数をクラスメソッドとして復元・定義した。
+
 ## 次に確認すべきこと
 
 1. **動作確認**: ブラウザをハードリロード（Cmd+Shift+R）して以下を確認
@@ -189,6 +196,11 @@ conan-tcg-prototype/
 - [x] コンタクト中のカットイン・変装機能を実装（state.jsにuseCutIn/useDisguise関数、app.jsにUI、カードデータにcutIn/disguiseプロパティ）
 - [x] モバイル対応を実装（タッチイベント対応、レスポンシブCSS、ビューポート調整）
 - [x] 「ガードしない」ボタンを自分(Player1)の現場という文字列の横に移動
+- [x] カットインと変装のバグを修正し、公式ルールに合わせて調整
+- [x] アクションログが更新されない問題を修正
+- [x] `createEmptyPlayerState`が`reset`関数から正しく呼び出せるように修正
+- [x] `state.subscribe`関数がクラスメソッドとして定義されるように修正
+- [x] `initGame`関数がクラスメソッドとして定義されるように修正
 
 ## 注意事項
 - 毎回作業終了時に必ず引き継ぎ書（HANDOVER.md）を更新すること（settings.md参照）

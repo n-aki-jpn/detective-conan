@@ -942,4 +942,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Force initial render
   renderBoard();
+
+  // Add a slight delay to ensure all DOM elements are rendered before initial logging
+  setTimeout(renderLogs, 100);
 });

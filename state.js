@@ -49,7 +49,7 @@ class ConanTCGState {
       cutInUsed: false, // カットイン使用済みフラグ
       disguiseUsed: false // 変装使用済みフラグ
     };
-  }
+   }
 
   createEmptyPlayerState(name, preferredColor) {
     return {
@@ -63,6 +63,7 @@ class ConanTCGState {
       evidenceArea: [],
       removeArea: [],
       field: Array(5).fill(null), // 5 character slots
+      gamePhase: GAME_PHASES.INCIDENT
     };
   }
 
@@ -74,15 +75,10 @@ class ConanTCGState {
     this.triggerStateChange();
   }
 
-  subscribe(callback) {
-    this.onStateChangeCallbacks.push(callback);
-  }
-
   triggerStateChange() {
     this.onStateChangeCallbacks.forEach(cb => cb(this));
   }
 
-  // Find a card and its location in the current state
   findCard(instanceId) {
     for (let pIdx = 0; pIdx < 2; pIdx++) {
       const player = this.players[pIdx];
@@ -129,50 +125,159 @@ class ConanTCGState {
     return null;
   }
 
-  // Initialize a new game
-  initGame(p1PartnerId, p1CaseId, p2PartnerId, p2CaseId) {
-    this.reset();
-    
-    // Explicitly reset game phases for both players
-    this.players[0].gamePhase = GAME_PHASES.INCIDENT;
-    this.players[1].gamePhase = GAME_PHASES.INCIDENT;
-    
-    // Set Partners & Cases
-    const p1PartnerData = CARD_DATABASE.find(c => c.id === p1PartnerId);
-    const p1CaseData = CARD_DATABASE.find(c => c.id === p1CaseId);
-    const p2PartnerData = CARD_DATABASE.find(c => c.id === p2PartnerId);
-    const p2CaseData = CARD_DATABASE.find(c => c.id === p2CaseId);
-
-    if (p1PartnerData && p1CaseData && p2PartnerData && p2CaseData) {
-      this.players[0].partner = { ...p1PartnerData, instanceId: "P1_PARTNER", state: "active", nameDeclaring: false };
-      this.players[0].caseCard = { ...p1CaseData, instanceId: "P1_CASE", state: "active", nameDeclaring: false };
-      this.players[1].partner = { ...p2PartnerData, instanceId: "P2_PARTNER", state: "active", nameDeclaring: false };
-      this.players[1].caseCard = { ...p2CaseData, instanceId: "P2_CASE", state: "active", nameDeclaring: false };
+  drawCard(playerIndex, log = true) {
+    const player = this.players[playerIndex];
+    const card = this.popCardFromDeck(playerIndex);
+    if (card) {
+      card.state = "active";
+      player.hand.push(card);
+      if (log) this.addLog(`${player.name}が山札から1枚ドローしました。（残高: ${player.deck.length}枚）`);
+      return card;
+    } else {
+      this.addLog(`警告: ${player.name}の山札が空でリフレッシュもできませんでした。`);
+      return null;
     }
-
-    // Generate starter decks
-    this.players[0].deck = generateStarterDeck(p1CaseData.color);
-    this.players[1].deck = generateStarterDeck(p2CaseData.color);
-
-    // Initial hand: draw 5 cards for both players
-    for (let i = 0; i < 5; i++) {
-      this.drawCard(0, false);
-      this.drawCard(1, false);
-    }
-
-    this.addLog("ゲームを開始しました！初期手札5枚をドローしました。");
-    
-    // Start Turn 1
-    this.startTurn();
   }
 
-  // Declare Defeat
   declareDefeat(playerIndex, reason) {
     const player = this.players[playerIndex];
     const winner = this.players[1 - playerIndex];
     this.addLog(`★敗北宣告★ ${player.name} は${reason}`);
     alert(`【ゲーム終了】\n${winner.name}の勝利です！\n${player.name}は${reason}`);
     this.triggerStateChange();
+  }
+
+  // ダミー関数：カットインや変装時にUIへ通知するための関数。現状はログ出力のみ。
+  // 実際のゲームでは、ここでカットイン演出や変装演出を行う
+  triggerCutIn(type, card, effect) {
+    this.addLog(`🎬 ${card.name} が ${type === "cutin" ? "カットイン" : "変装"} を発動！ 効果: ${effect}`);
+    this.triggerStateChange(); // UIを再描画して、例えばカットイン中のAP変化を反映させる
+  }
+
+  // Use Cut-in during contact
+  useCutIn(playerIndex, cardInstanceId) {
+    if (!this.guardPhase.active || this.currentPhase !== PHASES.GUARD) {
+      this.addLog("カットインはガードフェーズ中のみ使用できます。");
+      return false;
+    }
+
+    if (this.guardPhase.cutInUsed) {
+      this.addLog("カットインは1回のコンタクトにつき1枚だけ使用できます。");
+      return false;
+    }
+
+    const cardLoc = this.findCard(cardInstanceId);
+    if (!cardLoc || cardLoc.playerIndex !== playerIndex || cardLoc.area !== "hand") {
+      this.addLog("手札からカットインカードを選択してください。");
+      return false;
+    }
+
+    const card = cardLoc.card;
+    if (!card.cutIn) {
+      this.addLog("このカードはカットイン能力を持っていません。");
+      return false;
+    }
+
+    // Remove from hand and add to remove area
+    const player = this.players[playerIndex];
+    player.hand.splice(cardLoc.index, 1);
+    player.removeArea.push(card);
+
+    // Apply cut-in effect
+    const attackerLoc = this.findCard(this.guardPhase.attackerId);
+    const defenderLoc = this.findCard(this.guardPhase.defenderId); // ガードキャラのAPを増やす場合
+
+    let targetChar = null;
+    if (attackerLoc && attackerLoc.playerIndex === playerIndex) {
+      targetChar = attackerLoc.card; // 自分が攻撃者なら攻撃キャラに適用
+    } else if (defenderLoc && defenderLoc.playerIndex === playerIndex) {
+      targetChar = defenderLoc.card; // 自分が防御者なら防御キャラに適用
+    } else {
+      this.addLog("カットイン対象のキャラが見つかりません。（自分とコンタクト中のキャラ）");
+      return false;
+    }
+
+    const originalAP = targetChar.ap;
+
+    // Parse cut-in effect (e.g., "AP＋2000")
+    if (card.cutIn.includes("AP＋")) {
+      const apBonus = parseInt(card.cutIn.replace("AP＋", ""));
+      targetChar.ap += apBonus;
+      this.addLog(`${player.name} が ${card.name} をカットインで使用！ ${targetChar.name} のAPを +${apBonus} しました。（${originalAP} → ${targetChar.ap}）`);
+    }
+
+    this.guardPhase.cutInUsed = true;
+    this.triggerCutIn("cutin", card, card.cutIn);
+    return true;
+  }
+
+  // Use Disguise during contact
+  useDisguise(playerIndex, cardInstanceId) {
+    if (!this.guardPhase.active || this.currentPhase !== PHASES.GUARD) {
+      this.addLog("変装はガードフェーズ中のみ使用できます。");
+      return false;
+    }
+
+    if (this.guardPhase.disguiseUsed) {
+      this.addLog("変装は1回のコンタクトにつき1枚だけ使用できます。");
+      return false;
+    }
+
+    const cardLoc = this.findCard(cardInstanceId);
+    if (!cardLoc || cardLoc.playerIndex !== playerIndex || cardLoc.area !== "hand") {
+      this.addLog("手札から変装カードを選択してください。");
+      return false;
+    }
+
+    const card = cardLoc.card;
+    if (!card.disguise) {
+      this.addLog("このカードは変装能力を持っていません。");
+      return false;
+    }
+    
+    // 変装元のキャラを特定
+    let originalCharLoc = null;
+    if (playerIndex === this.guardPhase.attackerPlayerIndex) {
+      originalCharLoc = this.findCard(this.guardPhase.attackerId);
+    } else if (playerIndex === this.guardPhase.defenderPlayerIndex) {
+      originalCharLoc = this.findCard(this.guardPhase.defenderId);
+    }
+
+    if (!originalCharLoc || originalCharLoc.area !== "field") {
+      this.addLog("変装対象のキャラが現場にいません。");
+      return false;
+    }
+
+    const player = this.players[playerIndex];
+    const originalCard = originalCharLoc.card;
+
+    // 元のカードの状態や効果を引き継ぐ
+    card.state = originalCard.state; // 状態を引き継ぐ
+    card.nameDeclaring = originalCard.nameDeclaring; // 名乗り状態を引き継ぐ
+    card.ap = originalCard.ap; // 現在のAPを引き継ぐ
+    // その他の効果があれば、ここで引き継ぎロジックを追加
+
+    // 手札から変装カードを削除
+    player.hand.splice(cardLoc.index, 1);
+
+    // 現場のキャラを変装カードに入れ替える
+    player.field[originalCharLoc.index] = card;
+
+    // 元のカードを裏向きで山札の下に戻す
+    originalCard.state = "facedown";
+    player.deck.unshift(originalCard); // 山札の下に追加
+
+    // ガードフェーズの参照を更新
+    if (playerIndex === this.guardPhase.attackerPlayerIndex) {
+      this.guardPhase.attackerId = card.instanceId;
+    } else {
+      this.guardPhase.defenderId = card.instanceId;
+    }
+
+    this.guardPhase.disguiseUsed = true;
+    this.addLog(`${player.name} が ${card.name} で変装！ ${originalCard.name} と入れ替わりました。`);
+    this.triggerCutIn("disguise", card, "変装！");
+    return true;
   }
 
   // Refresh deck from remove area
@@ -197,38 +302,60 @@ class ConanTCGState {
   }
 
   // Pop a card from deck, refreshing if empty, or declaring defeat if remove area is also empty
-  popCardFromDeck(playerIndex) {
-    const player = this.players[playerIndex];
-    if (player.deck.length === 0) {
-      if (player.removeArea.length === 0) {
-        this.declareDefeat(playerIndex, "山札がなく、リムーブエリアも0枚のため敗北しました。");
-        return null;
-      }
-      this.refreshDeckFromRemoveArea(playerIndex);
-    }
-    return player.deck.pop();
-  }
+   popCardFromDeck(playerIndex) {
+     const player = this.players[playerIndex];
+     if (player.deck.length === 0) {
+       if (player.removeArea.length === 0) {
+         this.declareDefeat(playerIndex, "山札がなく、リムーブエリアも0枚のため敗北しました。");
+         return null;
+       }
+       this.refreshDeckFromRemoveArea(playerIndex);
+     }
+     return player.deck.pop();
+   }
 
-  // Draw card from deck
-  drawCard(playerIndex, log = true) {
-    const player = this.players[playerIndex];
-    const card = this.popCardFromDeck(playerIndex);
-    if (card) {
-      card.state = "active";
-      player.hand.push(card);
-      if (log) this.addLog(`${player.name}が山札から1枚ドローしました。（残高: ${player.deck.length}枚）`);
-      return card;
-    } else {
-      this.addLog(`警告: ${player.name}の山札が空でリフレッシュもできませんでした。`);
-      return null;
-    }
-  }
+   // Initialize a new game
+   initGame(p1PartnerId, p1CaseId, p2PartnerId, p2CaseId) {
+     this.reset();
+     
+     // Explicitly reset game phases for both players
+     this.players[0].gamePhase = GAME_PHASES.INCIDENT;
+     this.players[1].gamePhase = GAME_PHASES.INCIDENT;
+     
+     // Set Partners & Cases
+     const p1PartnerData = CARD_DATABASE.find(c => c.id === p1PartnerId);
+     const p1CaseData = CARD_DATABASE.find(c => c.id === p1CaseId);
+     const p2PartnerData = CARD_DATABASE.find(c => c.id === p2PartnerId);
+     const p2CaseData = CARD_DATABASE.find(c => c.id === p2CaseId);
 
-  // Auto Phase Automations
-  startTurn() {
-    const activePlayer = this.players[this.turnOwner];
-    this.currentPhase = PHASES.AUTO;
-    this.addLog(`${activePlayer.name}のターン ${this.turnNumber} (オートフェイズ開始)`);
+     if (p1PartnerData && p1CaseData && p2PartnerData && p2CaseData) {
+       this.players[0].partner = { ...p1PartnerData, instanceId: "P1_PARTNER", state: "active", nameDeclaring: false };
+       this.players[0].caseCard = { ...p1CaseData, instanceId: "P1_CASE", state: "active", nameDeclaring: false };
+       this.players[1].partner = { ...p2PartnerData, instanceId: "P2_PARTNER", state: "active", nameDeclaring: false };
+       this.players[1].caseCard = { ...p2CaseData, instanceId: "P2_CASE", state: "active", nameDeclaring: false };
+     }
+
+     // Generate starter decks
+     this.players[0].deck = generateStarterDeck(p1CaseData.color);
+     this.players[1].deck = generateStarterDeck(p2CaseData.color);
+
+     // Initial hand: draw 5 cards for both players
+     for (let i = 0; i < 5; i++) {
+       this.drawCard(0, false);
+       this.drawCard(1, false);
+     }
+
+     this.addLog("ゲームを開始しました！初期手札5枚をドローしました。");
+     
+     // Start Turn 1
+     this.startTurn();
+   }
+
+   // Auto Phase Automations
+   startTurn() {
+     const activePlayer = this.players[this.turnOwner];
+     this.currentPhase = PHASES.AUTO;
+     this.addLog(`${activePlayer.name}のターン ${this.turnNumber} (オートフェイズ開始)`);
 
     // 1. Untap (Stand cards)
     // Stand partners
@@ -999,28 +1126,33 @@ class ConanTCGState {
       this.addLog(`[サンドボックス] ${card.name} を ${targetPlayer.name} の山札に移動しました。`);
     }
 
-    this.triggerStateChange();
-    return true;
-  }
+     this.triggerStateChange();
+     return true;
+   }
 
-  // Toggle card rotation state
-  toggleCardState(instanceId, stateType) {
-    const loc = this.findCard(instanceId);
-    if (!loc) return false;
+   // Register a callback function to be called when the state changes
+   subscribe(callback) {
+     this.onStateChangeCallbacks.push(callback);
+   }
 
-    const card = loc.card;
-    if (stateType === "active" || stateType === "sleep" || stateType === "stun") {
-      const oldState = card.state;
-      card.state = stateType;
-      this.addLog(`[サンドボックス] ${card.name} の状態を ${oldState} から ${stateType} に変更しました。`);
-      this.triggerStateChange();
-      return true;
-    }
-    return false;
-  }
-}
+   // Toggle card rotation state
+   toggleCardState(instanceId, stateType) {
+     const loc = this.findCard(instanceId);
+     if (!loc) return false;
 
-if (typeof window !== "undefined") {
-  window.PHASES = PHASES;
-  window.ConanTCGState = ConanTCGState;
-}
+     const card = loc.card;
+     if (stateType === "active" || stateType === "sleep" || stateType === "stun") {
+       const oldState = card.state;
+       card.state = stateType;
+       this.addLog(`[サンドボックス] ${card.name} の状態を ${oldState} から ${stateType} に変更しました。`);
+       this.triggerStateChange();
+       return true;
+     }
+     return false;
+   }
+ }
+
+ if (typeof window !== "undefined") {
+   window.PHASES = PHASES;
+   window.ConanTCGState = ConanTCGState;
+ }
