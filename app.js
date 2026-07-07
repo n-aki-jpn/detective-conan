@@ -297,20 +297,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Render Field (Divide Field section into Opponent Field at top, Player Field at bottom)
     zoneField.innerHTML = "";
-    
-    // Opponent Row Header
-    const oppHeader = document.createElement("div");
-    oppHeader.className = "field-row-header";
-    oppHeader.innerHTML = `<span>相手 (${opponentPlayer.name}) の現場</span>`;
-    oppHeader.style.gridColumn = "span 5";
-    oppHeader.style.fontSize = "0.6rem";
-    oppHeader.style.color = "var(--text-secondary)";
-    oppHeader.style.borderBottom = "1px solid rgba(255,255,255,0.03)";
-    oppHeader.style.paddingBottom = "2px";
-    oppHeader.style.marginBottom = "5px";
-    zoneField.appendChild(oppHeader);
 
-    // Opponent Field slots (Rendered from active player's viewpoint, slots 0 to 4)
+    // Opponent Field slots (Rendered from active player\'s viewpoint, slots 0 to 4)
+    const oppFieldInfo = document.createElement("div");
+    oppFieldInfo.className = "player-field-info";
+    oppFieldInfo.style.gridColumn = "span 5";
+    oppFieldInfo.innerHTML = `<span class="player-field-label">相手 (${opponentPlayer.name}) の現場</span>`;
+    zoneField.appendChild(oppFieldInfo);
+
     for (let i = 0; i < 5; i++) {
       const oppSlot = document.createElement("div");
       oppSlot.className = "card-slot character-slot opponent-field-slot empty";
@@ -335,19 +329,18 @@ document.addEventListener("DOMContentLoaded", () => {
     fieldDivider.style.height = "10px";
     zoneField.appendChild(fieldDivider);
 
-    // Active Player Row Header
-    const activeHeader = document.createElement("div");
-    activeHeader.className = "field-row-header";
-    activeHeader.innerHTML = `<span>自分 (${activePlayer.name}) の現場</span>`;
-    activeHeader.style.gridColumn = "span 5";
-    activeHeader.style.fontSize = "0.6rem";
-    activeHeader.style.color = "var(--color-blue)";
-    activeHeader.style.borderBottom = "1px solid rgba(0, 136, 255, 0.1)";
-    activeHeader.style.paddingBottom = "2px";
-    activeHeader.style.marginBottom = "5px";
-    zoneField.appendChild(activeHeader);
+    // Active Player Field slots
+    const playerFieldInfo = document.createElement("div");
+    playerFieldInfo.className = "player-field-info";
+    playerFieldInfo.style.gridColumn = "span 5";
+    playerFieldInfo.innerHTML = `<span class="player-field-label">自分 (${activePlayer.name}) の現場</span>`;
 
-    // Player Field slots
+    // Append the skip guard button inside playerFieldInfo for better positioning
+    if (btnSkipGuard) {
+      playerFieldInfo.appendChild(btnSkipGuard);
+    }
+    zoneField.appendChild(playerFieldInfo);
+
     for (let i = 0; i < 5; i++) {
       const playSlot = document.createElement("div");
       playSlot.className = "card-slot character-slot player-field-slot empty";

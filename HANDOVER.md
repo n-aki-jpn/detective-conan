@@ -188,6 +188,7 @@ conan-tcg-prototype/
 - [x] カットイン機能を実装（HTML/CSS/JS、登場・推理・アクション・ガード・勝利・敗北時のカットイン）
 - [x] コンタクト中のカットイン・変装機能を実装（state.jsにuseCutIn/useDisguise関数、app.jsにUI、カードデータにcutIn/disguiseプロパティ）
 - [x] モバイル対応を実装（タッチイベント対応、レスポンシブCSS、ビューポート調整）
+- [x] 「ガードしない」ボタンを自分(Player1)の現場という文字列の横に移動
 
 ## 注意事項
 - 毎回作業終了時に必ず引き継ぎ書（HANDOVER.md）を更新すること（settings.md参照）

@@ -48,6 +48,8 @@
       <div class="header-actions">
         <button id="btn-next-phase" class="btn btn-primary btn-glow">次のフェイズへ</button>
         <button id="btn-solve-case" class="btn btn-gold btn-glow">事件解決 (勝利宣言)</button>
+        <button id="btn-skip-hint-play" class="btn btn-secondary btn-small hide">追加プレイ終了</button>
+        <button id="btn-swap-player" class="btn btn-accent btn-small">プレイヤー切替</button>
       </div>
     </header>
 
@@ -97,51 +99,58 @@
           <!-- Deck Slot -->
           <div class="zone-wrapper">
             <span class="zone-label">山札 (DECK)</span>
-            <div class="card-slot pile-slot deck-pile" id="zone-deck" data-zone="deck">
-              <div class="pile-count" id="deck-count">0</div>
-              <span class="slot-text">DRAW</span>
+            <div class="deck-count-display" id="zone-deck" data-zone="deck">
+              <span class="count-number" id="deck-count">0</span>
             </div>
           </div>
 
           <!-- Remove Area Slot -->
           <div class="zone-wrapper">
             <span class="zone-label">リムーブエリア</span>
-            <div class="card-slot pile-slot remove-pile empty" id="zone-remove" data-zone="removeArea">
-              <div class="pile-count" id="remove-count">0</div>
-              <span class="slot-placeholder">REMOVE</span>
+            <div class="remove-count-display" id="zone-remove" data-zone="removeArea">
+              <span class="count-number" id="remove-count">0</span>
             </div>
           </div>
         </div>
 
-        <!-- FILE Area (Resource) -->
-        <div class="file-area-section">
-          <div class="section-title-row">
-            <span class="zone-label">FILEエリア (コスト上限)</span>
-            <span class="file-count-badge" id="file-count">0枚</span>
+        <!-- Real-time Event Log Panel -->
+        <div class="log-panel-container">
+          <div class="log-header">
+            <span>アクションログ</span>
+            <button id="btn-clear-logs" class="btn-clear">クリア</button>
           </div>
-          <div class="file-slots-container" id="zone-file" data-zone="fileArea">
-            <!-- Cards stack horizontally here -->
-            <div class="file-empty-placeholder">FILEがありません</div>
+          <div class="log-content" id="log-box">
+            <div class="log-entry system-msg">ゲームを初期化しています...</div>
           </div>
         </div>
 
-        <!-- Evidence Area (Score) -->
-        <div class="evidence-area-section">
+        <!-- Sandbox Tools -->
+        <div class="sandbox-tools-section">
           <div class="section-title-row">
-            <span class="zone-label">証拠エリア (LP)</span>
-            <span class="evidence-count-badge" id="evidence-count">0枚</span>
+            <span class="zone-label">サンドボックスツール</span>
           </div>
-          <div class="evidence-slots-container" id="zone-evidence" data-zone="evidenceArea">
-            <div class="evidence-empty-placeholder">証拠がありません</div>
+          <div class="sandbox-buttons-container">
+            <button id="sb-btn-draw" class="btn btn-sb">山札ドロー</button>
+            <button id="sb-btn-add-file" class="btn btn-sb">FILE追加</button>
+            <button id="sb-btn-add-evidence" class="btn btn-sb">証拠追加</button>
+            <button id="sb-btn-reset" class="btn btn-danger">ゲームリセット</button>
           </div>
         </div>
+
       </section>
 
       <!-- RIGHT COLUMN: Battle Field -->
       <section class="board-column right-column glass">
-        <div class="column-header">現場 (FIELD) - キャラクター出撃枠</div>
+        <div class="column-header">
+          <span>現場 (FIELD) - キャラクター出撃枠</span>
+          <button id="btn-skip-guard" class="btn btn-secondary btn-small hide">ガードしない</button>
+        </div>
         
         <div class="field-slots-container" id="zone-field">
+          <div class="player-field-info">
+            <span class="player-field-label">Player 1 の現場</span>
+            <button id="btn-skip-guard" class="btn btn-secondary btn-small hide">ガードしない</button>
+          </div>
           <!-- 5 slots for Character cards -->
           <div class="field-slot-wrapper" data-slot="0">
             <span class="slot-idx">現場 1</span>
@@ -175,33 +184,30 @@
           </div>
         </div>
 
-        <!-- Sandbox & Game Control Bar -->
-        <div class="control-and-sandbox-panel">
-          <div class="panel-section game-controls">
-            <span class="panel-label">ゲーム操作:</span>
-            <button id="btn-next-hint" class="btn btn-action">ネクストヒント実行</button>
-            <button id="btn-skip-hint-play" class="btn btn-secondary btn-small hide">追加プレイ終了</button>
-            <button id="btn-skip-guard" class="btn btn-secondary btn-small hide">ガードしない</button>
-            <button id="btn-swap-player" class="btn btn-accent">プレイヤー切替 (P1 ⇄ P2)</button>
+        <!-- FILE and Evidence Areas (Horizontal) -->
+        <div class="file-evidence-horizontal">
+          <!-- FILE Area (Resource) -->
+          <div class="file-area-section">
+            <div class="section-title-row">
+              <span class="zone-label">FILEエリア (コスト上限)</span>
+              <span class="file-count-badge" id="file-count">0枚</span>
+              <button id="btn-next-hint" class="btn btn-action btn-small">ネクストヒント</button>
+            </div>
+            <div class="file-slots-container" id="zone-file" data-zone="fileArea">
+              <!-- Cards stack horizontally here -->
+              <div class="file-empty-placeholder">FILEがありません</div>
+            </div>
           </div>
-          
-          <div class="panel-section sandbox-controls">
-            <span class="panel-label">サンドボックスツール:</span>
-            <button id="sb-btn-draw" class="btn btn-sb">山札ドロー</button>
-            <button id="sb-btn-add-file" class="btn btn-sb">FILE追加</button>
-            <button id="sb-btn-add-evidence" class="btn btn-sb">証拠追加</button>
-            <button id="sb-btn-reset" class="btn btn-danger">ゲームリセット</button>
-          </div>
-        </div>
 
-        <!-- Real-time Event Log Panel -->
-        <div class="log-panel-container">
-          <div class="log-header">
-            <span>アクションログ</span>
-            <button id="btn-clear-logs" class="btn-clear">クリア</button>
-          </div>
-          <div class="log-content" id="log-box">
-            <div class="log-entry system-msg">ゲームを初期化しています...</div>
+          <!-- Evidence Area (Score) -->
+          <div class="evidence-area-section">
+            <div class="section-title-row">
+              <span class="zone-label">証拠エリア (LP)</span>
+              <span class="evidence-count-badge" id="evidence-count">0枚</span>
+            </div>
+            <div class="evidence-slots-container" id="zone-evidence" data-zone="evidenceArea">
+              <div class="evidence-empty-placeholder">証拠がありません</div>
+            </div>
           </div>
         </div>
       </section>
