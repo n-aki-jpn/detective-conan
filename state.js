@@ -184,16 +184,20 @@ class ConanTCGState {
     player.removeArea.push(card);
 
     // Apply cut-in effect
-    const attackerLoc = this.findCard(this.guardPhase.attackerId);
-    const defenderLoc = this.findCard(this.guardPhase.defenderId); // ガードキャラのAPを増やす場合
-
+    // コンタクト中の自分側のキャラのAPを増やす
     let targetChar = null;
-    if (attackerLoc && attackerLoc.playerIndex === playerIndex) {
-      targetChar = attackerLoc.card; // 自分が攻撃者なら攻撃キャラに適用
-    } else if (defenderLoc && defenderLoc.playerIndex === playerIndex) {
-      targetChar = defenderLoc.card; // 自分が防御者なら防御キャラに適用
-    } else {
+    if (playerIndex === this.guardPhase.attackerPlayerIndex) {
+      targetChar = this.findCard(this.guardPhase.attackerId)?.card;
+    } else if (playerIndex === this.guardPhase.defenderPlayerIndex) {
+      // ガード中のキャラにカットインを使用した場合、そのガードキャラのAPを増やす
+      targetChar = this.findCard(this.guardPhase.defenderId)?.card;
+    }
+
+    if (!targetChar) {
       this.addLog("カットイン対象のキャラが見つかりません。（自分とコンタクト中のキャラ）");
+      // エラー発生時はカードを手札に戻す
+      player.removeArea.pop(); 
+      player.hand.push(card);
       return false;
     }
 
@@ -208,6 +212,7 @@ class ConanTCGState {
 
     this.guardPhase.cutInUsed = true;
     this.triggerCutIn("cutin", card, card.cutIn);
+    this.triggerStateChange(); // UIを更新してAP変更を反映
     return true;
   }
 
@@ -235,16 +240,20 @@ class ConanTCGState {
       return false;
     }
     
-    // 変装元のキャラを特定
+    // 変装元のキャラを特定 (コンタクト中の自分側のキャラ)
     let originalCharLoc = null;
+    let targetCharIdInGuardPhase = null;
+
     if (playerIndex === this.guardPhase.attackerPlayerIndex) {
-      originalCharLoc = this.findCard(this.guardPhase.attackerId);
+      targetCharIdInGuardPhase = this.guardPhase.attackerId;
     } else if (playerIndex === this.guardPhase.defenderPlayerIndex) {
-      originalCharLoc = this.findCard(this.guardPhase.defenderId);
+      targetCharIdInGuardPhase = this.guardPhase.defenderId;
     }
 
-    if (!originalCharLoc || originalCharLoc.area !== "field") {
-      this.addLog("変装対象のキャラが現場にいません。");
+    originalCharLoc = this.findCard(targetCharIdInGuardPhase);
+
+    if (!originalCharLoc || originalCharLoc.area !== "field" || originalCharLoc.playerIndex !== playerIndex) {
+      this.addLog("変装対象のキャラが現場にいません。（自分とコンタクト中のキャラ）");
       return false;
     }
 
@@ -277,6 +286,7 @@ class ConanTCGState {
     this.guardPhase.disguiseUsed = true;
     this.addLog(`${player.name} が ${card.name} で変装！ ${originalCard.name} と入れ替わりました。`);
     this.triggerCutIn("disguise", card, "変装！");
+    this.triggerStateChange(); // UIを更新してキャラの入れ替わりを反映
     return true;
   }
 

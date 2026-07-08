@@ -461,26 +461,38 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // 2. Double click zoom
-    cardEl.addEventListener("dblclick", () => {
-      openZoomModal(card);
-    });
-
-    // 3. Right-click context menu (Context menu is very robust for testing)
-    cardEl.addEventListener("contextmenu", (e) => {
-      e.preventDefault();
-      clearZoomTimer();
-      openContextMenu(e, card.instanceId);
-    });
-
-    // Tap support: click/tap triggers context menu for ALL cards (including hand) to allow easy mobile play
-    cardEl.addEventListener("click", (e) => {
-      const cardLoc = state.findCard(card.instanceId);
-      if (cardLoc) {
+    // 携帯端末でタップ時にメニューが表示されない問題への対処：
+    // dblclickとclickイベントのバッティングを避けるため、
+    // タッチデバイスではdblclickとclickイベントを無効化する。
+    // 代わりにpointerdownでの長押し、またはコンテキストメニューで詳細表示を利用する。
+    if (window.matchMedia("(hover: none) and (pointer: coarse)").matches) {
+      // タッチデバイスの場合、dblclickとclickイベントはコンテキストメニュー表示のみに限定する
+      cardEl.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
         openContextMenu(e, card.instanceId);
-      }
-    });
+      });
+    } else {
+      // マウスデバイスの場合、dblclickでズーム、right-clickでコンテキストメニュー
+      cardEl.addEventListener("dblclick", () => {
+        openZoomModal(card);
+      });
+
+      cardEl.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        clearZoomTimer();
+        openContextMenu(e, card.instanceId);
+      });
+
+      cardEl.addEventListener("click", (e) => {
+        const cardLoc = state.findCard(card.instanceId);
+        if (cardLoc) {
+          e.preventDefault();
+          e.stopPropagation();
+          openContextMenu(e, card.instanceId);
+        }
+      });
+    }
   }
 
   // --- DRAG & DROP HANDLERS ---
@@ -683,73 +695,97 @@ document.addEventListener("DOMContentLoaded", () => {
       } else if (card.type === "Event") {
         addMenuOption(list, "イベントを使用する", () => state.playCard(activePIdx, cardId));
       }
-      addMenuOption(list, "FILEエリアへ置く", () => state.moveCard(cardId, "fileArea", activePIdx));
-      addMenuOption(list, "証拠エリアへ置く", () => state.moveCard(cardId, "evidenceArea", activePIdx));
+        addMenuOption(list, "FILEエリアへ置く", () => state.moveCard(cardId, "fileArea", activePIdx));
+        addMenuOption(list, "証拠エリアへ置く", () => state.moveCard(cardId, "evidenceArea", activePIdx));
 
-      // Cut-in and Disguise options during guard phase
-      if (state.guardPhase.active && state.currentPhase === "GUARD") {
-        if (card.cutIn && !state.guardPhase.cutInUsed) {
-          addMenuOption(list, "🎬 カットインを使用", () => state.useCutIn(activePIdx, cardId));
+        // Cut-in and Disguise options during guard phase
+        if (state.guardPhase.active && state.currentPhase === PHASES.GUARD) {
+          if (card.cutIn && !state.guardPhase.cutInUsed) {
+            addMenuOption(list, "🎬 カットインを使用", () => state.useCutIn(activePIdx, cardId));
+          }
+          if (card.disguise && !state.guardPhase.disguiseUsed) {
+            addMenuOption(list, "🎭 変装を使用", () => state.useDisguise(activePIdx, cardId));
+          }
         }
-        if (card.disguise && !state.guardPhase.disguiseUsed) {
-          addMenuOption(list, "🎭 変装を使用", () => state.useDisguise(activePIdx, cardId));
-        }
-      }
-    } else if (area === "field" || area === "partner") {
-      // Cards on board
-      if (card.state === "active") {
-        addMenuOption(list, "スリープする (横倒)", () => state.toggleCardState(cardId, "sleep"));
-        addMenuOption(list, "スタンする (逆倒)", () => state.toggleCardState(cardId, "stun"));
+      } else if (area === "field") { // Only field cards can be targeted for guard
+        // Cards on board
+        if (card.state === "active") {
+          if (state.currentPhase === PHASES.GUARD && state.guardPhase.active && playerIndex === activePIdx && card.type === "Character") {
+            addMenuOption(list, "🛡️ ガードする", () => state.performGuard(activePIdx, cardId));
+          } else {
+            addMenuOption(list, "スリープする (横倒)", () => state.toggleCardState(cardId, "sleep"));
+            addMenuOption(list, "スタンする (逆倒)", () => state.toggleCardState(cardId, "stun"));
 
-        // Reasoning is allowed for Characters/Partners on your side
-        if (playerIndex === activePIdx && !card.nameDeclaring) {
-          addMenuOption(list, "🔍 推理を行う (証拠獲得)", () => state.performReasoning(activePIdx, cardId));
+            // Reasoning is allowed for Characters/Partners on your side
+            if (playerIndex === activePIdx && !card.nameDeclaring) {
+              addMenuOption(list, "🔍 推理を行う (証拠獲得)", () => state.performReasoning(activePIdx, cardId));
+            }
+
+            // Action is allowed for Characters on your side
+            if (playerIndex === activePIdx && area === "field") {
+              addMenuOption(list, "⚔️ アクションを仕掛ける...", (event) => openActionTargetMenu(event, cardId), false);
+            }
+          }
+        } else {
+          addMenuOption(list, "アクティブに戻す (起立)", () => state.toggleCardState(cardId, "active"));
+          if (card.state === "stun") {
+            addMenuOption(list, "スリープにする (逆から横)", () => state.toggleCardState(cardId, "sleep"));
+          }
         }
 
-        // Action is allowed for Characters on your side
-        if (playerIndex === activePIdx && area === "field") {
-          addMenuOption(list, "⚔️ アクションを仕掛ける...", (event) => openActionTargetMenu(event, cardId), false);
-        }
-      } else {
-        addMenuOption(list, "アクティブに戻す (起立)", () => state.toggleCardState(cardId, "active"));
-        if (card.state === "stun") {
-          addMenuOption(list, "スリープにする (逆から横)", () => state.toggleCardState(cardId, "sleep"));
-        }
-      }
-
-      addMenuOption(list, "手札に戻す", () => state.moveCard(cardId, "hand", playerIndex));
-      addMenuOption(list, "FILEエリアへ移動", () => state.moveCard(cardId, "fileArea", playerIndex));
-      addMenuOption(list, "リムーブする", () => state.moveCard(cardId, "removeArea", playerIndex));
-    } else {
-      // File, Evidence, Remove, etc.
-      addMenuOption(list, "手札に戻す", () => state.moveCard(cardId, "hand", playerIndex));
-      addMenuOption(list, "リムーブする", () => state.moveCard(cardId, "removeArea", playerIndex));
-      if (area !== "fileArea") {
+        addMenuOption(list, "手札に戻す", () => state.moveCard(cardId, "hand", playerIndex));
         addMenuOption(list, "FILEエリアへ移動", () => state.moveCard(cardId, "fileArea", playerIndex));
+        addMenuOption(list, "リムーブする", () => state.moveCard(cardId, "removeArea", playerIndex));
+      } else if (area === "partner") {
+        if (card.state === "active") {
+          addMenuOption(list, "スリープする (横倒)", () => state.toggleCardState(cardId, "sleep"));
+          addMenuOption(list, "スタンする (逆倒)", () => state.toggleCardState(cardId, "stun"));
+          if (playerIndex === activePIdx && !card.nameDeclaring) {
+            addMenuOption(list, "🔍 推理を行う (証拠獲得)", () => state.performReasoning(activePIdx, cardId));
+          }
+        } else {
+          addMenuOption(list, "アクティブに戻す (起立)", () => state.toggleCardState(cardId, "active"));
+          if (card.state === "stun") {
+            addMenuOption(list, "スリープにする (逆から横)", () => state.toggleCardState(cardId, "sleep"));
+          }
+        }
+        addMenuOption(list, "手札に戻す", () => state.moveCard(cardId, "hand", playerIndex));
+        addMenuOption(list, "FILEエリアへ移動", () => state.moveCard(cardId, "fileArea", playerIndex));
+        addMenuOption(list, "リムーブする", () => state.moveCard(cardId, "removeArea", playerIndex));
+      } else {
+        // File, Evidence, Remove, etc.
+        addMenuOption(list, "手札に戻す", () => state.moveCard(cardId, "hand", playerIndex));
+        addMenuOption(list, "リムーブする", () => state.moveCard(cardId, "removeArea", playerIndex));
+        if (area !== "fileArea") {
+          addMenuOption(list, "FILEエリアへ移動", () => state.moveCard(cardId, "fileArea", playerIndex));
+        }
+      }
+
+      // Always include zoom detail option
+      addMenuOption(list, "🔍 詳細表示 (ズーム)", () => openZoomModal(card));
+
+      // Show menu at click coordinates
+      cardContextMenu.style.left = `${e.pageX}px`;
+      cardContextMenu.style.top = `${e.pageY}px`;
+      cardContextMenu.classList.remove("hide");
+      // For mobile, if this is a character card on the field, also open the action target menu directly
+      if (window.matchMedia("(hover: none) and (pointer: coarse)").matches && area === "field" && playerIndex === activePIdx && card.type === "Character" && card.state === "active") {
+        openActionTargetMenu(e, cardId);
       }
     }
 
-    // Always include zoom detail option
-    addMenuOption(list, "🔍 詳細表示 (ズーム)", () => openZoomModal(card));
-
-    // Show menu at click coordinates
-    cardContextMenu.style.left = `${e.pageX}px`;
-    cardContextMenu.style.top = `${e.pageY}px`;
-    cardContextMenu.classList.remove("hide");
-  }
-
-  function addMenuOption(parent, label, action, closeMenu = true) {
-    const li = document.createElement("li");
-    li.textContent = label;
-    li.addEventListener("click", (e) => {
-      e.stopPropagation();
-      action(e);
-      if (closeMenu) {
-        closeAllMenus();
-      }
-    });
-    parent.appendChild(li);
-  }
+    function addMenuOption(parent, label, action, closeMenu = true) {
+      const li = document.createElement("li");
+      li.textContent = label;
+      li.addEventListener("click", (e) => {
+        e.stopPropagation();
+        action(e);
+        if (closeMenu) {
+          closeAllMenus();
+        }
+      });
+      parent.appendChild(li);
+    }
 
   function openActionTargetMenu(e, cardId) {
     actionTargetList.innerHTML = "";
