@@ -1,0 +1,29 @@
+{
+  "version": "0.3",
+  "documents": 16,
+  "testSpecifications": 54,
+  "checks": {
+    "schemaStructure": "passed",
+    "exampleAgainstSchema": "passed",
+    "gameExecution": "not_run",
+    "pdfIconVisualVerification": "not_done"
+  },
+  "sha256": {
+    "CHANGELOG.md": "f67e597d22bee611f052e68978687139457f1e480375ebdfa051f5201c568fa9",
+    "README.md": "61bf111becafb4008bc0f8adb0b85b2be6e25a154c86ca4985fdb87d52d88641",
+    "api.md": "3d784cfcad725e7a8149baa5992e3f748e8402a89d6f7a9604ffa0353eea3039",
+    "card-model.md": "4760683c200e1dc3674217f9aca0e6796dd10ccffe7443bdac14520e8c49f602",
+    "card-schema.json": "560ece9a260744f0fe35e28f81dd20c470e7e08ff8e3be434d6bef10d45f93fb",
+    "decisions.md": "cdb18ecbe62d7e17d37542c575ffec6821bc8135936ee8ce76a75263e8bfd4ff",
+    "dummy-card-example.json": "d0af6f5eaa4bc7c33ae4a01dbdd34af2f8f94c8ce6b891b844f0eb8ca35ae1c6",
+    "floor-rules.md": "ca851b451dc55a991d77b9d8699c1c13eeaa065ae6697e589c77251408c148b5",
+    "legal-notes.md": "430044e3315e2d6a8974a137a5c42054dc9f9197eb84fe41ea58a54da6dca529",
+    "logging-and-simulation.md": "23391076f1e8716304cdd6bada98d1635c6f9f7656e9dacec70811afdf528d5b",
+    "open-issues.md": "8a352929a5344852cc26e8b477ac5b91d52b1dc7230940af98ab66a45901567c",
+    "resolution-timing.md": "8d5ec3fd2f8f5443bcb637b8122da7f84c3f87e925aa70696154cedb02189084",
+    "rules.md": "ec5f935c1288f8355f48d8c978d1935d68d109b283cb02a610d8e20aa3316fca",
+    "state-machine.md": "fd26e24abd0e6d9b73cfe2e15f462d9835da2faedcf9937d4898001afae64b53",
+    "test-cases.md": "761f3a7350e52080a1237e9c4086c107d6dbbbbf9a1ad2e9e2f6bb0e52f16af3",
+    "ui.md": "e496dd3eed41bb9fe69c5dc6bec684f4c83ca14705682b404c4180423ac9d6f6"
+  }
+}

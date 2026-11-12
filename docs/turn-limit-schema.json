@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Turn ability usage limit",
+  "type": "object",
+  "required": [
+    "scope",
+    "limit"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "scope": {
+      "const": "eachTurn"
+    },
+    "limit": {
+      "type": "integer",
+      "minimum": 1
+    }
+  }
+}

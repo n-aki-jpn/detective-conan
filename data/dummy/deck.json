@@ -1,0 +1,65 @@
+{
+  "deckId": "OFFICIAL-BLUE-CONAN-V1",
+  "deckName": "公式 青単・コナン探偵団デッキ",
+  "catalogVersion": "official-raw-v1",
+  "partnerId": "B01001",
+  "caseId": "B01024",
+  "mainDeck": [
+    {
+      "definitionId": "B01019",
+      "count": 3
+    },
+    {
+      "definitionId": "B01015",
+      "count": 3
+    },
+    {
+      "definitionId": "B01021",
+      "count": 3
+    },
+    {
+      "definitionId": "B01011",
+      "count": 3
+    },
+    {
+      "definitionId": "B01013",
+      "count": 3
+    },
+    {
+      "definitionId": "B01014",
+      "count": 3
+    },
+    {
+      "definitionId": "B01016",
+      "count": 3
+    },
+    {
+      "definitionId": "B01017",
+      "count": 3
+    },
+    {
+      "definitionId": "B01008",
+      "count": 3
+    },
+    {
+      "definitionId": "B01018",
+      "count": 3
+    },
+    {
+      "definitionId": "B01020",
+      "count": 3
+    },
+    {
+      "definitionId": "B01006",
+      "count": 3
+    },
+    {
+      "definitionId": "B01010",
+      "count": 2
+    },
+    {
+      "definitionId": "B01012",
+      "count": 2
+    }
+  ]
+}

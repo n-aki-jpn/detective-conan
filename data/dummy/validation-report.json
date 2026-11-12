@@ -1,0 +1,22 @@
+{
+  "mainDeckCount": 40,
+  "distinctMainCards": 14,
+  "partnerCount": 1,
+  "caseCount": 1,
+  "allMaxThree": true,
+  "allCharacter": true,
+  "uniqueDefinitionIds": true,
+  "levelCounts": {
+    "1": 6,
+    "2": 6,
+    "3": 6,
+    "4": 6,
+    "5": 6,
+    "6": 4,
+    "7": 3,
+    "8": 3
+  },
+  "lpPositiveCards": 23,
+  "gameSimulation": "not_run",
+  "allNumbers": "synthetic design values, not official card statistics"
+}

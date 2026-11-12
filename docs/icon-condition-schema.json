@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Ability effective condition",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "ownTurn"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "opponentTurn"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "color"
+      ],
+      "properties": {
+        "kind": {
+          "const": "partnerHasColor"
+        },
+        "color": {
+          "enum": [
+            "blue",
+            "green",
+            "white",
+            "red",
+            "yellow",
+            "black"
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "color"
+      ],
+      "properties": {
+        "kind": {
+          "const": "caseHasColor"
+        },
+        "color": {
+          "enum": [
+            "blue",
+            "green",
+            "white",
+            "red",
+            "yellow",
+            "black"
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "trait"
+      ],
+      "properties": {
+        "kind": {
+          "const": "caseHasTrait"
+        },
+        "trait": {
+          "type": "string",
+          "pattern": "^TRAIT_"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "count"
+      ],
+      "properties": {
+        "kind": {
+          "const": "minFileCount"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "phase"
+      ],
+      "properties": {
+        "kind": {
+          "const": "casePhase"
+        },
+        "phase": {
+          "enum": [
+            "INTRO",
+            "RESOLUTION"
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "nameKey"
+      ],
+      "properties": {
+        "kind": {
+          "const": "bondName"
+        },
+        "nameKey": {
+          "type": "string",
+          "pattern": "^NAME_"
+        }
+      }
+    }
+  ]
+}

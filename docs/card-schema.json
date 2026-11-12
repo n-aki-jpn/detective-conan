@@ -1,0 +1,247 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DummyCardDefinition-v0.3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "definitionId",
+    "canonicalId",
+    "dummyName",
+    "definitionVersion",
+    "sourceRefs",
+    "supported",
+    "cardType",
+    "colors",
+    "nameKeys",
+    "abilities"
+  ],
+  "properties": {
+    "definitionId": {
+      "type": "string",
+      "pattern": "^DUMMY-"
+    },
+    "canonicalId": {
+      "type": "string",
+      "pattern": "^DUMMY-"
+    },
+    "dummyName": {
+      "type": "string",
+      "pattern": "^DUMMY_"
+    },
+    "definitionVersion": {
+      "type": "string"
+    },
+    "sourceRefs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "supported": {
+      "type": "boolean"
+    },
+    "cardType": {
+      "enum": [
+        "character",
+        "event",
+        "partner",
+        "case"
+      ]
+    },
+    "colors": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "blue",
+          "green",
+          "white",
+          "red",
+          "yellow",
+          "black"
+        ]
+      }
+    },
+    "nameKeys": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^NAME_"
+      }
+    },
+    "traits": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^TRAIT_"
+      }
+    },
+    "level": {
+      "type": "integer"
+    },
+    "ap": {
+      "type": "integer"
+    },
+    "lp": {
+      "type": "integer"
+    },
+    "caseLevels": {
+      "type": "object",
+      "required": [
+        "first",
+        "second"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "first": {
+          "type": "integer"
+        },
+        "second": {
+          "type": "integer"
+        }
+      }
+    },
+    "isMR": {
+      "type": "boolean"
+    },
+    "abilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "handlerId",
+          "kind",
+          "activeZones",
+          "activationConditions",
+          "costs",
+          "resolutionConditions"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "handlerId": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "continuous",
+              "triggered",
+              "declared",
+              "keyword",
+              "cutIn",
+              "disguise",
+              "inspiration",
+              "partnerAssist",
+              "caseResolution"
+            ]
+          },
+          "activeZones": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "field",
+                "partner",
+                "case",
+                "deck",
+                "file",
+                "evidence",
+                "remove",
+                "hand"
+              ]
+            }
+          },
+          "activationConditions": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "costs": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "resolutionConditions": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "usageLimit": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "params": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "cardType": {
+            "const": "character"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "level",
+          "ap",
+          "lp"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "cardType": {
+            "const": "event"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "level"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "cardType": {
+            "const": "partner"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "lp"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "cardType": {
+            "const": "case"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "caseLevels"
+        ]
+      }
+    }
+  ]
+}

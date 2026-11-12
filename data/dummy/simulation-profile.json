@@ -1,0 +1,33 @@
+{
+  "profileId": "private-core-v1",
+  "supportedMechanics": [
+    "normalHandUse",
+    "nextHint",
+    "assist",
+    "caseResolution",
+    "deduce",
+    "guard",
+    "action",
+    "switch",
+    "contactAP",
+    "refresh"
+  ],
+  "excludedMechanics": [
+    "eventEffects",
+    "cutIn",
+    "inspiration",
+    "disguise",
+    "MR",
+    "triggeredAbilities",
+    "declaredCardAbilities",
+    "keywords"
+  ],
+  "rulingAssumptions": {
+    "U01": "Prototype policy: caseResolution may be declared in resolution phase with active partner even if evidence is insufficient; only sufficient evidence wins. Pending direct FAQ confirmation."
+  },
+  "wallClockLimit": null,
+  "simulationMaxDecisions": 10000,
+  "onDecisionLimit": "TRUNCATED",
+  "concedeInRandomPolicy": false,
+  "catalogAbilitiesNote": "Partner assist and case resolution are baseline engine actions, not omitted abilities."
+}

@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>名探偵コナンTCG モバイルWeb対戦 & デッキ構築</title>
+  <style>
+    :root {
+      --bg-color: #0b1120;
+      --card-bg: #1e293b;
+      --panel-bg: #1e293b;
+      --border-color: #334155;
+      --accent: #38bdf8;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --sleep-color: #f59e0b;
+      --stun-color: #ef4444;
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { background-color: var(--bg-color); color: var(--text); padding-bottom: calc(180px + var(--safe-bottom)); user-select: none; }
+    
+    /* Navigation Bar */
+    .nav-bar {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(15, 23, 42, 0.98); backdrop-filter: blur(10px);
+      padding: 6px 12px; border-bottom: 1px solid var(--border-color);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .nav-tabs { display: flex; gap: 6px; }
+    .nav-tab-btn {
+      background: #1e293b; color: var(--text-muted); border: 1px solid var(--border-color);
+      padding: 6px 12px; border-radius: 6px; font-weight: bold; font-size: 0.82rem; cursor: pointer; transition: 0.2s;
+    }
+    .nav-tab-btn.active {
+      background: #2563eb; color: #fff; border-color: #3b82f6; box-shadow: 0 0 10px rgba(37,99,235,0.4);
+    }
+    .nav-actions { display: flex; align-items: center; gap: 6px; }
+
+    .btn {
+      background: #2563eb; color: white; border: none; padding: 8px 14px;
+      border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.85rem;
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      transition: 0.15s; min-height: 38px;
+    }
+    .btn:active { transform: scale(0.96); opacity: 0.9; }
+    .btn-secondary { background: #475569; }
+    .btn-danger { background: #dc2626; }
+    .btn-success { background: #10b981; }
+
+    /* Screen Views */
+    .screen-view { display: none; }
+    .screen-view.active { display: block; }
+
+    /* ========== BATTLE SCREEN STYLES ========== */
+    .battle-header {
+      background: rgba(30, 41, 59, 0.8); padding: 6px 12px;
+      border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;
+    }
+    .status-badge { background: #0f172a; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 0.78rem; color: var(--accent); }
+    .board-container { padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+    .player-zone { background: var(--panel-bg); border-radius: 8px; padding: 8px 10px; border: 1px solid var(--border-color); }
+    
+    .zone-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .player-title { font-weight: bold; font-size: 0.85rem; }
+    
+    .counters-grid {
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-bottom: 6px;
+    }
+    .counter-pill {
+      background: rgba(15, 23, 42, 0.6); padding: 3px 2px; border-radius: 4px;
+      text-align: center; font-size: 0.68rem; color: var(--text-muted); border: 1px solid rgba(255,255,255,0.05);
+    }
+    .counter-pill b { display: block; font-size: 0.82rem; color: var(--accent); }
+
+    .zone-content { display: flex; gap: 6px; align-items: stretch; }
+    .fixed-cards-col { display: flex; flex-direction: column; gap: 4px; width: 85px; flex-shrink: 0; }
+    .field-slots {
+      flex: 1; display: flex; gap: 6px; background: rgba(0,0,0,0.25);
+      padding: 6px; border-radius: 6px; overflow-x: auto;
+      scrollbar-width: thin; min-height: 125px; align-items: center;
+    }
+
+    /* Cards */
+    .card {
+      background: #1e293b; border: 1.5px solid #475569; border-radius: 6px;
+      width: 82px; height: 115px; padding: 4px 5px; flex-shrink: 0;
+      display: flex; flex-direction: column; justify-content: space-between;
+      position: relative; box-shadow: 0 2px 4px rgba(0,0,0,0.3); font-size: 0.65rem;
+    }
+    .card.CHARACTER { border-top: 3px solid #38bdf8; }
+    .card.PARTNER { border-top: 3px solid #f59e0b; }
+    .card.CASE { border-top: 3px solid #a855f7; }
+    
+    .card.SLEEP { border-color: var(--sleep-color); opacity: 0.8; transform: rotate(4deg); }
+    .card.STUN { border-color: var(--stun-color); filter: grayscale(80%); }
+    .card.secret { background: #334155; justify-content: center; align-items: center; color: #94a3b8; font-weight: bold; border-style: dashed; }
+    
+    .card-top { display: flex; justify-content: space-between; font-weight: bold; font-size: 0.68rem; line-height: 1; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 2px; }
+    .card-badge { color: #38bdf8; font-size: 0.6rem; }
+    .card-name { font-weight: bold; font-size: 0.72rem; margin: 2px 0 1px 0; color: #f8fafc; line-height: 1.15; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .card-desc-preview { font-size: 0.58rem; color: #94a3b8; line-height: 1.15; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .card-stats { display: flex; justify-content: space-between; font-weight: bold; font-size: 0.75rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 2px; line-height: 1; }
+    .stat-ap { color: #f87171; }
+    .stat-lp { color: #facc15; }
+
+    /* Bottom Dock */
+    .bottom-dock {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 90;
+      background: rgba(15, 23, 42, 0.98); backdrop-filter: blur(12px);
+      border-top: 2px solid var(--accent); padding: 8px 10px calc(8px + var(--safe-bottom)) 10px;
+      box-shadow: 0 -4px 15px rgba(0,0,0,0.5);
+    }
+    .dock-tabs { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .dock-title { font-size: 0.82rem; font-weight: bold; color: var(--accent); }
+    .mobile-hand-scroll {
+      display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px;
+      scrollbar-width: none; -webkit-overflow-scrolling: touch;
+    }
+    .mobile-hand-scroll::-webkit-scrollbar { display: none; }
+    .mobile-hand-scroll .card { width: 95px; height: 130px; font-size: 0.7rem; }
+    .mobile-hand-scroll .card-name { font-size: 0.78rem; }
+    .mobile-hand-scroll .card-desc-preview { font-size: 0.62rem; -webkit-line-clamp: 3; }
+
+    .decision-banner {
+      background: #1e293b; border: 1.5px solid var(--accent); border-radius: 8px;
+      padding: 10px; margin-bottom: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+    }
+    .decision-title { font-size: 0.88rem; font-weight: bold; color: var(--accent); margin-bottom: 4px; }
+    .decision-desc { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 8px; }
+    .decision-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+
+    /* Mulligan Selector */
+    .mulligan-scroll { display: flex; gap: 8px; overflow-x: auto; padding: 6px 0; }
+    .mulligan-item {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      padding: 4px; border-radius: 6px; border: 2px solid transparent; cursor: pointer;
+    }
+    .mulligan-item.selected { border-color: #ef4444; background: rgba(239, 68, 68, 0.2); }
+    .mulligan-item.selected::after { content: "✕ 戻す"; color: #ef4444; font-size: 0.7rem; font-weight: bold; }
+
+    /* ========== DECK BUILDER STYLES ========== */
+    .deck-builder-container { padding: 10px; display: flex; flex-direction: column; gap: 12px; }
+    .deck-summary-card {
+      background: #1e293b; border: 1px solid var(--border-color); border-radius: 8px;
+      padding: 12px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .deck-count-bar {
+      display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; font-weight: bold;
+    }
+    .deck-valid-badge { padding: 3px 8px; border-radius: 4px; font-size: 0.78rem; font-weight: bold; }
+    .deck-valid-ok { background: #065f46; color: #34d399; }
+    .deck-valid-ng { background: #7f1d1d; color: #f87171; }
+
+    .fixed-select-row {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.8rem;
+    }
+    .fixed-select-box select {
+      width: 100%; background: #0f172a; color: white; border: 1px solid var(--border-color);
+      padding: 6px; border-radius: 6px; font-size: 0.78rem; margin-top: 4px;
+    }
+
+    .catalog-search-bar {
+      display: flex; gap: 6px; margin-bottom: 8px;
+    }
+    .catalog-search-bar input {
+      flex: 1; background: #0f172a; color: white; border: 1px solid var(--border-color);
+      padding: 8px 12px; border-radius: 6px; font-size: 0.82rem; outline: none;
+    }
+    .catalog-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(105px, 1fr)); gap: 8px;
+    }
+    .catalog-card-item {
+      background: #1e293b; border: 1.5px solid #475569; border-radius: 8px;
+      padding: 6px; display: flex; flex-direction: column; justify-content: space-between;
+      min-height: 155px; position: relative; font-size: 0.7rem; box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    }
+    .card-qty-controller {
+      display: flex; justify-content: space-between; align-items: center; margin-top: 6px;
+      background: #0f172a; border-radius: 4px; padding: 2px 4px; border: 1px solid rgba(255,255,255,0.08);
+    }
+    .qty-btn {
+      background: #334155; color: white; border: none; width: 24px; height: 24px;
+      border-radius: 4px; font-weight: bold; font-size: 0.9rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .qty-btn:active { background: #2563eb; }
+    .qty-num { font-weight: bold; color: var(--accent); font-size: 0.85rem; }
+
+    /* Modal */
+    .card-modal-backdrop {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 200;
+      background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px);
+      display: none; justify-content: center; align-items: center; padding: 20px;
+    }
+    .card-modal-content {
+      background: #1e293b; border: 2px solid var(--accent); border-radius: 12px;
+      width: 100%; max-width: 320px; padding: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; }
+    .modal-title { font-size: 1rem; font-weight: bold; color: #f8fafc; }
+    .modal-body { font-size: 0.82rem; line-height: 1.4; color: #cbd5e1; white-space: pre-wrap; margin-bottom: 14px; max-height: 200px; overflow-y: auto; }
+    .modal-footer { display: flex; justify-content: space-between; align-items: center; }
+  </style>
+</head>
+<body>
+  <!-- Top Navigation Bar -->
+  <nav class="nav-bar">
+    <div class="nav-tabs">
+      <button id="tab-battle" class="nav-tab-btn active" onclick="switchTab('battle')">⚔️ 対戦</button>
+      <button id="tab-deck" class="nav-tab-btn" onclick="switchTab('deck')">🃏 デッキ構築</button>
+    </div>
+    <div class="nav-actions">
+      <button class="btn btn-secondary" onclick="resetMatch()" style="padding:4px 8px; font-size:0.75rem; min-height:28px;">リセット</button>
+    </div>
+  </nav>
+
+  <!-- ================= SCREEN 1: BATTLE ================= -->
+  <div id="screen-battle" class="screen-view active">
+    <div class="battle-header">
+      <div style="display:flex; align-items:center; gap:6px;">
+        <span class="status-badge" id="match-info">T:1</span>
+        <label style="font-size:0.75rem; display:flex; align-items:center; gap:3px; background:#0f172a; padding:4px 6px; border-radius:4px; border:1px solid #475569;">
+          <input type="checkbox" id="cpu-toggle" onchange="toggleCpu(this.checked)" checked>
+          <span>CPU</span>
+        </label>
+      </div>
+      <select id="player-select" onchange="switchView(this.value)" style="background:#0f172a; color:white; border:1px solid #475569; padding:4px; border-radius:4px; font-size:0.75rem;">
+        <option value="player1">P1視点</option>
+        <option value="player2">P2視点</option>
+      </select>
+    </div>
+
+    <div class="board-container">
+      <!-- Decision Banner (Mobile Top) -->
+      <div id="decision-box" class="decision-banner" style="display:none;">
+        <div id="decision-title" class="decision-title">⚡ 行動選択</div>
+        <div id="decision-desc" class="decision-desc"></div>
+        <div id="decision-actions" class="decision-actions"></div>
+      </div>
+
+      <!-- Opponent Area -->
+      <div class="player-zone" id="opp-zone">
+        <div class="zone-header">
+          <span class="player-title" id="opp-id" style="color:#f87171;">相手</span>
+          <span id="opp-case-phase" style="font-size:0.72rem; color:var(--text-muted);">事件編</span>
+        </div>
+        <div class="counters-grid">
+          <div class="counter-pill">山札<b id="opp-deck">-</b></div>
+          <div class="counter-pill">手札<b id="opp-hand-count">-</b></div>
+          <div class="counter-pill">FILE<b id="opp-file">-</b></div>
+          <div class="counter-pill">証拠<b id="opp-evidence">-</b></div>
+          <div class="counter-pill">除外<b id="opp-remove">-</b></div>
+        </div>
+        <div class="zone-content">
+          <div class="fixed-cards-col">
+            <div id="opp-case" class="card"></div>
+            <div id="opp-partner" class="card"></div>
+          </div>
+          <div id="opp-field" class="field-slots"></div>
+        </div>
+      </div>
+
+      <!-- Player Area (Field) -->
+      <div class="player-zone" id="me-zone">
+        <div class="zone-header">
+          <span class="player-title" id="me-id" style="color:var(--accent);">自分</span>
+          <span id="me-case-phase" style="font-size:0.72rem; color:var(--accent);">事件編</span>
+        </div>
+        <div class="counters-grid">
+          <div class="counter-pill">山札<b id="me-deck">-</b></div>
+          <div class="counter-pill">手札<b id="me-hand-count">-</b></div>
+          <div class="counter-pill">FILE<b id="me-file">-</b></div>
+          <div class="counter-pill">証拠<b id="me-evidence">-</b></div>
+          <div class="counter-pill">除外<b id="me-remove">-</b></div>
+        </div>
+        <div class="zone-content">
+          <div class="fixed-cards-col">
+            <div id="me-case" class="card"></div>
+            <div id="me-partner" class="card"></div>
+          </div>
+          <div id="me-field" class="field-slots"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hand Bottom Dock -->
+    <div class="bottom-dock">
+      <div class="dock-tabs">
+        <div class="dock-title">
+          <span>🃏 手札</span>
+          <span style="font-size:0.7rem; color:var(--text-muted);">(タップで詳細)</span>
+        </div>
+      </div>
+      <div id="me-hand" class="mobile-hand-scroll"></div>
+    </div>
+  </div>
+
+  <!-- ================= SCREEN 2: DECK BUILDER ================= -->
+  <div id="screen-deck" class="screen-view">
+    <div class="deck-builder-container">
+      <div class="deck-summary-card">
+        <div class="deck-count-bar">
+          <div>デッキ枚数: <span id="builder-total-count" style="color:var(--accent); font-size:1.1rem;">40</span> / 40枚</div>
+          <span id="builder-status-badge" class="deck-valid-badge deck-valid-ok">構築完了</span>
+        </div>
+        <div class="fixed-select-row">
+          <div class="fixed-select-box">
+            <label style="color:var(--text-muted);">パートナー (1枚)</label>
+            <select id="builder-partner-select" onchange="updateDeckPartner(this.value)"></select>
+          </div>
+          <div class="fixed-select-box">
+            <label style="color:var(--text-muted);">事件カード (1枚)</label>
+            <select id="builder-case-select" onchange="updateDeckCase(this.value)"></select>
+          </div>
+        </div>
+        <button class="btn btn-success" onclick="saveAndApplyDeck()" style="width:100%; margin-top:4px;">
+          💾 デッキを保存して対戦に反映
+        </button>
+      </div>
+
+      <div>
+        <div class="catalog-search-bar">
+          <input type="text" id="catalog-search-input" placeholder="🔍 キャラ名・効果・番号で検索..." oninput="filterCatalog(this.value)">
+        </div>
+        <div id="builder-catalog-grid" class="catalog-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Card Details Modal -->
+  <div id="card-modal" class="card-modal-backdrop" onclick="closeCardModal()">
+    <div class="card-modal-content" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <span id="modal-card-name" class="modal-title">カード名</span>
+        <span id="modal-card-badge" class="card-badge" style="font-size:0.75rem;">キャラ</span>
+      </div>
+      <div id="modal-card-stats" style="display:flex; justify-content:space-between; font-weight:bold; margin-bottom:8px; font-size:0.85rem;">
+        <span id="modal-card-level">Lv.-</span>
+        <span id="modal-card-ap" class="stat-ap">AP -</span>
+        <span id="modal-card-lp" class="stat-lp">LP -</span>
+      </div>
+      <div id="modal-card-desc" class="modal-body"></div>
+      <div class="modal-footer">
+        <span id="modal-card-id" style="font-size:0.75rem; color:var(--text-muted);">B01001</span>
+        <button class="btn btn-secondary" onclick="closeCardModal()" style="padding:5px 12px; font-size:0.8rem; min-height:30px;">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentViewingPlayer = "player1";
+    let lastObs = null;
+    let lastRevision = -1;
+    let lastDecisionId = null;
+    let selectedMulliganIds = new Set();
+
+    // Deck Builder State
+    let catalogData = [];
+    let currentDeckDef = { partnerId: '', caseId: '', mainDeck: [] };
+    let deckQtyMap = {}; // defId -> count
+
+    // ========== NAVIGATION ==========
+    function switchTab(tab) {
+      document.getElementById('tab-battle').classList.toggle('active', tab === 'battle');
+      document.getElementById('tab-deck').classList.toggle('active', tab === 'deck');
+      document.getElementById('screen-battle').classList.toggle('active', tab === 'battle');
+      document.getElementById('screen-deck').classList.toggle('active', tab === 'deck');
+      if (tab === 'deck') {
+        loadDeckBuilderData();
+      } else {
+        lastRevision = -1;
+        fetchState();
+      }
+    }
+
+    // ========== BATTLE SYSTEM ==========
+    async function fetchState() {
+      try {
+        const res = await fetch(`/api/state?player_id=${currentViewingPlayer}`);
+        const data = await res.json();
+        
+        const curDecId = data.pendingDecision ? data.pendingDecision.decisionId : null;
+        const hasChanged = (data.revision !== lastRevision) || (curDecId !== lastDecisionId);
+        
+        lastObs = data;
+        if (hasChanged) {
+          lastRevision = data.revision;
+          lastDecisionId = curDecId;
+          render(data);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function switchView(pid) {
+      currentViewingPlayer = pid;
+      selectedMulliganIds.clear();
+      lastRevision = -1;
+      fetchState();
+    }
+
+    async function toggleCpu(isCpu) {
+      await fetch('/api/set_cpu', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isCpu: isCpu })
+      });
+      fetchState();
+    }
+
+    async function resetMatch() {
+      selectedMulliganIds.clear();
+      lastRevision = -1;
+      lastDecisionId = null;
+      await fetch('/api/reset', { method: 'POST' });
+      fetchState();
+    }
+
+    async function submitDecision(value) {
+      if (!lastObs || !lastObs.pendingDecision) return;
+      await fetch('/api/decision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playerId: currentViewingPlayer,
+          decisionId: lastObs.pendingDecision.decisionId,
+          revision: lastObs.revision,
+          value: value
+        })
+      });
+      selectedMulliganIds.clear();
+      fetchState();
+    }
+
+    function showCardModal(card) {
+      if (!card || !card.name) return;
+      document.getElementById('modal-card-name').innerText = card.name;
+      document.getElementById('modal-card-badge').innerText = card.cardType === 'PARTNER' ? 'パートナー' : (card.cardType === 'CASE' ? '事件' : 'キャラ');
+      document.getElementById('modal-card-level').innerText = card.level > 0 ? `Lv.${card.level} (${(card.colors || []).join('')})` : `${(card.colors || []).join('')}`;
+      document.getElementById('modal-card-ap').innerText = `AP ${card.ap ?? 0}`;
+      document.getElementById('modal-card-lp').innerText = `LP ${card.lp ?? 0}`;
+      document.getElementById('modal-card-desc').innerText = card.description || 'テキストなし';
+      document.getElementById('modal-card-id').innerText = card.definitionId || '';
+      document.getElementById('card-modal').style.display = 'flex';
+    }
+
+    function closeCardModal() {
+      document.getElementById('card-modal').style.display = 'none';
+    }
+
+    function createCardEl(card, isSecret = false, disableModal = false) {
+      const el = document.createElement('div');
+      const cType = card ? (card.cardType || '') : '';
+      el.className = `card ${cType} ${card ? (card.orientation || '') : ''}`;
+      
+      if (!card) {
+        el.style.opacity = '0.25';
+        el.style.borderStyle = 'dashed';
+        el.innerHTML = '<span style="margin:auto; color:#64748b; font-size:0.75rem;">空枠</span>';
+        return el;
+      }
+      if (isSecret || !card.name) {
+        el.className += ' secret';
+        el.innerHTML = '<span>裏面</span>';
+        return el;
+      }
+
+      const typeLabel = card.cardType === 'PARTNER' ? 'パートナー' : (card.cardType === 'CASE' ? '事件' : 'キャラ');
+      const stateBadge = card.orientation === 'SLEEP' ? '<span style="color:#f59e0b;">💤</span>' : (card.orientation === 'STUN' ? '<span style="color:#ef4444;">⚡</span>' : '');
+
+      el.innerHTML = `
+        <div class="card-top">
+          <span class="card-badge">${typeLabel}</span>
+          <span>${card.level > 0 ? 'Lv.' + card.level : ''}</span>
+        </div>
+        <div class="card-name">${card.name || card.definitionId} ${stateBadge}</div>
+        <div class="card-desc-preview">${card.description || ''}</div>
+        <div class="card-stats">
+          <span class="stat-ap">AP${card.ap ?? 0}</span>
+          <span class="stat-lp">LP${card.lp ?? 0}</span>
+        </div>
+      `;
+      if (!disableModal) {
+        el.onclick = (e) => {
+          e.stopPropagation();
+          showCardModal(card);
+        };
+      }
+      return el;
+    }
+
+    function getCardLabel(cardId, cardsList) {
+      const c = (cardsList || []).find(item => item && item.instanceId === cardId);
+      if (c) {
+        return `${c.name || c.definitionId} (Lv.${c.level} AP:${c.ap})`;
+      }
+      return `カード (${cardId})`;
+    }
+
+    function render(obs) {
+      if (document.getElementById('cpu-toggle')) {
+        document.getElementById('cpu-toggle').checked = !!obs.p2IsCpu;
+      }
+      document.getElementById('match-info').innerText = `T:${obs.turn} (${obs.turnPlayerId === currentViewingPlayer ? '自ターン' : '相手T'})`;
+      
+      const me = obs.me;
+      const opp = obs.opponent;
+
+      // Counters
+      document.getElementById('me-id').innerText = `${me.playerId} ${me.isFirstPlayer ? '[先攻]' : '[後攻]'}`;
+      document.getElementById('me-deck').innerText = me.deckCount;
+      document.getElementById('me-hand-count').innerText = me.handCount;
+      document.getElementById('me-file').innerText = me.fileCount;
+      document.getElementById('me-evidence').innerText = me.evidenceCount;
+      document.getElementById('me-remove').innerText = me.removeCount;
+      document.getElementById('me-case-phase').innerText = me.casePhase === 'RESOLUTION' ? '解決編' : '事件編';
+
+      document.getElementById('opp-id').innerText = `${opp.playerId} ${opp.isFirstPlayer ? '[先攻]' : '[後攻]'}`;
+      document.getElementById('opp-deck').innerText = opp.deckCount;
+      document.getElementById('opp-hand-count').innerText = opp.handCount;
+      document.getElementById('opp-file').innerText = opp.fileCount;
+      document.getElementById('opp-evidence').innerText = opp.evidenceCount;
+      document.getElementById('opp-remove').innerText = opp.removeCount;
+      document.getElementById('opp-case-phase').innerText = opp.casePhase === 'RESOLUTION' ? '解決編' : '事件編';
+
+      // Field
+      const meField = document.getElementById('me-field');
+      meField.innerHTML = '';
+      for (let i = 0; i < 5; i++) {
+        meField.appendChild(createCardEl(me.field[i]));
+      }
+      document.getElementById('me-case').replaceWith(createCardSlot('me-case', me.case));
+      document.getElementById('me-partner').replaceWith(createCardSlot('me-partner', me.partner));
+
+      const oppField = document.getElementById('opp-field');
+      oppField.innerHTML = '';
+      for (let i = 0; i < 5; i++) {
+        oppField.appendChild(createCardEl(opp.field[i]));
+      }
+      document.getElementById('opp-case').replaceWith(createCardSlot('opp-case', opp.case));
+      document.getElementById('opp-partner').replaceWith(createCardSlot('opp-partner', opp.partner));
+
+      // Hand
+      const meHand = document.getElementById('me-hand');
+      meHand.innerHTML = '';
+      me.hand.forEach(c => meHand.appendChild(createCardEl(c)));
+
+      // Decision Box
+      const decBox = document.getElementById('decision-box');
+      const decActs = document.getElementById('decision-actions');
+      decActs.innerHTML = '';
+
+      if (obs.winnerId) {
+        decBox.style.display = 'block';
+        document.getElementById('decision-title').innerText = `🏆 勝者: ${obs.winnerId}`;
+        document.getElementById('decision-desc').innerText = `決着: ${obs.finishReason === 'CASE_RESOLVED' ? '事件解決！' : obs.finishReason}`;
+        return;
+      }
+
+      if (obs.pendingDecision) {
+        decBox.style.display = 'block';
+        const pd = obs.pendingDecision;
+        
+        if (pd.kind === 'mulligan') {
+          document.getElementById('decision-title').innerText = `🃏 初期手札マリガン (引き直し)`;
+          document.getElementById('decision-desc').innerText = `戻したいカードをタップして選択してください`;
+
+          const mScroll = document.createElement('div');
+          mScroll.className = 'mulligan-scroll';
+
+          (pd.options.handCardIds || []).forEach(cid => {
+            const cardObj = me.hand.find(c => c && c.instanceId === cid);
+            const item = document.createElement('div');
+            item.className = `mulligan-item ${selectedMulliganIds.has(cid) ? 'selected' : ''}`;
+            const cardEl = createCardEl(cardObj, false, true);
+            item.appendChild(cardEl);
+            item.onclick = (e) => {
+              e.stopPropagation();
+              if (selectedMulliganIds.has(cid)) {
+                selectedMulliganIds.delete(cid);
+                item.classList.remove('selected');
+              } else {
+                selectedMulliganIds.add(cid);
+                item.classList.add('selected');
+              }
+              const confirmBtn = document.getElementById('mulligan-confirm-btn');
+              if (confirmBtn) {
+                confirmBtn.innerText = `🔄 ${selectedMulliganIds.size}枚戻す`;
+              }
+            };
+            mScroll.appendChild(item);
+          });
+          decActs.appendChild(mScroll);
+
+          const btnRow = document.createElement('div');
+          btnRow.style.display = 'flex';
+          btnRow.style.gap = '8px';
+          btnRow.style.width = '100%';
+          btnRow.style.marginTop = '6px';
+
+          const btnConfirm = document.createElement('button');
+          btnConfirm.id = 'mulligan-confirm-btn';
+          btnConfirm.className = 'btn btn-danger';
+          btnConfirm.style.flex = '1';
+          btnConfirm.innerText = `🔄 ${selectedMulliganIds.size}枚戻す`;
+          btnConfirm.onclick = () => submitDecision({ cardIds: Array.from(selectedMulliganIds) });
+          btnRow.appendChild(btnConfirm);
+
+          const btnPass = document.createElement('button');
+          btnPass.className = 'btn btn-success';
+          btnPass.style.flex = '1';
+          btnPass.innerText = '✨ このまま開始';
+          btnPass.onclick = () => submitDecision({ cardIds: [] });
+          btnRow.appendChild(btnPass);
+
+          decActs.appendChild(btnRow);
+
+        } else if (pd.kind === 'mainAction') {
+          document.getElementById('decision-title').innerText = `⚡ あなたの手番です`;
+          document.getElementById('decision-desc').innerText = `アクションを選択してください`;
+
+          (pd.options.actions || []).forEach(act => {
+            if (act.type === 'END_TURN') {
+              const b = document.createElement('button');
+              b.className = 'btn btn-secondary';
+              b.innerText = '⏭ ターン終了';
+              b.onclick = () => submitDecision({ type: 'END_TURN' });
+              decActs.appendChild(b);
+            } else if (act.type === 'HAND_PLAY') {
+              act.cardIds.forEach(cid => {
+                const b = document.createElement('button');
+                b.className = 'btn';
+                const label = getCardLabel(cid, me.hand);
+                b.innerText = `🃏 登場: ${label}`;
+                b.onclick = () => submitDecision({ type: 'HAND_PLAY', cardId: cid });
+                decActs.appendChild(b);
+              });
+            } else if (act.type === 'HINT_TAKE') {
+              const b = document.createElement('button');
+              b.className = 'btn';
+              b.innerText = '💡 ヒント (FILE回収)';
+              b.onclick = () => submitDecision({ type: 'HINT_TAKE' });
+              decActs.appendChild(b);
+            } else if (act.type === 'ASSIST') {
+              const b = document.createElement('button');
+              b.className = 'btn';
+              b.innerText = '🤝 アシスト (FILEへ)';
+              b.onclick = () => submitDecision({ type: 'ASSIST' });
+              decActs.appendChild(b);
+            } else if (act.type === 'RESOLVE_CASE') {
+              const b = document.createElement('button');
+              b.className = 'btn btn-danger';
+              b.innerText = '✨ 事件解決宣言 (勝利！)';
+              b.onclick = () => submitDecision({ type: 'RESOLVE_CASE' });
+              decActs.appendChild(b);
+            } else if (act.type === 'DEDUCE') {
+              act.actorIds.forEach(aid => {
+                const b = document.createElement('button');
+                b.className = 'btn';
+                const allMine = [...me.field, me.partner];
+                const label = getCardLabel(aid, allMine);
+                b.innerText = `🔎 推理: ${label}`;
+                b.onclick = () => submitDecision({ type: 'DEDUCE', actorId: aid });
+                decActs.appendChild(b);
+              });
+            } else if (act.type === 'ACTION') {
+              act.actorIds.forEach(aid => {
+                act.targetIds.forEach(tid => {
+                  const b = document.createElement('button');
+                  b.className = 'btn btn-danger';
+                  const actorLabel = getCardLabel(aid, me.field);
+                  const allOpp = [...opp.field, opp.case];
+                  const targetLabel = getCardLabel(tid, allOpp);
+                  b.innerText = `⚔️ 攻撃: ${actorLabel} ➔ ${targetLabel}`;
+                  b.onclick = () => submitDecision({ type: 'ACTION', actorId: aid, targetId: tid });
+                  decActs.appendChild(b);
+                });
+              });
+            }
+          });
+        } else if (pd.kind === 'guard') {
+          document.getElementById('decision-title').innerText = `🛡️ ガード選択`;
+          document.getElementById('decision-desc').innerText = `ガードするキャラを選ぶかスルー`;
+
+          const btnPass = document.createElement('button');
+          btnPass.className = 'btn btn-secondary';
+          btnPass.innerText = 'スルー';
+          btnPass.onclick = () => submitDecision({ guardCardId: null });
+          decActs.appendChild(btnPass);
+
+          (pd.options.guardCardIds || []).forEach(gid => {
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-danger';
+            const label = getCardLabel(gid, me.field);
+            btn.innerText = `🛡️ ガード: ${label}`;
+            btn.onclick = () => submitDecision({ guardCardId: gid });
+            decActs.appendChild(btn);
+          });
+        } else if (pd.kind === 'hintPlay') {
+          document.getElementById('decision-title').innerText = `💡 ヒント後の手札登場`;
+          document.getElementById('decision-desc').innerText = `回収後、手札を登場させられます`;
+
+          const btnPass = document.createElement('button');
+          btnPass.className = 'btn btn-secondary';
+          btnPass.innerText = 'スキップ';
+          btnPass.onclick = () => submitDecision({ cardId: null });
+          decActs.appendChild(btnPass);
+
+          (pd.options.playableCardIds || []).forEach(cid => {
+            const btn = document.createElement('button');
+            btn.className = 'btn';
+            const label = getCardLabel(cid, me.hand);
+            btn.innerText = `🃏 登場: ${label}`;
+            btn.onclick = () => submitDecision({ cardId: cid });
+            decActs.appendChild(btn);
+          });
+        }
+      } else {
+        if (obs.decisionPlayerId) {
+          decBox.style.display = 'block';
+          document.getElementById('decision-title').innerText = `相手 (${obs.decisionPlayerId}) 思考中...`;
+          document.getElementById('decision-desc').innerText = 'お待ちください';
+        } else {
+          decBox.style.display = 'none';
+        }
+      }
+    }
+
+    function createCardSlot(id, card) {
+      const el = createCardEl(card);
+      el.id = id;
+      return el;
+    }
+
+    // ========== DECK BUILDER LOGIC ==========
+    async function loadDeckBuilderData() {
+      try {
+        const [catRes, deckRes] = await Promise.all([
+          fetch('/api/catalog'),
+          fetch('/api/deck')
+        ]);
+        const catJson = await catRes.json();
+        const deckJson = await deckRes.json();
+
+        catalogData = catJson.cards || [];
+        currentDeckDef = deckJson;
+
+        // Init qty map
+        deckQtyMap = {};
+        (deckJson.mainDeck || []).forEach(item => {
+          deckQtyMap[item.definitionId] = item.count;
+        });
+
+        populateFixedSelects();
+        renderBuilderCatalog();
+        updateBuilderSummary();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function populateFixedSelects() {
+      const partnerSel = document.getElementById('builder-partner-select');
+      const caseSel = document.getElementById('builder-case-select');
+
+      partnerSel.innerHTML = '';
+      caseSel.innerHTML = '';
+
+      catalogData.filter(c => c.cardType === 'PARTNER').forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.definitionId;
+        opt.innerText = `[${c.definitionId}] ${c.title || c.dummyName}`;
+        if (c.definitionId === currentDeckDef.partnerId) opt.selected = true;
+        partnerSel.appendChild(opt);
+      });
+
+      catalogData.filter(c => c.cardType === 'CASE').forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.definitionId;
+        opt.innerText = `[${c.definitionId}] ${c.title || c.dummyName}`;
+        if (c.definitionId === currentDeckDef.caseId) opt.selected = true;
+        caseSel.appendChild(opt);
+      });
+    }
+
+    function updateDeckPartner(val) { currentDeckDef.partnerId = val; }
+    function updateDeckCase(val) { currentDeckDef.caseId = val; }
+
+    function changeCardQty(defId, delta) {
+      const cur = deckQtyMap[defId] || 0;
+      const next = Math.max(0, Math.min(3, cur + delta));
+      if (next === 0) {
+        delete deckQtyMap[defId];
+      } else {
+        deckQtyMap[defId] = next;
+      }
+      const qtyEl = document.getElementById(`qty-${defId}`);
+      if (qtyEl) qtyEl.innerText = next;
+      updateBuilderSummary();
+    }
+
+    function updateBuilderSummary() {
+      let total = 0;
+      for (const defId in deckQtyMap) {
+        total += deckQtyMap[defId];
+      }
+      document.getElementById('builder-total-count').innerText = total;
+
+      const badge = document.getElementById('builder-status-badge');
+      if (total === 40) {
+        badge.className = 'deck-valid-badge deck-valid-ok';
+        badge.innerText = '構築完了 (40/40)';
+      } else {
+        badge.className = 'deck-valid-badge deck-valid-ng';
+        badge.innerText = total > 40 ? `超過 (${total}/40)` : `不足 (${total}/40)`;
+      }
+    }
+
+    function renderBuilderCatalog(filterQuery = '') {
+      const grid = document.getElementById('builder-catalog-grid');
+      grid.innerHTML = '';
+
+      const query = (filterQuery || '').trim().toLowerCase();
+      const mainPool = catalogData.filter(c => c.cardType === 'CHARACTER' || c.cardType === 'EVENT');
+
+      mainPool.forEach(c => {
+        const title = (c.title || c.dummyName || '').toLowerCase();
+        const desc = (c.description || '').toLowerCase();
+        const defId = (c.definitionId || '').toLowerCase();
+
+        if (query && !title.includes(query) && !desc.includes(query) && !defId.includes(query)) {
+          return;
+        }
+
+        const qty = deckQtyMap[c.definitionId] || 0;
+        const item = document.createElement('div');
+        item.className = 'catalog-card-item';
+
+        item.innerHTML = `
+          <div onclick="showCardModal(${JSON.stringify(c).replace(/"/g, '&quot;')})" style="cursor:pointer; flex:1; display:flex; flex-direction:column; justify-content:space-between;">
+            <div class="card-top">
+              <span class="card-badge">${c.cardType === 'EVENT' ? 'イベント' : 'キャラ'}</span>
+              <span>Lv.${c.level}</span>
+            </div>
+            <div class="card-name">${c.title || c.dummyName}</div>
+            <div class="card-desc-preview">${c.description || ''}</div>
+            <div class="card-stats">
+              <span class="stat-ap">AP${c.ap}</span>
+              <span class="stat-lp">LP${c.lp}</span>
+            </div>
+          </div>
+          <div class="card-qty-controller">
+            <button class="qty-btn" onclick="changeCardQty('${c.definitionId}', -1)">−</button>
+            <span class="qty-num" id="qty-${c.definitionId}">${qty}</span>
+            <button class="qty-btn" onclick="changeCardQty('${c.definitionId}', 1)">＋</button>
+          </div>
+        `;
+        grid.appendChild(item);
+      });
+    }
+
+    function filterCatalog(q) {
+      renderBuilderCatalog(q);
+    }
+
+    async function saveAndApplyDeck() {
+      let total = 0;
+      const mainList = [];
+      for (const defId in deckQtyMap) {
+        const cnt = deckQtyMap[defId];
+        if (cnt > 0) {
+          total += cnt;
+          mainList.push({ definitionId: defId, count: cnt });
+        }
+      }
+
+      if (total !== 40) {
+        alert(`メインデッキはちょうど40枚にする必要があります。（現在: ${total}枚）`);
+        return;
+      }
+      if (!currentDeckDef.partnerId || !currentDeckDef.caseId) {
+        alert("パートナーカードと事件カードを選択してください。");
+        return;
+      }
+
+      const savePayload = {
+        deckId: "CUSTOM-USER-DECK",
+        deckName: "カスタムデッキ",
+        catalogVersion: "official-raw-v1",
+        partnerId: currentDeckDef.partnerId,
+        caseId: currentDeckDef.caseId,
+        mainDeck: mainList
+      };
+
+      try {
+        const res = await fetch('/api/save_deck', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(savePayload)
+        });
+        const result = await res.json();
+        if (res.ok) {
+          alert("デッキを保存しました！対戦画面に移動します。");
+          switchTab('battle');
+        } else {
+          alert(`保存エラー: ${result.error}`);
+        }
+      } catch (e) {
+        alert(`通信エラー: ${e.message}`);
+      }
+    }
+
+    setInterval(fetchState, 1000);
+    fetchState();
+  </script>
+</body>
+</html>

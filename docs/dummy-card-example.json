@@ -1,0 +1,21 @@
+{
+  "definitionId": "DUMMY-CHAR-A",
+  "canonicalId": "DUMMY-CHAR-A",
+  "dummyName": "DUMMY_CHAR_A",
+  "definitionVersion": "1",
+  "sourceRefs": [
+    "project:synthetic-test-fixture"
+  ],
+  "supported": true,
+  "cardType": "character",
+  "colors": [
+    "blue"
+  ],
+  "nameKeys": [
+    "NAME_A"
+  ],
+  "level": 1,
+  "ap": 1000,
+  "lp": 1,
+  "abilities": []
+}

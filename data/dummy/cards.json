@@ -1,0 +1,1286 @@
+{
+  "catalogVersion": "official-raw-v1",
+  "totalCards": 50,
+  "cards": [
+    {
+      "definitionId": "B01001",
+      "canonicalId": "B01001",
+      "dummyName": "江戸川コナン (B01001)",
+      "title": "江戸川コナン",
+      "definitionVersion": "1",
+      "cardType": "PARTNER",
+      "colors": [
+        "青"
+      ],
+      "level": 0,
+      "ap": 0,
+      "lp": 1,
+      "description": "【解決編】【事件解決】【スリープ】：自分の証拠が事件レベルの数以上ある場合、ゲームに勝利する。\n【アシスト】【スリープ】：FILEエリアに移動する。自分のFILEエリアにカードが7枚以上ある場合、事件を解決編にする。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01001.jpg",
+      "mainPath": "1734349765499910.jpg"
+    },
+    {
+      "definitionId": "B01001P",
+      "canonicalId": "B01001P",
+      "dummyName": "江戸川コナン (B01001P)",
+      "title": "江戸川コナン",
+      "definitionVersion": "1",
+      "cardType": "PARTNER",
+      "colors": [
+        "青"
+      ],
+      "level": 0,
+      "ap": 0,
+      "lp": 1,
+      "description": "【解決編】【事件解決】【スリープ】：自分の証拠が事件レベルの数以上ある場合、ゲームに勝利する。\n【アシスト】【スリープ】：FILEエリアに移動する。自分のFILEエリアにカードが7枚以上ある場合、事件を解決編にする。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01001P.jpg",
+      "mainPath": "1734349765505926.jpg"
+    },
+    {
+      "definitionId": "B01001Sec1",
+      "canonicalId": "B01001Sec1",
+      "dummyName": "江戸川コナン (B01001Sec1)",
+      "title": "江戸川コナン",
+      "definitionVersion": "1",
+      "cardType": "PARTNER",
+      "colors": [
+        "青"
+      ],
+      "level": 0,
+      "ap": 0,
+      "lp": 1,
+      "description": "【解決編】【事件解決】【スリープ】：自分の証拠が事件レベルの数以上ある場合、ゲームに勝利する。\r\n【アシスト】【スリープ】：FILEエリアに移動する。自分のFILEエリアにカードが7枚以上ある場合、事件を解決編にする。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01001Sec1.jpg",
+      "mainPath": "194400fcb7d2fc.jpg"
+    },
+    {
+      "definitionId": "B01001Sec2",
+      "canonicalId": "B01001Sec2",
+      "dummyName": "江戸川コナン (B01001Sec2)",
+      "title": "江戸川コナン",
+      "definitionVersion": "1",
+      "cardType": "PARTNER",
+      "colors": [
+        "青"
+      ],
+      "level": 0,
+      "ap": 0,
+      "lp": 1,
+      "description": "【解決編】【事件解決】【スリープ】：自分の証拠が事件レベルの数以上ある場合、ゲームに勝利する。\r\n【アシスト】【スリープ】：FILEエリアに移動する。自分のFILEエリアにカードが7枚以上ある場合、事件を解決編にする。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01001Sec2.jpg",
+      "mainPath": "194400f47d82b5.jpg"
+    },
+    {
+      "definitionId": "B01002",
+      "canonicalId": "B01002",
+      "dummyName": "工藤新一 (B01002)",
+      "title": "工藤新一",
+      "definitionVersion": "1",
+      "cardType": "PARTNER",
+      "colors": [
+        "青"
+      ],
+      "level": 0,
+      "ap": 0,
+      "lp": 1,
+      "description": "【解決編】【事件解決】【スリープ】：自分の証拠が事件レベルの数以上ある場合、ゲームに勝利する。\n【アシスト】【スリープ】：FILEエリアに移動する。自分のFILEエリアにカードが7枚以上ある場合、事件を解決編にする。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01002.jpg",
+      "mainPath": "1734349765520391.jpg"
+    },
+    {
+      "definitionId": "B01002P",
+      "canonicalId": "B01002P",
+      "dummyName": "工藤新一 (B01002P)",
+      "title": "工藤新一",
+      "definitionVersion": "1",
+      "cardType": "PARTNER",
+      "colors": [
+        "青"
+      ],
+      "level": 0,
+      "ap": 0,
+      "lp": 1,
+      "description": "【解決編】【事件解決】【スリープ】：自分の証拠が事件レベルの数以上ある場合、ゲームに勝利する。\n【アシスト】【スリープ】：FILEエリアに移動する。自分のFILEエリアにカードが7枚以上ある場合、事件を解決編にする。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01002P.jpg",
+      "mainPath": "1734349765525113.jpg"
+    },
+    {
+      "definitionId": "B01003",
+      "canonicalId": "B01003",
+      "dummyName": "灰原哀 (B01003)",
+      "title": "灰原哀",
+      "definitionVersion": "1",
+      "cardType": "PARTNER",
+      "colors": [
+        "青"
+      ],
+      "level": 0,
+      "ap": 0,
+      "lp": 1,
+      "description": "【解決編】【事件解決】【スリープ】：自分の証拠が事件レベルの数以上ある場合、ゲームに勝利する。\n【アシスト】【スリープ】：FILEエリアに移動する。自分のFILEエリアにカードが7枚以上ある場合、事件を解決編にする。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01003.jpg",
+      "mainPath": "1734349765531663.jpg"
+    },
+    {
+      "definitionId": "B01003P",
+      "canonicalId": "B01003P",
+      "dummyName": "灰原哀 (B01003P)",
+      "title": "灰原哀",
+      "definitionVersion": "1",
+      "cardType": "PARTNER",
+      "colors": [
+        "青"
+      ],
+      "level": 0,
+      "ap": 0,
+      "lp": 1,
+      "description": "【解決編】【事件解決】【スリープ】：自分の証拠が事件レベルの数以上ある場合、ゲームに勝利する。\n【アシスト】【スリープ】：FILEエリアに移動する。自分のFILEエリアにカードが7枚以上ある場合、事件を解決編にする。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01003P.jpg",
+      "mainPath": "1734349765536267.jpg"
+    },
+    {
+      "definitionId": "B01004",
+      "canonicalId": "B01004",
+      "dummyName": "毛利小五郎 (B01004)",
+      "title": "毛利小五郎",
+      "definitionVersion": "1",
+      "cardType": "PARTNER",
+      "colors": [
+        "青"
+      ],
+      "level": 0,
+      "ap": 0,
+      "lp": 1,
+      "description": "【解決編】【事件解決】【スリープ】：自分の証拠が事件レベルの数以上ある場合、ゲームに勝利する。\n【アシスト】【スリープ】：FILEエリアに移動する。自分のFILEエリアにカードが7枚以上ある場合、事件を解決編にする。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01004.jpg",
+      "mainPath": "1734349765541322.jpg"
+    },
+    {
+      "definitionId": "B01004P",
+      "canonicalId": "B01004P",
+      "dummyName": "毛利小五郎 (B01004P)",
+      "title": "毛利小五郎",
+      "definitionVersion": "1",
+      "cardType": "PARTNER",
+      "colors": [
+        "青"
+      ],
+      "level": 0,
+      "ap": 0,
+      "lp": 1,
+      "description": "【解決編】【事件解決】【スリープ】：自分の証拠が事件レベルの数以上ある場合、ゲームに勝利する。\n【アシスト】【スリープ】：FILEエリアに移動する。自分のFILEエリアにカードが7枚以上ある場合、事件を解決編にする。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01004P.jpg",
+      "mainPath": "1734349765547019.jpg"
+    },
+    {
+      "definitionId": "B01005",
+      "canonicalId": "B01005",
+      "dummyName": "江戸川コナン (B01005)",
+      "title": "江戸川コナン",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "青"
+      ],
+      "level": 8,
+      "ap": 7000,
+      "lp": 2,
+      "description": "【パートナー青】【ターン1】自分がネクストヒントで手札を使用したとき、そのカードのレベル以下のレベルのキャラを1枚まで選び、デッキの下に移す。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [
+        "探偵",
+        "毛利探偵事務所",
+        "少年探偵団"
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01005.jpg",
+      "mainPath": "1734349765552707.jpg"
+    },
+    {
+      "definitionId": "B01005P",
+      "canonicalId": "B01005P",
+      "dummyName": "江戸川コナン (B01005P)",
+      "title": "江戸川コナン",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "青"
+      ],
+      "level": 8,
+      "ap": 7000,
+      "lp": 2,
+      "description": "【パートナー青】【ターン1】自分がネクストヒントで手札を使用したとき、そのカードのレベル以下のレベルのキャラを1枚まで選び、デッキの下に移す。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [
+        "探偵,毛利探偵事務所,少年探偵団",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01005P.jpg",
+      "mainPath": "1734349765557282.jpg"
+    },
+    {
+      "definitionId": "B01006",
+      "canonicalId": "B01006",
+      "dummyName": "灰原哀 (B01006)",
+      "title": "灰原哀",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "青"
+      ],
+      "level": 6,
+      "ap": 4000,
+      "lp": 1,
+      "description": "【絆江戸川コナン】相手の能力や効果によって選ばれない。\n【宣言】【スリープ】：手札からレベル5以下の〚特徴［少年探偵団］〛のキャラを1枚まで登場させる。〚カード名［江戸川コナン］〛を登場させた場合、カードを1枚引く。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [
+        "少年探偵団,科学者",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01006.jpg",
+      "mainPath": "1734349765562208.jpg"
+    },
+    {
+      "definitionId": "B01006P",
+      "canonicalId": "B01006P",
+      "dummyName": "灰原哀 (B01006P)",
+      "title": "灰原哀",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "青"
+      ],
+      "level": 6,
+      "ap": 4000,
+      "lp": 1,
+      "description": "【絆江戸川コナン】相手の能力や効果によって選ばれない。\n【宣言】【スリープ】：手札からレベル5以下の〚特徴［少年探偵団］〛のキャラを1枚まで登場させる。〚カード名［江戸川コナン］〛を登場させた場合、カードを1枚引く。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [
+        "少年探偵団,科学者",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01006P.jpg",
+      "mainPath": "1734349765568836.jpg"
+    },
+    {
+      "definitionId": "B01007",
+      "canonicalId": "B01007",
+      "dummyName": "毛利蘭 (B01007)",
+      "title": "毛利蘭",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "青"
+      ],
+      "level": 7,
+      "ap": 6000,
+      "lp": 0,
+      "description": "相手の現場にいるキャラがこのキャラとのコンタクトによってリムーブされたとき、カードを1枚引く。\n【パートナー青】【宣言】【ターン1】〚手札を1枚リムーブする〛：ターン終了時までこのキャラをAP＋1000し、〚突撃〛（登場したターンからすぐにアクションできる）を持つ。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [
+        "高校生,毛利探偵事務所,空手家",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01007.jpg",
+      "mainPath": "1734349765574785.jpg"
+    },
+    {
+      "definitionId": "B01008",
+      "canonicalId": "B01008",
+      "dummyName": "江戸川コナン (B01008)",
+      "title": "江戸川コナン",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "青"
+      ],
+      "level": 5,
+      "ap": 6000,
+      "lp": 1,
+      "description": "【ヒラメキ】（証拠からリムーブされるときに発動する）カードを1枚引く。",
+      "cutIn": null,
+      "hirameki": "【ヒラメキ】（証拠からリムーブされるときに発動する）カードを1枚引く。",
+      "henso": null,
+      "traits": [
+        "探偵,毛利探偵事務所,少年探偵団",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01008.jpg",
+      "mainPath": "1734349765579866.jpg"
+    },
+    {
+      "definitionId": "B01009",
+      "canonicalId": "B01009",
+      "dummyName": "工藤新一 (B01009)",
+      "title": "工藤新一",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "青"
+      ],
+      "level": 6,
+      "ap": 5000,
+      "lp": 1,
+      "description": "【パートナー青】お互いの現場にキャラが合わせて6枚以上いる場合、手札にあるこのキャラはレベル4になる。\n【宣言】〚デッキの下に移す〛：LP0以下の【青】のキャラを1枚まで選び、アクティブにする。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [
+        "探偵,高校生",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01009.jpg",
+      "mainPath": "1734349765584400.jpg"
+    },
+    {
+      "definitionId": "B01009P",
+      "canonicalId": "B01009P",
+      "dummyName": "工藤新一 (B01009P)",
+      "title": "工藤新一",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "青"
+      ],
+      "level": 6,
+      "ap": 5000,
+      "lp": 1,
+      "description": "【パートナー青】お互いの現場にキャラが合わせて6枚以上いる場合、手札にあるこのキャラはレベル4になる。\n【宣言】〚デッキの下に移す〛：LP0以下の【青】のキャラを1枚まで選び、アクティブにする。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [
+        "探偵,高校生",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01009P.jpg",
+      "mainPath": "1734349765589682.jpg"
+    },
+    {
+      "definitionId": "B01010",
+      "canonicalId": "B01010",
+      "dummyName": "毛利小五郎 (B01010)",
+      "title": "毛利小五郎",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "青"
+      ],
+      "level": 6,
+      "ap": 6000,
+      "lp": 0,
+      "description": "相手の現場にいるキャラがこのキャラとのコンタクトによってリムーブされたとき、手札を1枚リムーブしてもよい。そうした場合、自分は証拠を1つ得る。\n",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [
+        "探偵,毛利探偵事務所",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01010.jpg",
+      "mainPath": "1734349765595905.jpg"
+    },
+    {
+      "definitionId": "B01010P",
+      "canonicalId": "B01010P",
+      "dummyName": "毛利小五郎 (B01010P)",
+      "title": "毛利小五郎",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "青"
+      ],
+      "level": 6,
+      "ap": 6000,
+      "lp": 0,
+      "description": "相手の現場にいるキャラがこのキャラとのコンタクトによってリムーブされたとき、手札を1枚リムーブしてもよい。そうした場合、自分は証拠を1つ得る。\n",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [
+        "探偵,毛利探偵事務所",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01010P.jpg",
+      "mainPath": "1734349765600233.jpg"
+    },
+    {
+      "definitionId": "B01011",
+      "canonicalId": "B01011",
+      "dummyName": "江戸川コナン (B01011)",
+      "title": "江戸川コナン",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "青"
+      ],
+      "level": 4,
+      "ap": 2000,
+      "lp": 2,
+      "description": "このキャラはスリープ状態で登場する。\n【ヒラメキ】（証拠からリムーブされるときに発動する）カードを1枚引く。",
+      "cutIn": null,
+      "hirameki": "【ヒラメキ】（証拠からリムーブされるときに発動する）カードを1枚引く。",
+      "henso": null,
+      "traits": [
+        "探偵,毛利探偵事務所,少年探偵団",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01011.jpg",
+      "mainPath": "1714012985492767.jpg"
+    },
+    {
+      "definitionId": "B01012",
+      "canonicalId": "B01012",
+      "dummyName": "阿笠博士 (B01012)",
+      "title": "阿笠博士",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "青"
+      ],
+      "level": 7,
+      "ap": 6000,
+      "lp": 1,
+      "description": "【ターン1】能力や効果によってレベル6以下の〚特徴［少年探偵団］〛のキャラが自分の現場に登場したとき、その中から1枚をアクティブにし、ターン終了時までそのキャラに〚迅速〛（登場したターンからすぐに推理かアクションできる）を与える。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [
+        "発明家",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01012.jpg",
+      "mainPath": "1714012985498894.jpg"
+    },
+    {
+      "definitionId": "B01013",
+      "canonicalId": "B01013",
+      "dummyName": "妃英理 (B01013)",
+      "title": "妃英理",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "青"
+      ],
+      "level": 4,
+      "ap": 3000,
+      "lp": 1,
+      "description": "【登場時】自分のデッキのカードを上から2枚見る。その中からLP0の【青】のキャラを1枚まで公開して手札に加え、残りを好きな順番でデッキの下に移す。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [
+        "弁護士",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01013.jpg",
+      "mainPath": "1714012985501591.jpg"
+    },
+    {
+      "definitionId": "B01013P",
+      "canonicalId": "B01013P",
+      "dummyName": "妃英理 (B01013P)",
+      "title": "妃英理",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "青"
+      ],
+      "level": 4,
+      "ap": 3000,
+      "lp": 1,
+      "description": "【登場時】自分のデッキのカードを上から2枚見る。その中からLP0の【青】のキャラを1枚まで公開して手札に加え、残りを好きな順番でデッキの下に移す。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [
+        "弁護士",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01013P.jpg",
+      "mainPath": "1714012985504571.jpg"
+    },
+    {
+      "definitionId": "B01014",
+      "canonicalId": "B01014",
+      "dummyName": "小嶋元太 (B01014)",
+      "title": "小嶋元太",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "青"
+      ],
+      "level": 4,
+      "ap": 5000,
+      "lp": 0,
+      "description": "【登場時】レベル3以上のキャラの能力やレベル3以上のイベントの効果によって登場した場合、レベル5以下のキャラを1枚まで選び、スリープさせる。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [
+        "少年探偵団",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01014.jpg",
+      "mainPath": "1714012985507627.jpg"
+    },
+    {
+      "definitionId": "B01015",
+      "canonicalId": "B01015",
+      "dummyName": "円谷光彦 (B01015)",
+      "title": "円谷光彦",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "青"
+      ],
+      "level": 3,
+      "ap": 3000,
+      "lp": 1,
+      "description": "【登場時】レベル3以上のキャラの能力やレベル3以上のイベントの効果によって登場した場合、キャラを1枚まで選び、ターン終了時までAP＋2000する。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [
+        "少年探偵団",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01015.jpg",
+      "mainPath": "1714012985509852.jpg"
+    },
+    {
+      "definitionId": "B01016",
+      "canonicalId": "B01016",
+      "dummyName": "灰原哀 (B01016)",
+      "title": "灰原哀",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "青"
+      ],
+      "level": 4,
+      "ap": 4000,
+      "lp": 1,
+      "description": "【登場時】自分のデッキのカードを上から4枚見る。その中から【青】のカードを1枚まで公開して手札に加え、残りを好きな順番でデッキの下に移す。カードを手札に加えた場合、手札を1枚リムーブする。\n【ヒラメキ】（証拠からリムーブされるときに発動する）カードを1枚引く。",
+      "cutIn": null,
+      "hirameki": "【ヒラメキ】（証拠からリムーブされるときに発動する）カードを1枚引く。",
+      "henso": null,
+      "traits": [
+        "少年探偵団,科学者",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01016.jpg",
+      "mainPath": "1714012985512478.jpg"
+    },
+    {
+      "definitionId": "B01016P",
+      "canonicalId": "B01016P",
+      "dummyName": "灰原哀 (B01016P)",
+      "title": "灰原哀",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "青"
+      ],
+      "level": 4,
+      "ap": 4000,
+      "lp": 1,
+      "description": "【登場時】自分のデッキのカードを上から4枚見る。その中から【青】のカードを1枚まで公開して手札に加え、残りを好きな順番でデッキの下に移す。カードを手札に加えた場合、手札を1枚リムーブする。\n【ヒラメキ】（証拠からリムーブされるときに発動する）カードを1枚引く。",
+      "cutIn": null,
+      "hirameki": "【ヒラメキ】（証拠からリムーブされるときに発動する）カードを1枚引く。",
+      "henso": null,
+      "traits": [
+        "少年探偵団,科学者",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01016P.jpg",
+      "mainPath": "1714012985515913.jpg"
+    },
+    {
+      "definitionId": "B01017",
+      "canonicalId": "B01017",
+      "dummyName": "本堂瑛祐 (B01017)",
+      "title": "本堂瑛祐",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "青"
+      ],
+      "level": 4,
+      "ap": 4000,
+      "lp": 1,
+      "description": "このキャラが推理したとき、自分のデッキのカードを上から2枚見る。その中から〚特徴［探偵］〛のキャラを1枚まで公開して手札に加え、残りを好きな順番でデッキの下に移す。\n【ヒラメキ】（証拠からリムーブされるときに発動する）カードを1枚引く。",
+      "cutIn": null,
+      "hirameki": "【ヒラメキ】（証拠からリムーブされるときに発動する）カードを1枚引く。",
+      "henso": null,
+      "traits": [
+        "高校生",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01017.jpg",
+      "mainPath": "1714012985519341.jpg"
+    },
+    {
+      "definitionId": "B01018",
+      "canonicalId": "B01018",
+      "dummyName": "宮野志保 (B01018)",
+      "title": "宮野志保",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "青"
+      ],
+      "level": 5,
+      "ap": 5000,
+      "lp": 1,
+      "description": "【相手ターン中】【現場リムーブ時】自分のデッキのカードを上から〚カード名［江戸川コナン］〛が出るまで1枚ずつ公開し、それを手札に加える。残りの公開したカードをデッキの下に移し、デッキをシャッフルする。\n【ヒラメキ】（証拠からリムーブされるときに発動する）カードを1枚引く。",
+      "cutIn": null,
+      "hirameki": "【ヒラメキ】（証拠からリムーブされるときに発動する）カードを1枚引く。",
+      "henso": null,
+      "traits": [
+        "科学者",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01018.jpg",
+      "mainPath": "1714012985521956.jpg"
+    },
+    {
+      "definitionId": "B01019",
+      "canonicalId": "B01019",
+      "dummyName": "毛利蘭 (B01019)",
+      "title": "毛利蘭",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "青"
+      ],
+      "level": 2,
+      "ap": 1000,
+      "lp": 1,
+      "description": "【カットイン】AP＋2000（コンタクト中に手札からリムーブして使う）",
+      "cutIn": "【カットイン】AP＋2000（コンタクト中に手札からリムーブして使う）",
+      "hirameki": null,
+      "henso": null,
+      "traits": [
+        "高校生,毛利探偵事務所,空手家",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01019.jpg",
+      "mainPath": "1714012985524844.jpg"
+    },
+    {
+      "definitionId": "B01019P",
+      "canonicalId": "B01019P",
+      "dummyName": "毛利蘭 (B01019P)",
+      "title": "毛利蘭",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "青"
+      ],
+      "level": 2,
+      "ap": 1000,
+      "lp": 1,
+      "description": "【カットイン】AP＋2000（コンタクト中に手札からリムーブして使う）",
+      "cutIn": "【カットイン】AP＋2000（コンタクト中に手札からリムーブして使う）",
+      "hirameki": null,
+      "henso": null,
+      "traits": [
+        "高校生,毛利探偵事務所,空手家",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01019P.jpg",
+      "mainPath": "1714012985527672.jpg"
+    },
+    {
+      "definitionId": "B01020",
+      "canonicalId": "B01020",
+      "dummyName": "毛利小五郎 (B01020)",
+      "title": "毛利小五郎",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "青"
+      ],
+      "level": 5,
+      "ap": 5000,
+      "lp": 1,
+      "description": "このキャラがスリープ状態の場合、相手は自分の現場にいるレベル4以下のキャラを指定してアクションできない。\n【ヒラメキ】（証拠からリムーブされるときに発動する）キャラを1枚まで選び、スリープさせる。",
+      "cutIn": null,
+      "hirameki": "【ヒラメキ】（証拠からリムーブされるときに発動する）キャラを1枚まで選び、スリープさせる。",
+      "henso": null,
+      "traits": [
+        "探偵,毛利探偵事務所",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01020.jpg",
+      "mainPath": "1714012985529336.jpg"
+    },
+    {
+      "definitionId": "B01021",
+      "canonicalId": "B01021",
+      "dummyName": "吉田歩美 (B01021)",
+      "title": "吉田歩美",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "青"
+      ],
+      "level": 3,
+      "ap": 2000,
+      "lp": 1,
+      "description": "【登場時】レベル3以上のキャラの能力やレベル3以上のイベントの効果によって登場した場合、カードを1枚引く。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [
+        "少年探偵団",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01021.jpg",
+      "mainPath": "1714012985532421.jpg"
+    },
+    {
+      "definitionId": "B01022",
+      "canonicalId": "B01022",
+      "dummyName": "少年探偵団 (B01022)",
+      "title": "少年探偵団",
+      "definitionVersion": "1",
+      "cardType": "EVENT",
+      "colors": [
+        "青"
+      ],
+      "level": 6,
+      "ap": 0,
+      "lp": 0,
+      "description": "【パートナー青】手札を1枚リムーブする。自分のデッキのカードを上から6枚見る。その中からレベル4以下の〚特徴［少年探偵団］〛のキャラを2枚まで登場させ、残りをシャッフルしてデッキの下に移す。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01022.jpg",
+      "mainPath": "1714012985535161.jpg"
+    },
+    {
+      "definitionId": "B01023",
+      "canonicalId": "B01023",
+      "dummyName": "シャッフルロマンス (B01023)",
+      "title": "シャッフルロマンス",
+      "definitionVersion": "1",
+      "cardType": "EVENT",
+      "colors": [
+        "青"
+      ],
+      "level": 2,
+      "ap": 0,
+      "lp": 0,
+      "description": "自分のデッキのカードを上から5枚見る。その中からカードを1枚まで手札に加え、残りを好きな順番でデッキの下に移す。このイベントを自分の現場にいるキャラ1枚にセットする。\nこのイベントがセットされているキャラは「このキャラがコンタクトしたとき、そのコンタクト中、このキャラをAP＋2000する。」を持つ。\n【ヒラメキ】（証拠からリムーブされるときに発動する）カードを1枚引く。",
+      "cutIn": null,
+      "hirameki": "【ヒラメキ】（証拠からリムーブされるときに発動する）カードを1枚引く。",
+      "henso": null,
+      "traits": [],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01023.jpg",
+      "mainPath": "1714012985537235.jpg"
+    },
+    {
+      "definitionId": "B01023P",
+      "canonicalId": "B01023P",
+      "dummyName": "シャッフルロマンス (B01023P)",
+      "title": "シャッフルロマンス",
+      "definitionVersion": "1",
+      "cardType": "EVENT",
+      "colors": [
+        "青"
+      ],
+      "level": 2,
+      "ap": 0,
+      "lp": 0,
+      "description": "自分のデッキのカードを上から5枚見る。その中からカードを1枚まで手札に加え、残りを好きな順番でデッキの下に移す。このイベントを自分の現場にいるキャラ1枚にセットする。\nこのイベントがセットされているキャラは「このキャラがコンタクトしたとき、そのコンタクト中、このキャラをAP＋2000する。」を持つ。\n【ヒラメキ】（証拠からリムーブされるときに発動する）カードを1枚引く。",
+      "cutIn": null,
+      "hirameki": "【ヒラメキ】（証拠からリムーブされるときに発動する）カードを1枚引く。",
+      "henso": null,
+      "traits": [],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01023P.jpg",
+      "mainPath": "1714012985541569.jpg"
+    },
+    {
+      "definitionId": "B01024",
+      "canonicalId": "B01024",
+      "dummyName": "大阪“3つのK”事件 (B01024)",
+      "title": "大阪“3つのK”事件",
+      "definitionVersion": "1",
+      "cardType": "CASE",
+      "colors": [
+        "青"
+      ],
+      "level": 0,
+      "ap": 0,
+      "lp": 0,
+      "description": "事件レベル: 先攻7 / 後攻6",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [],
+      "abilities": [],
+      "caseLevels": {
+        "first": 7,
+        "second": 6
+      },
+      "mainThumb": "B01024.jpg",
+      "mainPath": "1714012985544152.jpg"
+    },
+    {
+      "definitionId": "B01024P",
+      "canonicalId": "B01024P",
+      "dummyName": "大阪“3つのK”事件 (B01024P)",
+      "title": "大阪“3つのK”事件",
+      "definitionVersion": "1",
+      "cardType": "CASE",
+      "colors": [
+        "青"
+      ],
+      "level": 0,
+      "ap": 0,
+      "lp": 0,
+      "description": "事件レベル: 先攻7 / 後攻6",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [],
+      "abilities": [],
+      "caseLevels": {
+        "first": 7,
+        "second": 6
+      },
+      "mainThumb": "B01024P.jpg",
+      "mainPath": "1714012985547706.jpg"
+    },
+    {
+      "definitionId": "B01025",
+      "canonicalId": "B01025",
+      "dummyName": "服部平次 (B01025)",
+      "title": "服部平次",
+      "definitionVersion": "1",
+      "cardType": "PARTNER",
+      "colors": [
+        "緑"
+      ],
+      "level": 0,
+      "ap": 0,
+      "lp": 1,
+      "description": "【解決編】【事件解決】【スリープ】：自分の証拠が事件レベルの数以上ある場合、ゲームに勝利する。\n【アシスト】【スリープ】：FILEエリアに移動する。自分のFILEエリアにカードが7枚以上ある場合、事件を解決編にする。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01025.jpg",
+      "mainPath": "1714012985549177.jpg"
+    },
+    {
+      "definitionId": "B01025P",
+      "canonicalId": "B01025P",
+      "dummyName": "服部平次 (B01025P)",
+      "title": "服部平次",
+      "definitionVersion": "1",
+      "cardType": "PARTNER",
+      "colors": [
+        "緑"
+      ],
+      "level": 0,
+      "ap": 0,
+      "lp": 1,
+      "description": "【解決編】【事件解決】【スリープ】：自分の証拠が事件レベルの数以上ある場合、ゲームに勝利する。\n【アシスト】【スリープ】：FILEエリアに移動する。自分のFILEエリアにカードが7枚以上ある場合、事件を解決編にする。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01025P.jpg",
+      "mainPath": "1714013000968489.jpg"
+    },
+    {
+      "definitionId": "B01026",
+      "canonicalId": "B01026",
+      "dummyName": "服部平蔵 (B01026)",
+      "title": "服部平蔵",
+      "definitionVersion": "1",
+      "cardType": "PARTNER",
+      "colors": [
+        "緑"
+      ],
+      "level": 0,
+      "ap": 0,
+      "lp": 1,
+      "description": "【解決編】【事件解決】【スリープ】：自分の証拠が事件レベルの数以上ある場合、ゲームに勝利する。\n【アシスト】【スリープ】：FILEエリアに移動する。自分のFILEエリアにカードが7枚以上ある場合、事件を解決編にする。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01026.jpg",
+      "mainPath": "1714013000973538.jpg"
+    },
+    {
+      "definitionId": "B01026P",
+      "canonicalId": "B01026P",
+      "dummyName": "服部平蔵 (B01026P)",
+      "title": "服部平蔵",
+      "definitionVersion": "1",
+      "cardType": "PARTNER",
+      "colors": [
+        "緑"
+      ],
+      "level": 0,
+      "ap": 0,
+      "lp": 1,
+      "description": "【解決編】【事件解決】【スリープ】：自分の証拠が事件レベルの数以上ある場合、ゲームに勝利する。\n【アシスト】【スリープ】：FILEエリアに移動する。自分のFILEエリアにカードが7枚以上ある場合、事件を解決編にする。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01026P.jpg",
+      "mainPath": "1714013000976205.jpg"
+    },
+    {
+      "definitionId": "B01027",
+      "canonicalId": "B01027",
+      "dummyName": "遠山和葉 (B01027)",
+      "title": "遠山和葉",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "緑"
+      ],
+      "level": 7,
+      "ap": 5000,
+      "lp": 0,
+      "description": "【パートナー緑】LP＋1\n【宣言】【スリープ】：〚カード名［服部平次］〛のキャラを1枚まで選び、ターン終了時まで〚突撃〛（登場したターンからすぐにアクションできる）を与える。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [
+        "高校生",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01027.jpg",
+      "mainPath": "1714013000979715.jpg"
+    },
+    {
+      "definitionId": "B01028",
+      "canonicalId": "B01028",
+      "dummyName": "服部平次 (B01028)",
+      "title": "服部平次",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "緑"
+      ],
+      "level": 8,
+      "ap": 7000,
+      "lp": 2,
+      "description": "このキャラは相手の現場にいるアクティブ状態のキャラを指定してアクションできる。\nこのキャラがコンタクトしたとき、そのコンタクト中、このキャラをAP＋1000する。\n【パートナー緑】【自分ターン中】【ターン1】このキャラがコンタクトしたとき、このキャラをアクティブにする。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [
+        "探偵,高校生",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01028.jpg",
+      "mainPath": "1714013000981245.jpg"
+    },
+    {
+      "definitionId": "B01028P",
+      "canonicalId": "B01028P",
+      "dummyName": "服部平次 (B01028P)",
+      "title": "服部平次",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "緑"
+      ],
+      "level": 8,
+      "ap": 7000,
+      "lp": 2,
+      "description": "このキャラは相手の現場にいるアクティブ状態のキャラを指定してアクションできる。\nこのキャラがコンタクトしたとき、そのコンタクト中、このキャラをAP＋1000する。\n【パートナー緑】【自分ターン中】【ターン1】このキャラがコンタクトしたとき、このキャラをアクティブにする。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [
+        "探偵,高校生",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01028P.jpg",
+      "mainPath": "1714013000984316.jpg"
+    },
+    {
+      "definitionId": "B01029",
+      "canonicalId": "B01029",
+      "dummyName": "服部平次 (B01029)",
+      "title": "服部平次",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "緑"
+      ],
+      "level": 5,
+      "ap": 6000,
+      "lp": 1,
+      "description": " 【ヒラメキ】（証拠からリムーブされるときに発動する）カードを1枚引く。",
+      "cutIn": null,
+      "hirameki": " 【ヒラメキ】（証拠からリムーブされるときに発動する）カードを1枚引く。",
+      "henso": null,
+      "traits": [
+        "探偵,高校生",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01029.jpg",
+      "mainPath": "1714013000987480.jpg"
+    },
+    {
+      "definitionId": "B01030",
+      "canonicalId": "B01030",
+      "dummyName": "大岡紅葉 (B01030)",
+      "title": "大岡紅葉",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "緑"
+      ],
+      "level": 5,
+      "ap": 4000,
+      "lp": 1,
+      "description": "【ターン1】相手の現場にいるキャラがコンタクトによってリムーブされたとき、自分のリムーブエリアにある【カットイン】を持つ【緑】のカードを1枚まで選び、手札に加える。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [
+        "高校生",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01030.jpg",
+      "mainPath": "1714013000990927.jpg"
+    },
+    {
+      "definitionId": "B01030P",
+      "canonicalId": "B01030P",
+      "dummyName": "大岡紅葉 (B01030P)",
+      "title": "大岡紅葉",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "緑"
+      ],
+      "level": 5,
+      "ap": 4000,
+      "lp": 1,
+      "description": "【ターン1】相手の現場にいるキャラがコンタクトによってリムーブされたとき、自分のリムーブエリアにある【カットイン】を持つ【緑】のカードを1枚まで選び、手札に加える。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [
+        "高校生",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01030P.jpg",
+      "mainPath": "1714013000993481.jpg"
+    },
+    {
+      "definitionId": "B01031",
+      "canonicalId": "B01031",
+      "dummyName": "伊織無我 (B01031)",
+      "title": "伊織無我",
+      "definitionVersion": "1",
+      "cardType": "CHARACTER",
+      "colors": [
+        "緑"
+      ],
+      "level": 6,
+      "ap": 5000,
+      "lp": 1,
+      "description": "相手の現場にいるキャラがコンタクトによってリムーブされたとき、ターン終了時までこのキャラは〚突撃〛（登場したターンからすぐにアクションできる）を持つ。",
+      "cutIn": null,
+      "hirameki": null,
+      "henso": null,
+      "traits": [
+        "執事",
+        null,
+        null
+      ],
+      "abilities": [],
+      "caseLevels": null,
+      "mainThumb": "B01031.jpg",
+      "mainPath": "1714013000996254.jpg"
+    }
+  ]
+}

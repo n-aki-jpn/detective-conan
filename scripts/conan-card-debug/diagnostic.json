@@ -1,0 +1,25 @@
+{
+  "received_count": 50,
+  "reported_total": 2466,
+  "top_level_keys": [
+    "data",
+    "lastPage",
+    "total",
+    "page"
+  ],
+  "metadata": {
+    "lastPage": 50,
+    "total": 2466,
+    "page": 1
+  },
+  "first_record": {
+    "id": 1,
+    "card_id": "P001",
+    "card_num": "B01001"
+  },
+  "last_record": {
+    "id": 50,
+    "card_id": "0025",
+    "card_num": "B01031"
+  }
+}
