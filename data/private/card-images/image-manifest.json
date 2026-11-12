@@ -1,0 +1,25 @@
+{
+  "planned": 2466,
+  "selected": 1,
+  "processed": 1,
+  "saved": 1,
+  "existing": 0,
+  "failed": 0,
+  "results": [
+    {
+      "url": "https://www.takaratomy.co.jp/products/conan-cardgame/storage/card/1734349765499910.jpg",
+      "filename": "1734349765499910.jpg",
+      "references": [
+        {
+          "recordId": 1,
+          "card_num": "B01001",
+          "card_id": "P001",
+          "field": "main_path"
+        }
+      ],
+      "status": "saved",
+      "bytes": 168346,
+      "sha256": "966076ed593912ff8369a24e042b0c483df4aa282c0da4bfc2b6cd31bca4e17f"
+    }
+  ]
+}
