@@ -201,6 +201,7 @@ impl MatchEngine {
             face_up: false,
             temp_ap_bonus: 0,
             has_rush: false,
+            used_declare_this_turn: false,
         };
         ps.partner = Some(p_inst);
 
@@ -214,6 +215,7 @@ impl MatchEngine {
             face_up: false,
             temp_ap_bonus: 0,
             has_rush: false,
+            used_declare_this_turn: false,
         };
         ps.r#case = Some(c_inst);
 
@@ -229,6 +231,7 @@ impl MatchEngine {
                     face_up: false,
                     temp_ap_bonus: 0,
                     has_rush: false,
+                    used_declare_this_turn: false,
                 };
                 ps.deck.push(inst);
             }
@@ -312,6 +315,7 @@ impl MatchEngine {
             "hintPlay" => self.handle_hint_play_answer(player_id, &val),
             "guard" => self.handle_guard_answer(player_id, &val),
             "cutin" => self.handle_cutin_answer(player_id, &val),
+            "targetSelect" => self.handle_target_select_answer(player_id, &val),
             _ => return Err(format!("Unknown decision kind: {}", kind)),
         }
 
@@ -405,6 +409,7 @@ impl MatchEngine {
             for c in &mut ps.field {
                 c.temp_ap_bonus = 0;
                 c.has_rush = false;
+                c.used_declare_this_turn = false;
                 if c.orientation == CardOrientation::STUN {
                     c.orientation = CardOrientation::SLEEP;
                 } else {
@@ -414,6 +419,7 @@ impl MatchEngine {
             if let Some(ref mut p) = ps.partner {
                 p.temp_ap_bonus = 0;
                 p.has_rush = false;
+                p.used_declare_this_turn = false;
                 if p.zone == Zone::PARTNER {
                     if p.orientation == CardOrientation::STUN {
                         p.orientation = CardOrientation::SLEEP;
@@ -658,6 +664,52 @@ impl MatchEngine {
             }));
         }
 
+        // 8. Declare (宣言効果)
+        let mut declare_actors = vec![];
+        for c in &ps.field {
+            if let Some(c_def) = self.catalog.get(&c.definition_id) {
+                if c_def.description.contains("【宣言】") {
+                    let is_turn_1 = c_def.description.contains("【ターン1】");
+                    if is_turn_1 && c.used_declare_this_turn {
+                        continue;
+                    }
+                    let needs_sleep = c_def.description.contains("【スリープ】");
+                    if needs_sleep && c.orientation != CardOrientation::ACTIVE {
+                        continue;
+                    }
+                    declare_actors.push(json!({
+                        "actorId": c.instance_id.clone(),
+                        "name": self.card_name_by_def(&c.definition_id),
+                        "desc": c_def.description.clone(),
+                    }));
+                }
+            }
+        }
+        if let Some(ref p) = ps.partner {
+            if p.zone == Zone::PARTNER {
+                if let Some(p_def) = self.catalog.get(&p.definition_id) {
+                    if p_def.description.contains("【宣言】") {
+                        let is_turn_1 = p_def.description.contains("【ターン1】");
+                        let needs_sleep = p_def.description.contains("【スリープ】");
+                        let ok = (!is_turn_1 || !p.used_declare_this_turn) && (!needs_sleep || p.orientation == CardOrientation::ACTIVE);
+                        if ok {
+                            declare_actors.push(json!({
+                                "actorId": p.instance_id.clone(),
+                                "name": self.card_name_by_def(&p.definition_id),
+                                "desc": p_def.description.clone(),
+                            }));
+                        }
+                    }
+                }
+            }
+        }
+        if !declare_actors.is_empty() {
+            actions.push(json!({
+                "type": "DECLARE",
+                "actors": declare_actors
+            }));
+        }
+
         let dec_id = self.generate_decision_id();
         self.pending_decision = Some(json!({
             "decisionId": dec_id,
@@ -823,10 +875,323 @@ impl MatchEngine {
 
                 self.prompt_guard_or_cutin(&opp_pid);
             }
+            "DECLARE" => {
+                let actor_id = val.get("actorId").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                self.handle_declare_action(player_id, &actor_id);
+            }
             _ => {
                 self.prompt_main_action(player_id);
             }
         }
+    }
+
+    fn handle_declare_action(&mut self, player_id: &str, actor_id: &str) {
+        let def_id_opt = self.players.get(player_id).and_then(|ps| {
+            if let Some(ref p) = ps.partner {
+                if p.instance_id == actor_id {
+                    return Some(p.definition_id.clone());
+                }
+            }
+            ps.field.iter().find(|c| c.instance_id == actor_id).map(|c| c.definition_id.clone())
+        });
+
+        let def_id = match def_id_opt {
+            Some(id) => id,
+            None => {
+                self.prompt_main_action(player_id);
+                return;
+            }
+        };
+
+        let desc = match self.catalog.get(&def_id) {
+            Some(d) => d.description.clone(),
+            None => {
+                self.prompt_main_action(player_id);
+                return;
+            }
+        };
+
+        let card_name = self.card_name_by_def(&def_id);
+
+        // 1. コスト支払い
+        if let Some(ps) = self.players.get_mut(player_id) {
+            if desc.contains("【スリープ】") {
+                if let Some(ref mut p) = ps.partner {
+                    if p.instance_id == actor_id {
+                        p.orientation = CardOrientation::SLEEP;
+                    }
+                }
+                if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == actor_id) {
+                    c.orientation = CardOrientation::SLEEP;
+                }
+            }
+            if let Some(ref mut p) = ps.partner {
+                if p.instance_id == actor_id {
+                    p.used_declare_this_turn = true;
+                }
+            }
+            if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == actor_id) {
+                c.used_declare_this_turn = true;
+            }
+        }
+
+        self.log(format!("⚡ {} が [{}] の【宣言】を発動！", player_id, card_name));
+
+        // 2. 効果内容の判定
+        let opp_id = self.player_order.iter().find(|p| *p != player_id).cloned().unwrap_or_default();
+
+        let is_ap_buff = desc.contains("AP＋") || desc.contains("AP+");
+        let is_give_rush = desc.contains("突撃") && (desc.contains("与え") || desc.contains("持つ"));
+        let is_activate = desc.contains("アクティブにする");
+        let is_sleep_opp = desc.contains("スリープさせる") && (desc.contains("相手") || desc.contains("キャラを1枚") || desc.contains("キャラ1枚"));
+        let is_stun_opp = desc.contains("スタンさせる") && (desc.contains("相手") || desc.contains("キャラを1枚") || desc.contains("キャラ1枚"));
+        let is_remove_opp = desc.contains("リムーブする") && (desc.contains("相手") || desc.contains("キャラを1枚") || desc.contains("キャラ1枚"));
+
+        let mut candidates: Vec<Value> = vec![];
+        let mut effect_type = "";
+        let mut title = "";
+
+        if is_sleep_opp {
+            effect_type = "SLEEP";
+            title = "スリープさせる相手キャラを1体選択してください";
+            if let Some(opp_ps) = self.players.get(&opp_id) {
+                for c in &opp_ps.field {
+                    if c.orientation == CardOrientation::ACTIVE {
+                        candidates.push(json!({
+                            "instanceId": c.instance_id,
+                            "name": self.card_name_by_def(&c.definition_id),
+                            "level": self.catalog.get(&c.definition_id).map(|d| d.level).unwrap_or(0),
+                            "ap": self.catalog.get(&c.definition_id).map(|d| d.ap).unwrap_or(0) + c.temp_ap_bonus,
+                            "orientation": format!("{:?}", c.orientation),
+                            "isOpponent": true
+                        }));
+                    }
+                }
+            }
+        } else if is_stun_opp {
+            effect_type = "STUN";
+            title = "スタンさせる相手キャラを1体選択してください";
+            if let Some(opp_ps) = self.players.get(&opp_id) {
+                for c in &opp_ps.field {
+                    candidates.push(json!({
+                        "instanceId": c.instance_id,
+                        "name": self.card_name_by_def(&c.definition_id),
+                        "level": self.catalog.get(&c.definition_id).map(|d| d.level).unwrap_or(0),
+                        "ap": self.catalog.get(&c.definition_id).map(|d| d.ap).unwrap_or(0) + c.temp_ap_bonus,
+                        "orientation": format!("{:?}", c.orientation),
+                        "isOpponent": true
+                    }));
+                }
+            }
+        } else if is_remove_opp {
+            effect_type = "REMOVE";
+            title = "リムーブする相手キャラを1体選択してください";
+            if let Some(opp_ps) = self.players.get(&opp_id) {
+                for c in &opp_ps.field {
+                    candidates.push(json!({
+                        "instanceId": c.instance_id,
+                        "name": self.card_name_by_def(&c.definition_id),
+                        "level": self.catalog.get(&c.definition_id).map(|d| d.level).unwrap_or(0),
+                        "ap": self.catalog.get(&c.definition_id).map(|d| d.ap).unwrap_or(0) + c.temp_ap_bonus,
+                        "orientation": format!("{:?}", c.orientation),
+                        "isOpponent": true
+                    }));
+                }
+            }
+        } else if is_activate {
+            effect_type = "ACTIVATE";
+            title = "アクティブにする味方キャラを1体選択してください";
+            if let Some(ps) = self.players.get(player_id) {
+                for c in &ps.field {
+                    if c.orientation == CardOrientation::SLEEP {
+                        candidates.push(json!({
+                            "instanceId": c.instance_id,
+                            "name": self.card_name_by_def(&c.definition_id),
+                            "level": self.catalog.get(&c.definition_id).map(|d| d.level).unwrap_or(0),
+                            "ap": self.catalog.get(&c.definition_id).map(|d| d.ap).unwrap_or(0) + c.temp_ap_bonus,
+                            "orientation": format!("{:?}", c.orientation),
+                            "isOpponent": false
+                        }));
+                    }
+                }
+            }
+        } else if is_ap_buff && desc.contains("選び") {
+            effect_type = "AP_BUFF";
+            title = "APを強化する味方キャラを1体選択してください";
+            if let Some(ps) = self.players.get(player_id) {
+                for c in &ps.field {
+                    candidates.push(json!({
+                        "instanceId": c.instance_id,
+                        "name": self.card_name_by_def(&c.definition_id),
+                        "level": self.catalog.get(&c.definition_id).map(|d| d.level).unwrap_or(0),
+                        "ap": self.catalog.get(&c.definition_id).map(|d| d.ap).unwrap_or(0) + c.temp_ap_bonus,
+                        "orientation": format!("{:?}", c.orientation),
+                        "isOpponent": false
+                    }));
+                }
+            }
+        } else if is_give_rush && desc.contains("選び") {
+            effect_type = "GIVE_RUSH";
+            title = "突撃を与える味方キャラを1体選択してください";
+            if let Some(ps) = self.players.get(player_id) {
+                for c in &ps.field {
+                    if !c.has_rush {
+                        candidates.push(json!({
+                            "instanceId": c.instance_id,
+                            "name": self.card_name_by_def(&c.definition_id),
+                            "level": self.catalog.get(&c.definition_id).map(|d| d.level).unwrap_or(0),
+                            "ap": self.catalog.get(&c.definition_id).map(|d| d.ap).unwrap_or(0) + c.temp_ap_bonus,
+                            "orientation": format!("{:?}", c.orientation),
+                            "isOpponent": false
+                        }));
+                    }
+                }
+            }
+        }
+
+        if !effect_type.is_empty() {
+            if candidates.is_empty() {
+                self.log("⚠️ 対象となる有効なカードが存在しないため、効果は適用されませんでした");
+                self.prompt_main_action(player_id);
+                return;
+            }
+
+            let dec_id = self.generate_decision_id();
+            self.pending_decision = Some(json!({
+                "decisionId": dec_id,
+                "revision": self.revision,
+                "playerId": player_id,
+                "kind": "targetSelect",
+                "options": {
+                    "actorId": actor_id,
+                    "actorName": card_name,
+                    "effectType": effect_type,
+                    "title": title,
+                    "candidates": candidates,
+                    "optional": true
+                }
+            }));
+            return;
+        }
+
+        self.resolve_declare_effect_immediate(player_id, actor_id, &desc);
+        self.prompt_main_action(player_id);
+    }
+
+    fn resolve_declare_effect_immediate(&mut self, player_id: &str, actor_id: &str, desc: &str) {
+        let card_name = self.card_name_by_inst(actor_id);
+
+        let draw_count = parse_draw_count(desc);
+        if draw_count > 0 {
+            self.draw_cards(player_id, draw_count);
+            self.log(format!("✨ [{}] の【宣言】でカードを {} 枚引きました", card_name, draw_count));
+        }
+
+        let ev_count = parse_evidence_gain(desc);
+        if ev_count > 0 {
+            self.gain_evidence(player_id, ev_count);
+            self.log(format!("✨ [{}] の【宣言】で証拠を {} つ獲得しました", card_name, ev_count));
+        }
+
+        let ap_bonus = parse_ap_bonus(desc);
+        if ap_bonus > 0 && !desc.contains("選び") {
+            if let Some(ps) = self.players.get_mut(player_id) {
+                if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == actor_id) {
+                    c.temp_ap_bonus += ap_bonus;
+                    self.log(format!("✨ [{}] の【宣言】で自身のAP +{}", card_name, ap_bonus));
+                }
+            }
+        }
+
+        if desc.contains("突撃") && !desc.contains("与え") {
+            if let Some(ps) = self.players.get_mut(player_id) {
+                if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == actor_id) {
+                    c.has_rush = true;
+                    self.log(format!("⚡ [{}] の【宣言】で自身に〚突撃〛を付与しました", card_name));
+                }
+            }
+        }
+    }
+
+    fn handle_target_select_answer(&mut self, player_id: &str, val: &Value) {
+        let target_id = val.get("targetId").and_then(|v| v.as_str());
+        let actor_id = val.get("actorId").and_then(|v| v.as_str()).unwrap_or("");
+        let effect_type = val.get("effectType").and_then(|v| v.as_str()).unwrap_or("");
+
+        let actor_name = self.card_name_by_inst(actor_id);
+
+        if let Some(tid) = target_id {
+            let target_name = self.card_name_by_inst(tid);
+            let opp_id = self.player_order.iter().find(|p| *p != player_id).cloned().unwrap_or_default();
+
+            match effect_type {
+                "SLEEP" => {
+                    if let Some(opp_ps) = self.players.get_mut(&opp_id) {
+                        if let Some(c) = opp_ps.field.iter_mut().find(|c| c.instance_id == tid) {
+                            c.orientation = CardOrientation::SLEEP;
+                            self.log(format!("💤 [{}] の効果で相手の [{}] をスリープさせました", actor_name, target_name));
+                        }
+                    }
+                }
+                "STUN" => {
+                    if let Some(opp_ps) = self.players.get_mut(&opp_id) {
+                        if let Some(c) = opp_ps.field.iter_mut().find(|c| c.instance_id == tid) {
+                            c.orientation = CardOrientation::STUN;
+                            self.log(format!("💫 [{}] の効果で相手の [{}] をスタンさせました", actor_name, target_name));
+                        }
+                    }
+                }
+                "REMOVE" => {
+                    let mut removed = false;
+                    if let Some(opp_ps) = self.players.get_mut(&opp_id) {
+                        if let Some(idx) = opp_ps.field.iter().position(|c| c.instance_id == tid) {
+                            let mut card = opp_ps.field.remove(idx);
+                            card.zone = Zone::REMOVE;
+                            opp_ps.remove.push(card);
+                            removed = true;
+                        }
+                    }
+                    if removed {
+                        self.log(format!("💥 [{}] の効果で相手の [{}] をリムーブしました！", actor_name, target_name));
+                    }
+                }
+                "ACTIVATE" => {
+                    if let Some(ps) = self.players.get_mut(player_id) {
+                        if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == tid) {
+                            c.orientation = CardOrientation::ACTIVE;
+                            self.log(format!("✨ [{}] の効果で味方の [{}] をアクティブにしました！", actor_name, target_name));
+                        }
+                    }
+                }
+                "AP_BUFF" => {
+                    let def_id = self.find_card_def_id(actor_id).unwrap_or_default();
+                    let desc = self.catalog.get(&def_id).map(|d| d.description.clone()).unwrap_or_default();
+                    let bonus = parse_ap_bonus(&desc);
+                    let actual_bonus = if bonus > 0 { bonus } else { 1000 };
+                    if let Some(ps) = self.players.get_mut(player_id) {
+                        if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == tid) {
+                            c.temp_ap_bonus += actual_bonus;
+                            self.log(format!("✨ [{}] の効果で [{}] のAP +{}", actor_name, target_name, actual_bonus));
+                        }
+                    }
+                }
+                "GIVE_RUSH" => {
+                    if let Some(ps) = self.players.get_mut(player_id) {
+                        if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == tid) {
+                            c.has_rush = true;
+                            self.log(format!("⚡ [{}] の効果で [{}] に〚突撃〛を与えました！", actor_name, target_name));
+                        }
+                    }
+                }
+                _ => {
+                    self.log(format!("✨ [{}] の効果が [{}] に適用されました", actor_name, target_name));
+                }
+            }
+        } else {
+            self.log(format!("{} は [{}] の対象を選択しませんでした（スキップ）", player_id, actor_name));
+        }
+
+        self.prompt_main_action(player_id);
     }
 
     /// ガードまたはカットインの意思決定をプロンプト

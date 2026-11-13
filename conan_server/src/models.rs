@@ -103,6 +103,8 @@ pub struct CardInstance {
     pub temp_ap_bonus: i32,
     #[serde(default)]
     pub has_rush: bool,
+    #[serde(default)]
+    pub used_declare_this_turn: bool,
 }
 
 fn default_orientation() -> CardOrientation {

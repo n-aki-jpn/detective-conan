@@ -1154,7 +1154,7 @@
           div.className += ' log-turn-divider';
         } else if (msg.includes('攻撃') || msg.includes('バトル決着') || msg.includes('リムーブ') || msg.includes('💥')) {
           div.className += ' log-attack';
-        } else if (msg.includes('【カットイン】') || msg.includes('カットイン') || msg.includes('⚡')) {
+        } else if (msg.includes('【カットイン】') || msg.includes('カットイン') || msg.includes('【宣言】') || msg.includes('⚡')) {
           div.className += ' log-cutin';
         } else if (msg.includes('ガード') || msg.includes('🛡️')) {
           div.className += ' log-guard';
@@ -1371,6 +1371,16 @@
                   decActs.appendChild(b);
                 });
               });
+            } else if (act.type === 'DECLARE') {
+              (act.actors || []).forEach(actor => {
+                const b = document.createElement('button');
+                b.className = 'btn';
+                b.style.cssText = 'background:#8b5cf6; border-color:#a78bfa; font-size:0.8rem; padding:6px 12px; font-weight:bold; box-shadow:0 0 10px rgba(139,92,246,0.3);';
+                b.innerText = `⚡ 【宣言】: ${actor.name}`;
+                b.title = actor.desc || '';
+                b.onclick = () => submitDecision({ type: 'DECLARE', actorId: actor.actorId });
+                decActs.appendChild(b);
+              });
             }
           });
         } else if (pd.kind === 'guard') {
@@ -1440,6 +1450,51 @@
             btn.onclick = () => submitDecision({ cardId: cid });
             decActs.appendChild(btn);
           });
+        } else if (pd.kind === 'targetSelect') {
+          const actorName = pd.options.actorName || '効果';
+          document.getElementById('decision-title').innerText = `⚡ 対象選択: ${actorName}`;
+          document.getElementById('decision-desc').innerText = pd.options.title || '効果の対象カードを1枚選んでください';
+
+          if (pd.options.optional) {
+            const btnSkip = document.createElement('button');
+            btnSkip.className = 'btn btn-secondary';
+            btnSkip.innerText = 'スキップ（選択しない）';
+            btnSkip.onclick = () => submitDecision({
+              targetId: null,
+              actorId: pd.options.actorId,
+              effectType: pd.options.effectType
+            });
+            decActs.appendChild(btnSkip);
+          }
+
+          const candContainer = document.createElement('div');
+          candContainer.style.cssText = 'display:flex; flex-wrap:wrap; gap:8px; width:100%; margin-top:6px;';
+
+          (pd.options.candidates || []).forEach(cand => {
+            const btn = document.createElement('button');
+            btn.className = 'btn';
+            const isOpp = cand.isOpponent;
+            const sideLabel = isOpp ? '【相手】' : '【味方】';
+            btn.style.cssText = isOpp
+              ? 'background:#991b1b; border-color:#ef4444; font-size:0.8rem; display:flex; flex-direction:column; align-items:flex-start; padding:6px 10px; min-height:auto;'
+              : 'background:#1e3a8a; border-color:#3b82f6; font-size:0.8rem; display:flex; flex-direction:column; align-items:flex-start; padding:6px 10px; min-height:auto;';
+
+            const stateLabel = cand.orientation === 'SLEEP' ? ' 💤' : cand.orientation === 'STUN' ? ' 💫' : '';
+            btn.innerHTML = `
+              <span style="font-weight:bold; display:flex; align-items:center; gap:4px;">${sideLabel} ${cand.name}${stateLabel}</span>
+              <span style="font-size:0.68rem; opacity:0.85;">Lv.${cand.level} / AP ${cand.ap}</span>
+            `;
+
+            btn.onclick = () => submitDecision({
+              targetId: cand.instanceId,
+              actorId: pd.options.actorId,
+              effectType: pd.options.effectType
+            });
+
+            candContainer.appendChild(btn);
+          });
+
+          decActs.appendChild(candContainer);
         }
       } else {
         if (obs.decisionPlayerId) {

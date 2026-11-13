@@ -70,6 +70,17 @@ impl RandomAgent {
                         }
                     }
                 }
+                if types.contains(&"DECLARE") && rng.gen_bool(0.7) {
+                    if let Some(act) = actions.iter().find(|a| a.get("type").and_then(|t| t.as_str()) == Some("DECLARE")) {
+                        if let Some(actors) = act.get("actors").and_then(|v| v.as_array()) {
+                            if let Some(actor) = actors.choose(&mut rng) {
+                                if let Some(aid) = actor.get("actorId").and_then(|v| v.as_str()) {
+                                    return json!({"value": {"type": "DECLARE", "actorId": aid}});
+                                }
+                            }
+                        }
+                    }
+                }
                 if types.contains(&"ASSIST") && rng.gen_bool(0.5) {
                     return json!({"value": {"type": "ASSIST"}});
                 }
@@ -95,6 +106,29 @@ impl RandomAgent {
                     }
                 }
                 json!({"value": {"guardCardId": null}})
+            }
+            "targetSelect" => {
+                let actor_id = opts.get("actorId").and_then(|v| v.as_str()).unwrap_or("");
+                let effect_type = opts.get("effectType").and_then(|v| v.as_str()).unwrap_or("");
+                if let Some(candidates) = opts.get("candidates").and_then(|v| v.as_array()) {
+                    if let Some(chosen) = candidates.choose(&mut rng) {
+                        let tid = chosen.get("instanceId").and_then(|v| v.as_str());
+                        return json!({
+                            "value": {
+                                "targetId": tid,
+                                "actorId": actor_id,
+                                "effectType": effect_type
+                            }
+                        });
+                    }
+                }
+                json!({
+                    "value": {
+                        "targetId": null,
+                        "actorId": actor_id,
+                        "effectType": effect_type
+                    }
+                })
             }
             _ => json!({"value": {}}),
         }

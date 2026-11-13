@@ -42,6 +42,7 @@ pub fn build_player_observation(engine: &MatchEngine, viewing_player_id: &str) -
             "ap": effective_ap,
             "baseAp": base_ap,
             "hasRush": c.has_rush,
+            "usedDeclareThisTurn": c.used_declare_this_turn,
             "lp": lp,
             "cardType": card_type,
             "orientation": orientation_str,
