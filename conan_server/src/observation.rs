@@ -122,6 +122,7 @@ pub fn build_player_observation(engine: &MatchEngine, viewing_player_id: &str) -
         "opponent": opp_ps.map(|p| serialize_player(p, false)).unwrap_or(Value::Null),
         "pendingDecision": pending_dec,
         "winnerId": engine.winner_id,
-        "finishReason": engine.finish_reason
+        "finishReason": engine.finish_reason,
+        "logs": &engine.logs
     })
 }

@@ -203,6 +203,83 @@
     .mulligan-item.selected { border-color: #ef4444; background: rgba(239, 68, 68, 0.2); }
     .mulligan-item.selected::after { content: "✕ 戻す"; color: #ef4444; font-size: 0.7rem; font-weight: bold; }
 
+    /* ========== BATTLE ACTION LOG STYLES ========== */
+    .battle-log-zone {
+      background: #0f172a;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin-top: 4px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    }
+    .battle-log-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+    .battle-log-latest {
+      font-size: 0.72rem;
+      color: #cbd5e1;
+      background: rgba(30, 41, 59, 0.7);
+      padding: 3px 6px;
+      border-radius: 4px;
+      margin: 4px 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      border-left: 3px solid var(--accent);
+    }
+    .battle-log-list {
+      max-height: 180px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      font-size: 0.73rem;
+      line-height: 1.4;
+      padding-top: 4px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      scrollbar-width: thin;
+    }
+    .log-item {
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(30, 41, 59, 0.4);
+      color: #e2e8f0;
+      word-break: break-all;
+    }
+    .log-turn-divider {
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--accent);
+      font-weight: bold;
+      border-left: 3px solid var(--accent);
+      padding: 3px 6px;
+      margin-top: 4px;
+    }
+    .log-attack {
+      border-left: 3px solid #ef4444;
+      background: rgba(239, 68, 68, 0.1);
+    }
+    .log-cutin {
+      border-left: 3px solid #a855f7;
+      background: rgba(168, 85, 247, 0.1);
+    }
+    .log-guard {
+      border-left: 3px solid #eab308;
+      background: rgba(234, 179, 8, 0.1);
+    }
+    .log-play {
+      border-left: 3px solid #3b82f6;
+      background: rgba(59, 130, 246, 0.1);
+    }
+    .log-finish {
+      border-left: 3px solid #10b981;
+      background: rgba(16, 185, 129, 0.2);
+      font-weight: bold;
+    }
+
     /* ========== DECK BUILDER STYLES ========== */
     .deck-builder-container { padding: 10px; display: flex; flex-direction: column; gap: 12px; }
     .deck-summary-card {
@@ -464,6 +541,22 @@
           </div>
           <div id="me-field" class="field-slots"></div>
         </div>
+      </div>
+
+      <!-- Battle Log (Action History) -->
+      <div class="battle-log-zone">
+        <div class="battle-log-header" onclick="toggleLogExpanded()">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span style="font-weight:bold; font-size:0.82rem; color:var(--text);">📜 対戦ログ / 履歴</span>
+            <span id="log-count-badge" style="font-size:0.65rem; background:#1e293b; color:var(--accent); border:1px solid #475569; padding:1px 6px; border-radius:10px;">0件</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <button class="btn btn-secondary" onclick="event.stopPropagation(); scrollLogToBottom();" style="font-size:0.65rem; padding:2px 8px; min-height:22px;">⬇ 最新</button>
+            <span id="log-toggle-icon" style="font-size:0.75rem; color:var(--text-muted);">▲ 閉じる</span>
+          </div>
+        </div>
+        <div id="log-latest-summary" class="battle-log-latest">対戦待機中...</div>
+        <div id="battle-log-list" class="battle-log-list"></div>
       </div>
     </div>
 
@@ -844,7 +937,8 @@
         const curDecId = data.pendingDecision ? data.pendingDecision.decisionId : null;
         const curWaitingP2 = !!data.waitingForPlayer2;
         const curPhase = data.phase || '';
-        const hasChanged = (data.revision !== lastRevision) || (curDecId !== lastDecisionId) || (curWaitingP2 !== lastWaitingP2) || (curPhase !== lastPhase);
+        const curLogsLen = (data.logs || []).length;
+        const hasChanged = (data.revision !== lastRevision) || (curDecId !== lastDecisionId) || (curWaitingP2 !== lastWaitingP2) || (curPhase !== lastPhase) || (curLogsLen !== lastLogCount);
         
         lastObs = data;
         if (hasChanged) {
@@ -863,6 +957,7 @@
       currentViewingPlayer = pid;
       selectedMulliganIds.clear();
       lastRevision = -1;
+      lastLogCount = 0;
       updateUrlParams();
       fetchState();
     }
@@ -880,6 +975,7 @@
       selectedMulliganIds.clear();
       lastRevision = -1;
       lastDecisionId = null;
+      lastLogCount = 0;
       await fetch('/api/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1010,6 +1106,70 @@
       return el;
     }
 
+    let isLogExpanded = true;
+    let lastLogCount = 0;
+
+    function toggleLogExpanded() {
+      isLogExpanded = !isLogExpanded;
+      const listEl = document.getElementById('battle-log-list');
+      const iconEl = document.getElementById('log-toggle-icon');
+      if (listEl) {
+        listEl.style.display = isLogExpanded ? 'flex' : 'none';
+      }
+      if (iconEl) {
+        iconEl.innerText = isLogExpanded ? '▲ 閉じる' : '▼ 履歴を見る';
+      }
+    }
+
+    function scrollLogToBottom() {
+      const listEl = document.getElementById('battle-log-list');
+      if (listEl) {
+        listEl.scrollTop = listEl.scrollHeight;
+      }
+    }
+
+    function renderLogs(logs) {
+      if (!logs || !Array.isArray(logs)) return;
+      const countBadge = document.getElementById('log-count-badge');
+      const latestSummary = document.getElementById('log-latest-summary');
+      const listEl = document.getElementById('battle-log-list');
+      if (!listEl) return;
+
+      if (countBadge) countBadge.innerText = `${logs.length}件`;
+      if (latestSummary && logs.length > 0) {
+        latestSummary.innerText = logs[logs.length - 1];
+      }
+
+      if (logs.length === lastLogCount) return;
+      lastLogCount = logs.length;
+
+      listEl.innerHTML = '';
+      logs.forEach(msg => {
+        if (msg.includes('━━━━━━')) return;
+        const div = document.createElement('div');
+        div.className = 'log-item';
+        div.innerText = msg;
+
+        if (msg.includes('【ターン') || msg.includes('対戦開始')) {
+          div.className += ' log-turn-divider';
+        } else if (msg.includes('攻撃') || msg.includes('バトル決着') || msg.includes('リムーブ') || msg.includes('💥')) {
+          div.className += ' log-attack';
+        } else if (msg.includes('【カットイン】') || msg.includes('カットイン') || msg.includes('⚡')) {
+          div.className += ' log-cutin';
+        } else if (msg.includes('ガード') || msg.includes('🛡️')) {
+          div.className += ' log-guard';
+        } else if (msg.includes('登場') || msg.includes('引き直し') || msg.includes('引き')) {
+          div.className += ' log-play';
+        } else if (msg.includes('対戦終了') || msg.includes('事件解決') || msg.includes('勝者')) {
+          div.className += ' log-finish';
+        }
+
+        listEl.appendChild(div);
+      });
+
+      listEl.scrollTop = listEl.scrollHeight;
+    }
+
     function getCardLabel(cardId, cardsList) {
       const c = (cardsList || []).find(item => item && item.instanceId === cardId);
       if (c) {
@@ -1019,6 +1179,7 @@
     }
 
     function render(obs) {
+      renderLogs(obs.logs);
       if (document.getElementById('cpu-toggle')) {
         document.getElementById('cpu-toggle').checked = !!obs.p2IsCpu;
       }

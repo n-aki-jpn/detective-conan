@@ -70,6 +70,7 @@ pub struct MatchEngine {
     pub winner_id: Option<String>,
     pub finish_reason: Option<String>,
     pub action_context: Option<Value>,
+    pub logs: Vec<String>,
 }
 
 fn normalize_color_set(raw_colors: &[String]) -> HashSet<String> {
@@ -85,21 +86,6 @@ fn normalize_color_set(raw_colors: &[String]) -> HashSet<String> {
     set
 }
 
-/// カードdescriptionから数値を抽出するユーティリティ
-/// 例: "AP＋2000" → 2000, "カードを3枚引く" → 3
-fn extract_number_before(text: &str, suffix: &str) -> Option<i32> {
-    if let Some(pos) = text.find(suffix) {
-        let before = &text[..pos];
-        // 末尾の連続する数字を取得
-        let digits: String = before.chars().rev().take_while(|c| c.is_ascii_digit()).collect();
-        let digits: String = digits.chars().rev().collect();
-        digits.parse().ok()
-    } else {
-        None
-    }
-}
-
-/// 効果テキストに含まれる数値付きキーワードを解析
 fn parse_draw_count(desc: &str) -> usize {
     if desc.contains("カードを2枚引く") || desc.contains("2枚引く") { return 2; }
     if desc.contains("カードを3枚引く") || desc.contains("3枚引く") { return 3; }
@@ -137,6 +123,56 @@ impl MatchEngine {
             winner_id: None,
             finish_reason: None,
             action_context: None,
+            logs: vec![],
+        }
+    }
+
+    pub fn log(&mut self, msg: impl Into<String>) {
+        let msg_str = msg.into();
+        self.logs.push(msg_str);
+        if self.logs.len() > 500 {
+            self.logs.drain(0..100);
+        }
+    }
+
+    pub fn card_name_by_def(&self, def_id: &str) -> String {
+        self.catalog.get(def_id)
+            .and_then(|d| d.names.first().cloned())
+            .unwrap_or_else(|| def_id.to_string())
+    }
+
+    pub fn find_card_def_id(&self, instance_id: &str) -> Option<String> {
+        for ps in self.players.values() {
+            if let Some(ref p) = ps.partner {
+                if p.instance_id == instance_id { return Some(p.definition_id.clone()); }
+            }
+            if let Some(ref c) = ps.r#case {
+                if c.instance_id == instance_id { return Some(c.definition_id.clone()); }
+            }
+            for c in &ps.field {
+                if c.instance_id == instance_id { return Some(c.definition_id.clone()); }
+            }
+            for c in &ps.hand {
+                if c.instance_id == instance_id { return Some(c.definition_id.clone()); }
+            }
+            for c in &ps.file {
+                if c.instance_id == instance_id { return Some(c.definition_id.clone()); }
+            }
+            for c in &ps.evidence {
+                if c.instance_id == instance_id { return Some(c.definition_id.clone()); }
+            }
+            for c in &ps.remove {
+                if c.instance_id == instance_id { return Some(c.definition_id.clone()); }
+            }
+        }
+        None
+    }
+
+    pub fn card_name_by_inst(&self, inst_id: &str) -> String {
+        if let Some(def_id) = self.find_card_def_id(inst_id) {
+            self.card_name_by_def(&def_id)
+        } else {
+            inst_id.to_string()
         }
     }
 
@@ -216,6 +252,8 @@ impl MatchEngine {
         let p2_id = self.player_order[1].clone();
         self.players.get_mut(&p1_id).unwrap().is_first_player = true;
         self.players.get_mut(&p2_id).unwrap().is_first_player = false;
+
+        self.log(format!("⚔️ 対戦開始！ 先攻: {}, 後攻: {}", p1_id, p2_id));
 
         // Shuffle and deal 5 cards
         for ps in self.players.values_mut() {
@@ -320,6 +358,9 @@ impl MatchEngine {
                     }
                 }
                 ps.hand = kept;
+                self.log(format!("🃏 {} が手札 {} 枚を引き直しました", player_id, replace_count));
+            } else {
+                self.log(format!("🃏 {} は初期手札をキープしました", player_id));
             }
         }
 
@@ -385,6 +426,9 @@ impl MatchEngine {
             is_first_player = ps.is_first_player;
         }
 
+        self.log(format!("━━━━━━━━━━━━━━━━━━━━"));
+        self.log(format!("【ターン {}】{} のターン開始", turn, turn_player_id));
+
         // AUTO_DRAW 1 card
         self.draw_cards(turn_player_id, 1);
         if self.phase == MatchPhase::FINISHED {
@@ -399,6 +443,7 @@ impl MatchEngine {
                 return;
             }
         }
+        self.log(format!("📥 {} はカードを1枚引き、FILEに {} 枚置きました", turn_player_id, file_count));
 
         self.phase = MatchPhase::MAIN;
         self.prompt_main_action(turn_player_id);
@@ -472,6 +517,8 @@ impl MatchEngine {
         let mut rng = rand::thread_rng();
         ps.deck.shuffle(&mut rng);
 
+        self.log(format!("🔄 {} の山札が無くなりリフレッシュ発生！（相手の証拠+1）", player_id));
+
         // Opponent gains 1 evidence
         self.gain_evidence(&other_id, 1);
     }
@@ -481,6 +528,13 @@ impl MatchEngine {
         self.winner_id = Some(winner_id.to_string());
         self.finish_reason = Some(reason.to_string());
         self.pending_decision = None;
+
+        let reason_str = match reason {
+            "CASE_RESOLVED" => "事件解決",
+            "REFRESH_EMPTY_REMOVE" => "リフレッシュ枯渇",
+            _ => reason,
+        };
+        self.log(format!("🏆 【対戦終了】勝者: {} ({})", winner_id, reason_str));
     }
 
     fn prompt_main_action(&mut self, player_id: &str) {
@@ -621,6 +675,7 @@ impl MatchEngine {
 
         match action_type {
             "END_TURN" => {
+                self.log(format!("⏭ {} がターンを終了しました", player_id));
                 let next_turn = self.turn + 1;
                 let next_pid = self.player_order.iter().find(|pid| *pid != player_id).unwrap().clone();
                 self.start_turn(next_turn, &next_pid);
@@ -642,6 +697,9 @@ impl MatchEngine {
                     }
                 }
                 if let Some(def_id) = played_def_id {
+                    let card_name = self.card_name_by_def(&def_id);
+                    let lvl = self.catalog.get(&def_id).map(|d| d.level).unwrap_or(0);
+                    self.log(format!("🃏 {} が [{}] (Lv.{}) を登場させました", player_id, card_name, lvl));
                     self.resolve_on_play_effects(player_id, &def_id);
                 }
                 self.prompt_main_action(player_id);
@@ -672,6 +730,7 @@ impl MatchEngine {
                         }
                     }
                 }
+                self.log(format!("💡 {} が ネクストヒント を使用（FILEから手札へ1枚回収）", player_id));
 
                 let dec_id = self.generate_decision_id();
                 self.pending_decision = Some(json!({
@@ -685,6 +744,7 @@ impl MatchEngine {
                 }));
             }
             "ASSIST" => {
+                let mut became_resolution = false;
                 if let Some(ps) = self.players.get_mut(player_id) {
                     if let Some(ref mut p) = ps.partner {
                         if p.zone == Zone::PARTNER {
@@ -692,13 +752,19 @@ impl MatchEngine {
                             p.zone = Zone::FILE;
                         }
                     }
-                    if ps.effective_file_count() >= 7 {
+                    if ps.effective_file_count() >= 7 && ps.case_phase != CasePhase::RESOLUTION {
                         ps.case_phase = CasePhase::RESOLUTION;
+                        became_resolution = true;
                     }
+                }
+                self.log(format!("🤝 {} が パートナーのアシスト を宣言（パートナーをFILEへ移動）", player_id));
+                if became_resolution {
+                    self.log(format!("✨ {} のFILEが7枚以上になり、事件が【解決編】に突入しました！", player_id));
                 }
                 self.prompt_main_action(player_id);
             }
             "RESOLVE_CASE" => {
+                self.log(format!("🎉 {} が 事件解決 を宣言！", player_id));
                 self.finish_match(player_id, "CASE_RESOLVED");
             }
             "DEDUCE" => {
@@ -723,8 +789,12 @@ impl MatchEngine {
                     }
                 }
 
+                let actor_name = self.card_name_by_inst(&actor_id);
                 if lp > 0 {
                     self.gain_evidence(player_id, lp as usize);
+                    self.log(format!("🔎 {} の [{}] が 推理 を行いました（証拠 +{}）", player_id, actor_name, lp));
+                } else {
+                    self.log(format!("🔎 {} の [{}] が 推理 を行いました", player_id, actor_name));
                 }
                 self.prompt_main_action(player_id);
             }
@@ -739,6 +809,10 @@ impl MatchEngine {
                 }
 
                 let opp_pid = self.player_order.iter().find(|p| *p != player_id).unwrap().clone();
+
+                let actor_name = self.card_name_by_inst(&actor_id);
+                let target_name = self.card_name_by_inst(&target_id);
+                self.log(format!("⚔️ {} の [{}] が {} の [{}] に攻撃を仕掛けました！", player_id, actor_name, opp_pid, target_name));
 
                 self.action_context = Some(json!({
                     "actorId": actor_id,
@@ -827,7 +901,11 @@ impl MatchEngine {
             }
         }
         if let Some(def_id) = played_def_id {
+            let card_name = self.card_name_by_def(&def_id);
+            self.log(format!("🃏 {} がヒントから [{}] を登場させました", player_id, card_name));
             self.resolve_on_play_effects(player_id, &def_id);
+        } else {
+            self.log(format!("{} はヒントからの登場をスキップしました", player_id));
         }
         self.prompt_main_action(player_id);
     }
@@ -836,7 +914,6 @@ impl MatchEngine {
         // カットイン使用かチェック
         if let Some(cutin_instance_id) = val.get("cutinCardId").and_then(|v| v.as_str()) {
             let cutin_instance_id = cutin_instance_id.to_string();
-            // カットインカードを手札からリムーブ
             let cutin_def_id = {
                 let ps = self.players.get_mut(player_id).unwrap();
                 if let Some(idx) = ps.hand.iter().position(|c| c.instance_id == cutin_instance_id) {
@@ -851,7 +928,8 @@ impl MatchEngine {
             };
 
             if let Some(def_id) = cutin_def_id {
-                // カットイン効果を解決してから、再度ガード/カットインを促す
+                let cutin_name = self.card_name_by_def(&def_id);
+                self.log(format!("⚡ {} が [{}] の【カットイン】を発動！", player_id, cutin_name));
                 self.resolve_cutin_effects(player_id, &def_id);
                 // カットイン後も再度ガードできる
                 let defender_pid = player_id.to_string();
@@ -862,12 +940,16 @@ impl MatchEngine {
 
         // 通常ガード処理
         let guard_id = val.get("guardCardId").and_then(|v| v.as_str()).map(|s| s.to_string());
+        if let Some(ref gid) = guard_id {
+            let guard_name = self.card_name_by_inst(gid);
+            self.log(format!("🛡️ {} が [{}] でガードを宣言！", player_id, guard_name));
+        } else {
+            self.log(format!("{} はガードを行いませんでした（スルー）", player_id));
+        }
         self.proceed_to_action_resolution(guard_id.as_deref());
     }
 
-    /// カットイン時の追加決定（将来的な拡張用）
     fn handle_cutin_answer(&mut self, player_id: &str, val: &Value) {
-        // 現在はguard answerで処理しているため、ここはフォールバック
         self.handle_guard_answer(player_id, val);
     }
 
@@ -917,6 +999,9 @@ impl MatchEngine {
                     defender_ps.remove.push(ev_card);
                 }
                 self.gain_evidence(&attacker_pid, 1);
+                self.log(format!("💥 事件への攻撃ヒット！ {} の証拠を1枚削り、{} が証拠を1つ獲得！", defender_pid, attacker_pid));
+            } else {
+                self.log(format!("💥 事件への攻撃！ しかし {} の証拠はすでに0でした", defender_pid));
             }
         } else if let Some(def_cid) = target_field_card_id {
             let actor_def_id = self.players.get(&attacker_pid)
@@ -935,6 +1020,9 @@ impl MatchEngine {
                 let actor_ap = self.catalog.get(&a_def_id).map(|d| d.ap).unwrap_or(0) + actor_bonus;
                 let def_ap = self.catalog.get(&d_def_id).map(|d| d.ap).unwrap_or(0) + def_bonus;
 
+                let actor_name = self.card_name_by_def(&a_def_id);
+                let def_name = self.card_name_by_def(&d_def_id);
+
                 if actor_ap >= def_ap {
                     let defender_ps = self.players.get_mut(&defender_pid).unwrap();
                     if let Some(idx) = defender_ps.field.iter().position(|c| c.instance_id == def_cid) {
@@ -942,6 +1030,9 @@ impl MatchEngine {
                         removed_c.zone = Zone::REMOVE;
                         defender_ps.remove.push(removed_c);
                     }
+                    self.log(format!("💥 バトル決着: [{}] (AP{}) vs [{}] (AP{}) ➔ {} の [{}] をリムーブ！", actor_name, actor_ap, def_name, def_ap, defender_pid, def_name));
+                } else {
+                    self.log(format!("🛡️ バトル決着: [{}] (AP{}) vs [{}] (AP{}) ➔ AP不足のためリムーブできず（守備成功）", actor_name, actor_ap, def_name, def_ap));
                 }
             }
         }
@@ -960,11 +1051,14 @@ impl MatchEngine {
             return;
         }
 
+        let card_name = self.card_name_by_def(definition_id);
+
         // 突撃: 登場したターンからすぐにアクション可能
         if desc.contains("突撃") {
             if let Some(ps) = self.players.get_mut(player_id) {
                 if let Some(c) = ps.field.iter_mut().find(|c| c.definition_id == definition_id && c.entered_turn == self.turn) {
                     c.has_rush = true;
+                    self.log(format!("⚡ 〚突撃〛 [{}] は登場ターンから攻撃可能です！", card_name));
                 }
             }
         }
@@ -978,12 +1072,14 @@ impl MatchEngine {
             let draw_count = parse_draw_count(&desc);
             if draw_count > 0 {
                 self.draw_cards(player_id, draw_count);
+                self.log(format!("✨ [{}] の効果でカードを {} 枚引きました", card_name, draw_count));
             }
 
             // 証拠獲得効果
             let ev_count = parse_evidence_gain(&desc);
             if ev_count > 0 {
                 self.gain_evidence(player_id, ev_count);
+                self.log(format!("✨ [{}] の効果で証拠を {} つ獲得しました", card_name, ev_count));
             }
 
             // APバフ効果（自身）
@@ -992,6 +1088,7 @@ impl MatchEngine {
                 if let Some(ps) = self.players.get_mut(player_id) {
                     if let Some(c) = ps.field.iter_mut().find(|c| c.definition_id == definition_id && c.entered_turn == self.turn) {
                         c.temp_ap_bonus += ap_bonus;
+                        self.log(format!("✨ [{}] の効果で自身のAP +{}", card_name, ap_bonus));
                     }
                 }
             }
@@ -999,8 +1096,8 @@ impl MatchEngine {
             // スリープ効果: 相手フィールドのキャラをスリープ
             if desc.contains("スリープさせる") && (desc.contains("相手の") || desc.contains("キャラを1枚")) {
                 let opp_id = self.player_order.iter().find(|p| *p != player_id).cloned().unwrap_or_default();
+                let mut target_name = None;
                 if let Some(opp_ps) = self.players.get_mut(&opp_id) {
-                    // 最もAPが低いACTIVEキャラをスリープ（CPU代替選択）
                     let target_idx = opp_ps.field.iter().enumerate()
                         .filter(|(_, c)| c.orientation == CardOrientation::ACTIVE)
                         .min_by_key(|(_, c)| {
@@ -1009,13 +1106,19 @@ impl MatchEngine {
                         .map(|(i, _)| i);
                     if let Some(idx) = target_idx {
                         opp_ps.field[idx].orientation = CardOrientation::SLEEP;
+                        let tid = opp_ps.field[idx].definition_id.clone();
+                        target_name = Some(self.card_name_by_def(&tid));
                     }
+                }
+                if let Some(tname) = target_name {
+                    self.log(format!("💤 [{}] の効果で相手の [{}] をスリープさせました", card_name, tname));
                 }
             }
 
             // スタン効果
             if desc.contains("スタンさせる") && (desc.contains("相手の") || desc.contains("キャラを1枚")) {
                 let opp_id = self.player_order.iter().find(|p| *p != player_id).cloned().unwrap_or_default();
+                let mut target_name = None;
                 if let Some(opp_ps) = self.players.get_mut(&opp_id) {
                     let target_idx = opp_ps.field.iter().enumerate()
                         .filter(|(_, c)| c.orientation == CardOrientation::ACTIVE || c.orientation == CardOrientation::SLEEP)
@@ -1025,7 +1128,12 @@ impl MatchEngine {
                         .map(|(i, _)| i);
                     if let Some(idx) = target_idx {
                         opp_ps.field[idx].orientation = CardOrientation::STUN;
+                        let tid = opp_ps.field[idx].definition_id.clone();
+                        target_name = Some(self.card_name_by_def(&tid));
                     }
+                }
+                if let Some(tname) = target_name {
+                    self.log(format!("💫 [{}] の効果で相手の [{}] をスタンさせました", card_name, tname));
                 }
             }
         }
@@ -1042,67 +1150,88 @@ impl MatchEngine {
             return;
         }
 
+        let card_name = self.card_name_by_def(definition_id);
+
         // カットイン後のドロー
         let draw_count = parse_draw_count(&desc);
         if draw_count > 0 {
             self.draw_cards(player_id, draw_count);
+            self.log(format!("⚡ [{}] のカットイン効果: カードを {} 枚引きました", card_name, draw_count));
         }
 
         // カットイン後の証拠獲得
         let ev_count = parse_evidence_gain(&desc);
         if ev_count > 0 {
             self.gain_evidence(player_id, ev_count);
+            self.log(format!("⚡ [{}] のカットイン効果: 証拠を {} つ獲得しました", card_name, ev_count));
         }
 
         // カットイン: 相手の現場キャラをスリープ
         if desc.contains("スリープさせる") {
             let opp_id = self.player_order.iter().find(|p| *p != player_id).cloned().unwrap_or_default();
+            let mut target_name = None;
             if let Some(ctx) = &self.action_context {
-                // アクション中のアクターを優先ターゲット
                 let actor_id = ctx.get("actorId").and_then(|v| v.as_str()).unwrap_or("").to_string();
                 if let Some(opp_ps) = self.players.get_mut(&opp_id) {
                     if let Some(c) = opp_ps.field.iter_mut().find(|c| c.instance_id == actor_id) {
                         c.orientation = CardOrientation::SLEEP;
+                        let tid = c.definition_id.clone();
+                        target_name = Some(self.card_name_by_def(&tid));
                     }
                 }
             } else {
-                // アクターがない場合は最初のACTIVEキャラ
                 let opp_id2 = opp_id.clone();
                 if let Some(opp_ps) = self.players.get_mut(&opp_id2) {
                     for c in opp_ps.field.iter_mut() {
                         if c.orientation == CardOrientation::ACTIVE {
                             c.orientation = CardOrientation::SLEEP;
+                            let tid = c.definition_id.clone();
+                            target_name = Some(self.card_name_by_def(&tid));
                             break;
                         }
                     }
                 }
+            }
+            if let Some(tname) = target_name {
+                self.log(format!("⚡ [{}] のカットイン効果: [{}] をスリープさせました", card_name, tname));
             }
         }
 
         // カットイン: 相手の現場キャラをスタン
         if desc.contains("スタンさせる") {
             let opp_id = self.player_order.iter().find(|p| *p != player_id).cloned().unwrap_or_default();
+            let mut target_name = None;
             if let Some(opp_ps) = self.players.get_mut(&opp_id) {
                 for c in opp_ps.field.iter_mut() {
                     if c.orientation == CardOrientation::ACTIVE || c.orientation == CardOrientation::SLEEP {
                         c.orientation = CardOrientation::STUN;
+                        let tid = c.definition_id.clone();
+                        target_name = Some(self.card_name_by_def(&tid));
                         break;
                     }
                 }
+            }
+            if let Some(tname) = target_name {
+                self.log(format!("⚡ [{}] のカットイン効果: [{}] をスタンさせました", card_name, tname));
             }
         }
 
         // カットイン: APバフ（自分のキャラに）
         let ap_bonus = parse_ap_bonus(&desc);
         if ap_bonus > 0 {
+            let mut buffed_def_id = None;
             if let Some(ps) = self.players.get_mut(player_id) {
-                // 最初のACTIVEキャラにバフ
                 for c in ps.field.iter_mut() {
                     if c.orientation == CardOrientation::ACTIVE {
                         c.temp_ap_bonus += ap_bonus;
+                        buffed_def_id = Some(c.definition_id.clone());
                         break;
                     }
                 }
+            }
+            if let Some(did) = buffed_def_id {
+                let my_card_name = self.card_name_by_def(&did);
+                self.log(format!("⚡ [{}] のカットイン効果: [{}] のAP +{}", card_name, my_card_name, ap_bonus));
             }
         }
 
@@ -1113,6 +1242,7 @@ impl MatchEngine {
                 if let Some(mut ev) = opp_ps.evidence.pop() {
                     ev.zone = Zone::REMOVE;
                     opp_ps.remove.push(ev);
+                    self.log(format!("⚡ [{}] のカットイン効果: 相手の証拠を1枚リムーブしました！", card_name));
                 }
             }
         }

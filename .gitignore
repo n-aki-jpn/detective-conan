@@ -35,3 +35,5 @@ desktop.ini
 *.tmp
 *old*.exe
 scratch/
+scripts/test*.py
+scripts/test*.json
