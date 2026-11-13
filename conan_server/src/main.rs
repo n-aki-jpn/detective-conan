@@ -24,7 +24,7 @@ mod observation;
 use agent::RandomAgent;
 use catalog::CardCatalog;
 use engine::MatchEngine;
-use models::{DeckCardItem, DeckDefinition};
+use models::{DeckCardItem, DeckDefinition, MatchPhase};
 use observation::build_player_observation;
 
 // ─── Room / Session Management ───────────────────────────────────────────────
@@ -43,13 +43,7 @@ struct MatchRoom {
 
 impl MatchRoom {
     fn new(room_id: &str, catalog: CardCatalog, p1_deck: DeckDefinition, is_cpu: bool, default_p2_deck: DeckDefinition) -> Self {
-        let mut engine = MatchEngine::new(catalog);
-        let p2_deck_actual = if is_cpu { default_p2_deck.clone() } else { default_p2_deck.clone() };
-
-        engine.add_player("player1", &p1_deck);
-        engine.add_player("player2", &p2_deck_actual);
-        engine.start_match();
-
+        let mut engine = MatchEngine::new(catalog.clone());
         let cpu_agent = if is_cpu { Some(RandomAgent::new("player2")) } else { None };
 
         let mut room = Self {
@@ -57,13 +51,26 @@ impl MatchRoom {
             engine,
             p2_is_cpu: is_cpu,
             cpu_agent,
-            p1_deck,
-            p2_deck: if is_cpu { Some(default_p2_deck) } else { None },
+            p1_deck: p1_deck.clone(),
+            p2_deck: if is_cpu { Some(default_p2_deck.clone()) } else { None },
             p1_connected: true,
             p2_connected: is_cpu,
             created_at: std::time::Instant::now(),
         };
-        room.process_cpu_if_needed();
+
+        // 両プレイヤーの状態を初期化（クライアントでの観戦・表示用）
+        room.engine.add_player("player1", &p1_deck);
+        let p2_init_deck = if is_cpu { default_p2_deck } else { p1_deck.clone() };
+        room.engine.add_player("player2", &p2_init_deck);
+
+        if is_cpu {
+            room.engine.start_match();
+            room.process_cpu_if_needed();
+        } else {
+            // 対人オンライン部屋はP2参加（join_p2）まで待機フェーズ
+            room.engine.phase = MatchPhase::WAITING;
+        }
+
         room
     }
 
@@ -73,7 +80,7 @@ impl MatchRoom {
         self.p2_is_cpu = false;
         self.cpu_agent = None;
 
-        // Restart match with fresh p1 & p2 decks
+        // P2参加と同時に、新鮮な両者デッキで試合開始！
         let mut engine = MatchEngine::new(catalog.clone());
         engine.add_player("player1", &self.p1_deck);
         engine.add_player("player2", &p2_deck);
@@ -128,6 +135,16 @@ struct MatchManager {
     rooms: HashMap<String, MatchRoom>,
 }
 
+fn sanitize_deck(sent_deck: Option<DeckDefinition>, fallback_deck: &DeckDefinition) -> DeckDefinition {
+    if let Some(d) = sent_deck {
+        let count: i32 = d.main_deck.iter().map(|item| item.count).sum();
+        if count == 40 && !d.partner_id.is_empty() && !d.case_id.is_empty() {
+            return d;
+        }
+    }
+    fallback_deck.clone()
+}
+
 impl MatchManager {
     fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let catalog_path = PathBuf::from("data/dummy/cards.json");
@@ -170,18 +187,7 @@ impl MatchManager {
     }
 
     fn save_deck(&mut self, new_def: DeckDefinition) -> Result<(), String> {
-        let content = serde_json::to_string_pretty(&new_def).map_err(|e| e.to_string())?;
-
-        std::fs::write(&self.deck_path, &content).map_err(|e| e.to_string())?;
-
-        let deck_id = new_def.deck_id.clone().unwrap_or_else(|| "custom".to_string());
-        let safe_id: String = deck_id
-            .chars()
-            .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
-            .collect();
-        let slot_file = self.decks_dir.join(format!("{}.json", safe_id));
-        let _ = std::fs::write(slot_file, &content);
-
+        // クライアント側（localStorage）保存に移行したため、サーバー側ファイルには書き込まずメモリのみ保持
         self.deck_def = new_def;
         Ok(())
     }
@@ -225,7 +231,7 @@ impl MatchManager {
         let code: u32 = rng.gen_range(1000..9999);
         let room_id = format!("{}", code);
 
-        let deck = p1_deck.unwrap_or_else(|| self.deck_def.clone());
+        let deck = sanitize_deck(p1_deck, &self.deck_def);
         let room = MatchRoom::new(&room_id, self.catalog.clone(), deck, is_cpu, self.deck_def.clone());
         self.rooms.insert(room_id.clone(), room);
         room_id
@@ -351,7 +357,7 @@ async fn handle_join_room(
             ).into_response();
         }
 
-        let p2_deck = body.deck.unwrap_or(default_deck);
+        let p2_deck = sanitize_deck(body.deck, &default_deck);
         room.join_p2(&catalog, p2_deck);
 
         Json(json!({

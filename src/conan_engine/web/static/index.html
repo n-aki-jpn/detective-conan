@@ -368,6 +368,15 @@
           <button class="btn btn-success" onclick="createNewRoom()" style="width:100%;">
             🆕 ルームを作成する (4桁コード)
           </button>
+          <div id="room-created-info" style="display:none; background:#0f172a; padding:8px; border-radius:6px; border:1px solid #38bdf8; margin-top:4px;">
+            <div style="font-size:0.75rem; color:var(--text-muted);">作成された部屋番号:</div>
+            <div id="room-code-display" style="font-size:1.4rem; font-weight:bold; color:#38bdf8; text-align:center; font-family:monospace;">-</div>
+            <div style="font-size:0.72rem; color:var(--text-muted); margin-top:4px;">相手用参加URL:</div>
+            <input type="text" id="room-join-url-input" readonly style="width:100%; background:#1e293b; color:white; border:1px solid var(--border-color); padding:4px 6px; border-radius:4px; font-size:0.72rem; margin-top:2px;">
+            <button class="btn btn-secondary" onclick="copyJoinUrl()" style="width:100%; margin-top:6px; font-size:0.75rem; min-height:28px;">
+              📋 参加URLをコピー
+            </button>
+          </div>
         </div>
 
         <!-- Join Room -->
@@ -476,7 +485,7 @@
       <!-- Deck Slot Selector Bar -->
       <div style="background:#0f172a; border:1px solid var(--border-color); border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:8px;">
         <div style="display:flex; justify-content:space-between; align-items:center;">
-          <span style="font-size:0.85rem; font-weight:bold; color:var(--accent);">📂 保存済みデッキ一覧</span>
+          <span style="font-size:0.85rem; font-weight:bold; color:var(--accent);">📂 保存済みデッキ一覧 (ブラウザ保存)</span>
           <button class="btn btn-secondary" onclick="createNewDeckPrompt()" style="padding:4px 10px; font-size:0.75rem; min-height:28px;">＋ 新規デッキ作成</button>
         </div>
         <div style="display:flex; gap:6px; align-items:center;">
@@ -615,16 +624,50 @@
     let lastObs = null;
     let lastRevision = -1;
     let lastDecisionId = null;
+    let lastWaitingP2 = null;
+    let lastPhase = null;
     let selectedMulliganIds = new Set();
 
-    // Deck Builder State
+    // Deck Builder State (Client-Side LocalStorage)
+    const STORAGE_KEY_DECKS = 'conan_tcg_client_decks_v1';
+    const STORAGE_KEY_ACTIVE = 'conan_tcg_active_deck_id';
+
     let catalogData = [];
     let currentDeckDef = { partnerId: '', caseId: '', mainDeck: [] };
     let deckQtyMap = {}; // defId -> count
     let builderPage = 0;
     const PAGE_SIZE = 60;
 
-    // Check URL parameters for roomId & player (e.g. ?room=1234&player=player2)
+    function getStoredDecks() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY_DECKS);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch (e) {
+        console.error("Failed to parse stored decks", e);
+      }
+      return [];
+    }
+
+    function saveStoredDecks(decks) {
+      try {
+        localStorage.setItem(STORAGE_KEY_DECKS, JSON.stringify(decks));
+      } catch (e) {
+        console.error("Failed to save decks to localStorage", e);
+      }
+    }
+
+    function getActiveStoredDeckId() {
+      return localStorage.getItem(STORAGE_KEY_ACTIVE) || '';
+    }
+
+    function setActiveStoredDeckId(id) {
+      localStorage.setItem(STORAGE_KEY_ACTIVE, id);
+    }
+
+    // Check URL parameters for roomId & player & join
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.has('room')) {
       currentRoomId = urlParams.get('room');
@@ -651,6 +694,12 @@
     function showRoomModal() {
       document.getElementById('current-room-display').innerText = currentRoomId;
       document.getElementById('current-player-display').innerText = currentViewingPlayer;
+      if (currentRoomId !== 'default') {
+        showRoomCreatedInfo(currentRoomId);
+      } else {
+        const infoEl = document.getElementById('room-created-info');
+        if (infoEl) infoEl.style.display = 'none';
+      }
       document.getElementById('room-modal').style.display = 'flex';
     }
 
@@ -658,7 +707,36 @@
       document.getElementById('room-modal').style.display = 'none';
     }
 
+    function showRoomCreatedInfo(roomId) {
+      const infoEl = document.getElementById('room-created-info');
+      const codeEl = document.getElementById('room-code-display');
+      const inputEl = document.getElementById('room-join-url-input');
+      if (infoEl && codeEl && inputEl) {
+        infoEl.style.display = 'block';
+        codeEl.innerText = roomId;
+        inputEl.value = `${window.location.origin}/?join=${roomId}`;
+      }
+    }
+
+    function copyJoinUrl() {
+      const inputEl = document.getElementById('room-join-url-input');
+      if (inputEl && inputEl.value) {
+        navigator.clipboard.writeText(inputEl.value).then(() => {
+          alert("相手用参加URLをコピーしました！スマホ等でこのURLを開いてもらってください。");
+        }).catch(() => {
+          prompt("以下のURLをコピーしてください:", inputEl.value);
+        });
+      }
+    }
+
+    async function ensureDeckReady() {
+      if (!currentDeckDef || !currentDeckDef.partnerId || !currentDeckDef.caseId || (currentDeckDef.mainDeck || []).length === 0) {
+        await loadDeckBuilderData();
+      }
+    }
+
     async function createNewRoom() {
+      await ensureDeckReady();
       try {
         const res = await fetch('/api/rooms/create', {
           method: 'POST',
@@ -670,11 +748,14 @@
           currentRoomId = data.roomId;
           currentViewingPlayer = "player1";
           lastRevision = -1;
+          lastWaitingP2 = null;
           selectedMulliganIds.clear();
           
           updateUrlParams();
-          closeRoomModal();
-          alert(`部屋番号「${currentRoomId}」を作成しました！\n対戦相手のスマホでこの番号を入力して参加してもらってください。`);
+          showRoomCreatedInfo(currentRoomId);
+          document.getElementById('current-room-display').innerText = currentRoomId;
+          document.getElementById('current-player-display').innerText = currentViewingPlayer;
+          alert(`部屋番号「${currentRoomId}」を作成しました！\n相手用参加URLをコピーして相手に送るか、部屋番号を入力してもらってください。`);
           fetchState();
         }
       } catch (e) {
@@ -682,9 +763,13 @@
       }
     }
 
-    async function joinExistingRoom() {
-      const input = document.getElementById('join-room-input');
-      const roomId = input ? input.value.trim() : '';
+    async function joinExistingRoom(targetRoomId) {
+      await ensureDeckReady();
+      let roomId = targetRoomId;
+      if (!roomId) {
+        const input = document.getElementById('join-room-input');
+        roomId = input ? input.value.trim() : '';
+      }
       if (!roomId) {
         alert("部屋番号を入力してください");
         return;
@@ -700,6 +785,7 @@
           currentRoomId = data.roomId;
           currentViewingPlayer = data.assignedPlayerId || "player2";
           lastRevision = -1;
+          lastWaitingP2 = null;
           selectedMulliganIds.clear();
 
           updateUrlParams();
@@ -718,6 +804,7 @@
       currentRoomId = "default";
       currentViewingPlayer = "player1";
       lastRevision = -1;
+      lastWaitingP2 = null;
       selectedMulliganIds.clear();
       updateUrlParams();
       closeRoomModal();
@@ -729,9 +816,11 @@
       if (currentRoomId !== 'default') {
         url.searchParams.set('room', currentRoomId);
         url.searchParams.set('player', currentViewingPlayer);
+        url.searchParams.delete('join');
       } else {
         url.searchParams.delete('room');
         url.searchParams.delete('player');
+        url.searchParams.delete('join');
       }
       window.history.replaceState({}, '', url);
 
@@ -753,12 +842,22 @@
         const data = await res.json();
         
         const curDecId = data.pendingDecision ? data.pendingDecision.decisionId : null;
-        const hasChanged = (data.revision !== lastRevision) || (curDecId !== lastDecisionId);
+        const curWaitingP2 = !!data.waitingForPlayer2;
+        const curPhase = data.phase || '';
+        const hasChanged = (data.revision !== lastRevision) || (curDecId !== lastDecisionId) || (curWaitingP2 !== lastWaitingP2) || (curPhase !== lastPhase);
         
         lastObs = data;
         if (hasChanged) {
           lastRevision = data.revision;
           lastDecisionId = curDecId;
+          lastWaitingP2 = curWaitingP2;
+          lastPhase = curPhase;
+          render(data);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
           render(data);
         }
       } catch (e) {
@@ -936,13 +1035,16 @@
         const decBox = document.getElementById('decision-box');
         decBox.style.display = 'block';
         document.getElementById('decision-title').innerText = `⏳ 対戦相手の参加を待っています...`;
-        document.getElementById('decision-desc').innerText = `部屋番号は「${obs.roomId}」です。相手の端末でこの番号を入力して参加してください。`;
-        document.getElementById('decision-actions').innerHTML = '';
-        return;
+        const joinUrl = `${window.location.origin}/?join=${obs.roomId}`;
+        document.getElementById('decision-desc').innerHTML = `部屋番号: <b style="color:var(--accent); font-size:1.1rem;">${obs.roomId}</b><br><span style="font-size:0.72rem; color:var(--text-muted);">相手端末でこの番号を入力するか、参加URLを開いてもらってください。</span>`;
+        document.getElementById('decision-actions').innerHTML = `
+          <button class="btn btn-secondary" style="font-size:0.75rem; padding:4px 10px;" onclick="navigator.clipboard.writeText('${joinUrl}').then(()=>alert('参加URLをコピーしました！'))">📋 参加URLをコピー</button>
+        `;
       }
       
       const me = obs.me;
       const opp = obs.opponent;
+      if (!me || !opp) return;
 
       // Counters
       document.getElementById('me-id').innerText = `${me.playerId} ${me.isFirstPlayer ? '[先攻]' : '[後攻]'}`;
@@ -1170,39 +1272,61 @@
       return el;
     }
 
-    // ========== DECK BUILDER LOGIC ==========
+    // ========== DECK BUILDER LOGIC (Client-Side LocalStorage) ==========
     async function loadDeckBuilderData() {
       try {
-        const [catRes, deckRes, decksListRes] = await Promise.all([
-          fetch('/api/catalog'),
-          fetch('/api/deck'),
-          fetch('/api/decks')
-        ]);
-        const catJson = await catRes.json();
-        const deckJson = await deckRes.json();
-        const decksListJson = await decksListRes.json();
+        if (catalogData.length === 0) {
+          const catRes = await fetch('/api/catalog');
+          const catJson = await catRes.json();
+          catalogData = catJson.cards || [];
+        }
 
-        catalogData = catJson.cards || [];
-        currentDeckDef = deckJson;
+        let decks = getStoredDecks();
+        if (decks.length === 0) {
+          // 初回起動時: サーバーから初期テンプレートデッキを取得してlocalStorageに初期投入
+          try {
+            const deckRes = await fetch('/api/deck');
+            const defaultDeck = await deckRes.json();
+            defaultDeck.deckId = "starter_blue";
+            defaultDeck.deckName = defaultDeck.deckName || "スターターデッキ（青）";
+            decks = [defaultDeck];
+            saveStoredDecks(decks);
+            setActiveStoredDeckId(defaultDeck.deckId);
+          } catch (e) {
+            console.error("初期デッキ取得失敗:", e);
+          }
+        }
 
-        // Init qty map
+        let activeId = getActiveStoredDeckId();
+        let current = decks.find(d => d.deckId === activeId);
+        if (!current && decks.length > 0) {
+          current = decks[0];
+          activeId = current.deckId;
+          setActiveStoredDeckId(activeId);
+        }
+
+        if (current) {
+          currentDeckDef = JSON.parse(JSON.stringify(current));
+        } else {
+          currentDeckDef = { deckId: "deck_" + Date.now(), deckName: "新デッキ", partnerId: '', caseId: '', mainDeck: [] };
+        }
+
         deckQtyMap = {};
-        (deckJson.mainDeck || []).forEach(item => {
+        (currentDeckDef.mainDeck || []).forEach(item => {
           deckQtyMap[item.definitionId] = item.count;
         });
 
-        // Update deck name input
         const nameInput = document.getElementById('builder-deck-name');
         if (nameInput) {
-          nameInput.value = currentDeckDef.deckName || 'カスタムデッキ';
+          nameInput.value = currentDeckDef.deckName || 'マイデッキ';
         }
 
-        renderSavedDecksDropdown(decksListJson.decks || []);
+        renderSavedDecksDropdown(decks);
         populateFixedSelects();
         renderBuilderCatalog();
         updateBuilderSummary();
       } catch (e) {
-        console.error(e);
+        console.error("デッキビルダー読み込みエラー:", e);
       }
     }
 
@@ -1210,41 +1334,39 @@
       const sel = document.getElementById('saved-decks-select');
       if (!sel) return;
       sel.innerHTML = '';
+      const activeId = getActiveStoredDeckId();
       decks.forEach(d => {
         const opt = document.createElement('option');
-        opt.value = d.deckId || d.fileId;
-        opt.innerText = `${d.deckName} (${d.totalCards}/40枚)`;
-        if (d.isActive || (currentDeckDef && (currentDeckDef.deckId === d.deckId || currentDeckDef.deckId === d.fileId))) {
-          opt.selected = true;
-        }
+        opt.value = d.deckId;
+        let cardCount = 0;
+        (d.mainDeck || []).forEach(item => { cardCount += (item.count || 0); });
+        opt.innerText = `${d.deckName || '無題'} (${cardCount}/40枚)`;
+        if (d.deckId === activeId) opt.selected = true;
         sel.appendChild(opt);
       });
     }
 
-    async function onSelectSavedDeck(deckId) {
+    function onSelectSavedDeck(deckId) {
       if (!deckId) return;
-      try {
-        const res = await fetch(`/api/decks/${encodeURIComponent(deckId)}`);
-        if (!res.ok) throw new Error("デッキ読み込みに失敗しました");
-        const deckData = await res.json();
-        
-        currentDeckDef = deckData;
-        deckQtyMap = {};
-        (deckData.mainDeck || []).forEach(item => {
-          deckQtyMap[item.definitionId] = item.count;
-        });
+      const decks = getStoredDecks();
+      const found = decks.find(d => d.deckId === deckId);
+      if (!found) return;
 
-        const nameInput = document.getElementById('builder-deck-name');
-        if (nameInput) {
-          nameInput.value = currentDeckDef.deckName || deckId;
-        }
+      setActiveStoredDeckId(deckId);
+      currentDeckDef = JSON.parse(JSON.stringify(found));
+      deckQtyMap = {};
+      (currentDeckDef.mainDeck || []).forEach(item => {
+        deckQtyMap[item.definitionId] = item.count;
+      });
 
-        populateFixedSelects();
-        renderBuilderCatalog();
-        updateBuilderSummary();
-      } catch (e) {
-        alert(e.message);
+      const nameInput = document.getElementById('builder-deck-name');
+      if (nameInput) {
+        nameInput.value = currentDeckDef.deckName || deckId;
       }
+
+      populateFixedSelects();
+      renderBuilderCatalog();
+      updateBuilderSummary();
     }
 
     function createNewDeckPrompt() {
@@ -1252,40 +1374,47 @@
       if (!name) return;
       
       const newId = "deck_" + Date.now();
-      currentDeckDef = {
+      const newDeck = {
         deckId: newId,
         deckName: name,
         partnerId: currentDeckDef.partnerId || '',
         caseId: currentDeckDef.caseId || '',
         mainDeck: []
       };
+
+      const decks = getStoredDecks();
+      decks.push(newDeck);
+      saveStoredDecks(decks);
+      setActiveStoredDeckId(newId);
+
+      currentDeckDef = JSON.parse(JSON.stringify(newDeck));
       deckQtyMap = {};
 
       const nameInput = document.getElementById('builder-deck-name');
       if (nameInput) nameInput.value = name;
 
+      renderSavedDecksDropdown(decks);
       populateFixedSelects();
       renderBuilderCatalog();
       updateBuilderSummary();
     }
 
-    async function deleteCurrentDeckSlot() {
+    function deleteCurrentDeckSlot() {
+      const decks = getStoredDecks();
+      if (decks.length <= 1) {
+        alert("デッキが1つしかないため削除できません。新しいデッキを作成してから削除してください。");
+        return;
+      }
       const deckId = currentDeckDef.deckId;
-      if (!deckId) {
-        alert("削除するデッキが選択されていません");
+      if (!confirm(`デッキ「${currentDeckDef.deckName || deckId}」をブラウザから削除してもよろしいですか？`)) {
         return;
       }
-      if (!confirm(`デッキ「${currentDeckDef.deckName || deckId}」を削除してもよろしいですか？`)) {
-        return;
-      }
-      try {
-        const res = await fetch(`/api/decks/${encodeURIComponent(deckId)}`, { method: 'DELETE' });
-        if (!res.ok) throw new Error("削除に失敗しました");
-        alert("デッキを削除しました");
-        loadDeckBuilderData();
-      } catch (e) {
-        alert(e.message);
-      }
+
+      const remaining = decks.filter(d => d.deckId !== deckId);
+      saveStoredDecks(remaining);
+      setActiveStoredDeckId(remaining[0].deckId);
+      onSelectSavedDeck(remaining[0].deckId);
+      renderSavedDecksDropdown(remaining);
     }
 
     let builderViewMode = 'deck'; // 'deck' (投入中カード一覧) or 'catalog' (全カード)
@@ -1710,30 +1839,38 @@
       }
 
       const deckNameInput = document.getElementById('builder-deck-name');
-      const chosenName = (deckNameInput && deckNameInput.value.trim()) || currentDeckDef.deckName || "カスタムデッキ";
+      const chosenName = (deckNameInput && deckNameInput.value.trim()) || currentDeckDef.deckName || "マイデッキ";
       const chosenId = currentDeckDef.deckId || ("deck_" + Date.now());
 
-      const savePayload = {
-        deckId: chosenId,
-        deckName: chosenName,
-        catalogVersion: "official-raw-v1",
-        partnerId: currentDeckDef.partnerId,
-        caseId: currentDeckDef.caseId,
-        mainDeck: mainList
-      };
+      currentDeckDef.deckId = chosenId;
+      currentDeckDef.deckName = chosenName;
+      currentDeckDef.mainDeck = mainList;
 
+      // 1. クライアント側（ブラウザのlocalStorage）に保存
+      const decks = getStoredDecks();
+      const idx = decks.findIndex(d => d.deckId === chosenId);
+      if (idx >= 0) {
+        decks[idx] = JSON.parse(JSON.stringify(currentDeckDef));
+      } else {
+        decks.push(JSON.parse(JSON.stringify(currentDeckDef)));
+      }
+      saveStoredDecks(decks);
+      setActiveStoredDeckId(chosenId);
+      renderSavedDecksDropdown(decks);
+
+      // 2. サーバー側メモリの対戦盤面に反映
       try {
         const res = await fetch('/api/save_deck', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(savePayload)
+          body: JSON.stringify(currentDeckDef)
         });
         const result = await res.json();
         if (res.ok) {
-          alert("デッキを保存しました！対戦画面に移動します。");
+          alert("デッキをブラウザに保存しました！対戦画面に移動します。");
           switchTab('battle');
         } else {
-          alert(`保存エラー: ${result.error}`);
+          alert(`対戦反映エラー: ${result.error}`);
         }
       } catch (e) {
         alert(`通信エラー: ${e.message}`);
@@ -1835,8 +1972,22 @@
       }
     }
 
+    // 初期化と起動
+    ensureDeckReady();
     setInterval(fetchState, 1000);
     fetchState();
+
+    // URLの ?join=XXXX による自動参加処理
+    if (urlParams.has('join')) {
+      const joinCode = urlParams.get('join').trim();
+      if (joinCode) {
+        setTimeout(() => {
+          if (confirm(`部屋「${joinCode}」に対戦相手（P2）として参加しますか？`)) {
+            joinExistingRoom(joinCode);
+          }
+        }, 500);
+      }
+    }
   </script>
 </body>
 </html>
