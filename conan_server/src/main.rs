@@ -111,7 +111,7 @@ impl MatchRoom {
                         break;
                     }
                     let ans = match &self.cpu_agent {
-                        Some(agent) => agent.choose_action(dec),
+                        Some(agent) => agent.choose_action_with_engine(&self.engine, dec),
                         None => break,
                     };
                     if self.engine.submit_decision("player2", &ans).is_err() {
@@ -1612,6 +1612,164 @@ mod tests {
         assert_eq!(p1_after.remove.len(), 1);
         assert_eq!(p1_after.remove[0].definition_id, "TEST_EVENT_DRAW");
         assert_eq!(p1_after.hand.len(), 1);
+    }
+
+    #[test]
+    fn test_smart_cpu_agent_decisions() {
+        let path = if std::path::Path::new("data/dummy/cards.json").exists() {
+            "data/dummy/cards.json"
+        } else {
+            "../data/dummy/cards.json"
+        };
+        let mut catalog = CardCatalog::load_from_json(path).expect("catalog load failed");
+
+        for (id, ap, lvl) in [
+            ("CPU_LOW", 2000, 2),
+            ("CPU_MID", 3000, 3),
+            ("CPU_HIGH", 5000, 5),
+        ] {
+            catalog.definitions.insert(
+                id.to_string(),
+                models::CardDefinition {
+                    definition_id: id.to_string(),
+                    canonical_id: id.to_string(),
+                    card_type: models::CardType::CHARACTER,
+                    colors: vec!["青".to_string()],
+                    level: lvl,
+                    ap,
+                    lp: 1,
+                    names: vec![id.to_string()],
+                    description: String::new(),
+                    traits: vec![],
+                    case_levels: None,
+                    main_thumb: None,
+                    main_path: None,
+                },
+            );
+        }
+
+        let mut engine = MatchEngine::new(catalog);
+        engine.turn = 3;
+        engine.turn_player_id = "player2".to_string();
+        engine.player_order = vec!["player1".to_string(), "player2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("player1".to_string());
+        let mut ps2 = engine::PlayerState::new("player2".to_string());
+
+        // player1 (opponent) has AP2000 (SLEEP) and AP5000 (SLEEP)
+        ps1.field.push(models::CardInstance {
+            instance_id: "p1_weak".to_string(),
+            definition_id: "CPU_LOW".to_string(),
+            owner_id: "player1".to_string(),
+            zone: models::Zone::FIELD,
+            orientation: models::CardOrientation::SLEEP,
+            entered_turn: 1,
+            face_up: true,
+            temp_ap_bonus: 0,
+            has_rush: false,
+            rush_target: None,
+            used_declare_this_turn: false,
+        });
+        ps1.field.push(models::CardInstance {
+            instance_id: "p1_strong".to_string(),
+            definition_id: "CPU_HIGH".to_string(),
+            owner_id: "player1".to_string(),
+            zone: models::Zone::FIELD,
+            orientation: models::CardOrientation::SLEEP,
+            entered_turn: 1,
+            face_up: true,
+            temp_ap_bonus: 0,
+            has_rush: false,
+            rush_target: None,
+            used_declare_this_turn: false,
+        });
+
+        // player2 (CPU) has AP3000 (ACTIVE)
+        ps2.field.push(models::CardInstance {
+            instance_id: "p2_mid".to_string(),
+            definition_id: "CPU_MID".to_string(),
+            owner_id: "player2".to_string(),
+            zone: models::Zone::FIELD,
+            orientation: models::CardOrientation::ACTIVE,
+            entered_turn: 1,
+            face_up: true,
+            temp_ap_bonus: 0,
+            has_rush: false,
+            rush_target: None,
+            used_declare_this_turn: false,
+        });
+        // player2 hand has Lv2 and Lv5 for mulligan test
+        ps2.hand.push(models::CardInstance {
+            instance_id: "h_lv2".to_string(),
+            definition_id: "CPU_LOW".to_string(),
+            owner_id: "player2".to_string(),
+            zone: models::Zone::HAND,
+            orientation: models::CardOrientation::ACTIVE,
+            entered_turn: 0,
+            face_up: true,
+            temp_ap_bonus: 0,
+            has_rush: false,
+            rush_target: None,
+            used_declare_this_turn: false,
+        });
+        ps2.hand.push(models::CardInstance {
+            instance_id: "h_lv5".to_string(),
+            definition_id: "CPU_HIGH".to_string(),
+            owner_id: "player2".to_string(),
+            zone: models::Zone::HAND,
+            orientation: models::CardOrientation::ACTIVE,
+            entered_turn: 0,
+            face_up: true,
+            temp_ap_bonus: 0,
+            has_rush: false,
+            rush_target: None,
+            used_declare_this_turn: false,
+        });
+
+        engine.players.insert("player1".to_string(), ps1);
+        engine.players.insert("player2".to_string(), ps2);
+
+        let cpu = agent::RandomAgent::new("player2");
+
+        // 1. Mulligan test: returns Lv5, keeps Lv2
+        let mul_dec = serde_json::json!({
+            "kind": "mulligan",
+            "options": {"handCardIds": ["h_lv2", "h_lv5"]}
+        });
+        let mul_ans = cpu.choose_action_with_engine(&engine, &mul_dec);
+        assert_eq!(mul_ans["value"]["cardIds"], serde_json::json!(["h_lv5"]));
+
+        // 2. MainAction test: AP3000 attacks AP2000 (not AP5000)
+        let act_dec = serde_json::json!({
+            "kind": "mainAction",
+            "options": {
+                "actions": [
+                    {"type": "END_TURN"},
+                    {
+                        "type": "ACTION",
+                        "actorIds": ["p2_mid"],
+                        "targetIds": ["p1_weak", "p1_strong"],
+                        "actorTargetMap": {"p2_mid": ["p1_weak", "p1_strong"]}
+                    }
+                ]
+            }
+        });
+        let act_ans = cpu.choose_action_with_engine(&engine, &act_dec);
+        assert_eq!(act_ans["value"]["type"], "ACTION");
+        assert_eq!(act_ans["value"]["targetId"], "p1_weak");
+
+        // 3. Guard test: if attacker AP is 2000, AP3000 blocks it
+        engine.action_context = Some(serde_json::json!({
+            "attackerPlayerId": "player1",
+            "actorId": "p1_weak",
+            "targetId": "p2_case"
+        }));
+        let guard_dec = serde_json::json!({
+            "kind": "guard",
+            "options": {"guardCardIds": ["p2_mid"], "cutinCardIds": []}
+        });
+        let guard_ans = cpu.choose_action_with_engine(&engine, &guard_dec);
+        assert_eq!(guard_ans["value"]["guardCardId"], "p2_mid");
     }
 }
 
