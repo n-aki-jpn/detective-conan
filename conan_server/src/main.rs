@@ -24,7 +24,7 @@ mod observation;
 use agent::RandomAgent;
 use catalog::CardCatalog;
 use engine::MatchEngine;
-use models::DeckDefinition;
+use models::{DeckCardItem, DeckDefinition};
 use observation::build_player_observation;
 
 // ─── Room / Session Management ───────────────────────────────────────────────
@@ -561,6 +561,189 @@ async fn handle_save_deck(
     Json(StatusOk { status: "ok" }).into_response()
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PublishDeckRequest {
+    #[serde(default)]
+    partner_id: Option<String>,
+    #[serde(default)]
+    case_id: Option<String>,
+    #[serde(default)]
+    main_deck: Option<Vec<DeckCardItem>>,
+
+    #[serde(default)]
+    partner: Option<Vec<String>>,
+    #[serde(default)]
+    incident: Option<Vec<String>>,
+    #[serde(default)]
+    other: Option<Vec<String>>,
+
+    #[serde(default)]
+    color: Option<String>,
+}
+
+fn resolve_color_code(colors: &[String]) -> String {
+    let mut code = String::new();
+    for col in colors {
+        for ch in col.chars() {
+            let letter = match ch {
+                '青' => 'B',
+                '緑' => 'G',
+                '白' => 'W',
+                '赤' => 'R',
+                '黄' => 'Y',
+                '黒' => 'K',
+                _ => continue,
+            };
+            if !code.contains(letter) {
+                code.push(letter);
+            }
+        }
+    }
+    if code.is_empty() {
+        "B".to_string()
+    } else {
+        code
+    }
+}
+
+async fn handle_publish_deck(
+    State(state): State<SharedState>,
+    Json(body): Json<PublishDeckRequest>,
+) -> impl IntoResponse {
+    let (partner_ids, incident_ids, other_ids, color_code) = {
+        let mgr = state.lock().unwrap();
+
+        let p_id = body
+            .partner
+            .and_then(|p| p.into_iter().next())
+            .or(body.partner_id)
+            .unwrap_or_default();
+
+        let inc_id = body
+            .incident
+            .and_then(|i| i.into_iter().next())
+            .or(body.case_id)
+            .unwrap_or_default();
+
+        let mut o_ids = Vec::new();
+        if let Some(other) = body.other {
+            o_ids = other;
+        } else if let Some(items) = body.main_deck {
+            for item in items {
+                for _ in 0..item.count {
+                    o_ids.push(item.definition_id.clone());
+                }
+            }
+        }
+
+        let col = if let Some(c) = body.color {
+            if c.is_empty() { "B".to_string() } else { c }
+        } else if let Some(p_card) = mgr.catalog.get(&p_id) {
+            resolve_color_code(&p_card.colors)
+        } else {
+            "B".to_string()
+        };
+
+        (vec![p_id], vec![inc_id], o_ids, col)
+    };
+
+    if partner_ids.is_empty() || partner_ids[0].is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "パートナーカードが選択されていません"})),
+        ).into_response();
+    }
+    if incident_ids.is_empty() || incident_ids[0].is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "事件カードが選択されていません"})),
+        ).into_response();
+    }
+    if other_ids.len() != 40 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": format!("メインデッキは40枚である必要があります（現在: {}枚）", other_ids.len())})),
+        ).into_response();
+    }
+
+    let payload = json!({
+        "partner": partner_ids,
+        "incident": incident_ids,
+        "other": other_ids,
+    });
+
+    let deck_json_str = serde_json::to_string(&payload).unwrap_or_default();
+    let endpoint = "https://www.takaratomy.co.jp/products/conan-cardgame/deckrecipe/store";
+
+    let client = match reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": format!("HTTPクライアント初期化エラー: {}", e)})),
+            ).into_response();
+        }
+    };
+
+    let response = match client
+        .get(endpoint)
+        .query(&[("color", &color_code), ("deck", &deck_json_str)])
+        .send()
+        .await
+    {
+        Ok(res) => res,
+        Err(e) => {
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({"error": format!("公式サイトへの接続に失敗しました: {}", e)})),
+            ).into_response();
+        }
+    };
+
+    let status = response.status().as_u16();
+    let location_header = response
+        .headers()
+        .get(reqwest::header::LOCATION)
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.to_string());
+
+    let mut full_location = None;
+    let mut d_code = None;
+
+    if let Some(loc) = &location_header {
+        let base_url = match url::Url::parse(endpoint) {
+            Ok(u) => u,
+            Err(_) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": "URL解析エラー"})),
+                ).into_response();
+            }
+        };
+
+        if let Ok(joined) = base_url.join(loc) {
+            if let Some((_, code)) = joined.query_pairs().find(|(k, _)| k == "d_code") {
+                d_code = Some(code.to_string());
+            }
+            full_location = Some(joined.to_string());
+        } else {
+            full_location = Some(loc.clone());
+        }
+    }
+
+    Json(json!({
+        "status": status,
+        "location": full_location,
+        "code": d_code,
+        "success": d_code.is_some()
+    })).into_response()
+}
+
 async fn handle_decision(
     State(state): State<SharedState>,
     Json(body): Json<DecisionRequest>,
@@ -606,6 +789,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/reset", post(handle_reset))
         .route("/api/set_cpu", post(handle_set_cpu))
         .route("/api/save_deck", post(handle_save_deck))
+        .route("/api/deck/publish", post(handle_publish_deck))
         .route("/api/decision", post(handle_decision))
         .fallback_service(ServeDir::new(&static_dir))
         .with_state(shared_state);
@@ -695,6 +879,17 @@ mod tests {
         // Verify character card B01005 (blue)
         let blue_card = catalog.get("B01005").expect("B01005 should exist");
         assert!(blue_card.colors.contains(&"青".to_string()));
+    }
+
+    #[test]
+    fn test_color_code_resolution() {
+        assert_eq!(resolve_color_code(&["青".to_string()]), "B");
+        assert_eq!(resolve_color_code(&["緑".to_string()]), "G");
+        assert_eq!(resolve_color_code(&["白".to_string()]), "W");
+        assert_eq!(resolve_color_code(&["赤".to_string()]), "R");
+        assert_eq!(resolve_color_code(&["黄".to_string()]), "Y");
+        assert_eq!(resolve_color_code(&["黒".to_string()]), "K");
+        assert_eq!(resolve_color_code(&["青".to_string(), "緑".to_string()]), "BG");
     }
 }
 

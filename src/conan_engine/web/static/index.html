@@ -513,9 +513,14 @@
 
         <div id="builder-color-alert" style="display:none; background:#7f1d1d; color:#fca5a5; padding:6px 10px; border-radius:6px; font-size:0.75rem; font-weight:bold; line-height:1.3;"></div>
 
-        <button class="btn btn-success" onclick="saveAndApplyDeck()" style="width:100%; margin-top:2px;">
-          💾 デッキを保存して対戦に反映
-        </button>
+        <div style="display:flex; gap:6px; margin-top:2px;">
+          <button class="btn btn-success" onclick="saveAndApplyDeck()" style="flex:1;">
+            💾 デッキ保存
+          </button>
+          <button id="btn-publish-deck" class="btn" onclick="publishOfficialDeck()" style="background:#0284c7; flex:1;" title="タカラトミー公式デッキレシピコードを発行">
+            🌐 公式コード発行
+          </button>
+        </div>
       </div>
 
       <!-- View Selector (Deck vs All Catalog) & Search -->
@@ -547,6 +552,40 @@
       </div>
 
       <div id="builder-catalog-container"></div>
+    </div>
+  </div>
+
+  <!-- Official Deck Code Modal -->
+  <div id="publish-modal" class="card-modal-backdrop" onclick="closePublishModal()">
+    <div class="card-modal-content" style="max-width:360px;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <span class="modal-title" style="color:var(--accent);">🌐 公式デッキコード</span>
+        <button class="qty-btn" onclick="closePublishModal()">✕</button>
+      </div>
+      <div class="modal-body" style="font-size:0.8rem; display:flex; flex-direction:column; gap:10px; max-height:none;">
+        <div style="text-align:center; padding:12px; background:#0f172a; border-radius:8px; border:1px solid var(--accent);">
+          <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:4px;">発行された公式デッキコード:</div>
+          <div id="publish-code-text" style="font-size:1.8rem; font-weight:bold; color:#38bdf8; letter-spacing:2px; font-family:monospace; user-select:all;">-</div>
+          <button class="btn btn-secondary" onclick="copyPublishCode()" style="margin-top:8px; width:100%; min-height:30px; font-size:0.78rem;">
+            📋 デッキコードをコピー
+          </button>
+        </div>
+
+        <div style="background:#0f172a; padding:10px; border-radius:6px; border:1px solid var(--border-color); display:flex; flex-direction:column; gap:6px;">
+          <div style="font-size:0.72rem; color:var(--text-muted);">公式デッキレシピURL:</div>
+          <a id="publish-url-link" href="#" target="_blank" rel="noopener noreferrer" style="color:#38bdf8; font-size:0.72rem; word-break:break-all; text-decoration:underline;">-</a>
+          <button class="btn btn-secondary" onclick="copyPublishUrl()" style="font-size:0.75rem; min-height:28px; padding:3px 8px;">
+            🔗 レシピURLをコピー
+          </button>
+        </div>
+
+        <div style="font-size:0.7rem; color:var(--text-muted); line-height:1.4;">
+          ※タカラトミー名探偵コナンTCG公式サイトに登録され、大会や公式アプリ等のデッキレシピとして使用可能です。
+        </div>
+      </div>
+      <div class="modal-footer" style="justify-content:flex-end;">
+        <button class="btn btn-secondary" onclick="closePublishModal()" style="padding:5px 16px; font-size:0.8rem; min-height:30px;">閉じる</button>
+      </div>
     </div>
   </div>
 
@@ -1698,6 +1737,101 @@
         }
       } catch (e) {
         alert(`通信エラー: ${e.message}`);
+      }
+    }
+
+    let currentPublishedCode = '';
+    let currentPublishedUrl = '';
+
+    function closePublishModal() {
+      const m = document.getElementById('publish-modal');
+      if (m) m.style.display = 'none';
+    }
+
+    function showPublishModal(code, url) {
+      currentPublishedCode = code || '';
+      currentPublishedUrl = url || '';
+      const codeEl = document.getElementById('publish-code-text');
+      const linkEl = document.getElementById('publish-url-link');
+      if (codeEl) codeEl.innerText = code || '取得失敗';
+      if (linkEl) {
+        linkEl.href = url || '#';
+        linkEl.innerText = url || 'URLなし';
+      }
+      const modal = document.getElementById('publish-modal');
+      if (modal) modal.style.display = 'flex';
+    }
+
+    function copyPublishCode() {
+      if (!currentPublishedCode) return;
+      navigator.clipboard.writeText(currentPublishedCode).then(() => {
+        alert(`デッキコード「${currentPublishedCode}」をクリップボードにコピーしました！`);
+      }).catch(() => {
+        prompt("以下のコードをコピーしてください:", currentPublishedCode);
+      });
+    }
+
+    function copyPublishUrl() {
+      if (!currentPublishedUrl) return;
+      navigator.clipboard.writeText(currentPublishedUrl).then(() => {
+        alert("公式デッキレシピURLをコピーしました！");
+      }).catch(() => {
+        prompt("以下のURLをコピーしてください:", currentPublishedUrl);
+      });
+    }
+
+    async function publishOfficialDeck() {
+      let total = 0;
+      const mainList = [];
+      for (const defId in deckQtyMap) {
+        const cnt = deckQtyMap[defId];
+        if (cnt > 0) {
+          total += cnt;
+          mainList.push({ definitionId: defId, count: cnt });
+        }
+      }
+
+      if (total !== 40) {
+        alert(`公式デッキコードを発行するには、メインデッキがちょうど40枚である必要があります。（現在: ${total}枚）`);
+        return;
+      }
+      if (!currentDeckDef.partnerId || !currentDeckDef.caseId) {
+        alert("パートナーカードと事件カードを選択してください。");
+        return;
+      }
+
+      const btn = document.getElementById('btn-publish-deck');
+      const originalText = btn ? btn.innerHTML : '';
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '⏳ 発行中...';
+      }
+
+      const payload = {
+        partnerId: currentDeckDef.partnerId,
+        caseId: currentDeckDef.caseId,
+        mainDeck: mainList
+      };
+
+      try {
+        const res = await fetch('/api/deck/publish', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (res.ok && data.code) {
+          showPublishModal(data.code, data.location);
+        } else {
+          alert(`公式コード発行に失敗しました:\n${data.error || 'コードが返されませんでした'}`);
+        }
+      } catch (e) {
+        alert(`通信エラー: ${e.message}`);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = originalText;
+        }
       }
     }
 
