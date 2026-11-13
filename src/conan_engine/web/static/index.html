@@ -420,10 +420,13 @@
       <button id="tab-deck" class="nav-tab-btn" onclick="switchTab('deck')">🃏 デッキ構築</button>
     </div>
     <div class="nav-actions">
+      <button id="bgm-toggle-btn" class="btn btn-secondary" onclick="toggleBgm()" style="padding:4px 8px; font-size:0.75rem; min-height:28px;" title="対戦BGMのON/OFF">🔊 BGM</button>
+      <input id="bgm-volume-slider" type="range" min="0" max="1" step="0.05" value="0.35" oninput="setBgmVolume(this.value)" style="width:54px; accent-color:#38bdf8; cursor:pointer;" title="BGM音量">
       <button class="btn btn-secondary" onclick="showRoomModal()" style="padding:4px 8px; font-size:0.75rem; min-height:28px;">📶 対戦ルーム</button>
       <button class="btn btn-secondary" onclick="resetMatch()" style="padding:4px 8px; font-size:0.75rem; min-height:28px;">リセット</button>
     </div>
   </nav>
+  <audio id="battle-bgm" src="/audio/battle.mp3" loop preload="auto"></audio>
 
   <!-- Room Matching Modal -->
   <div id="room-modal" class="card-modal-backdrop" onclick="closeRoomModal()">
@@ -777,9 +780,11 @@
       document.getElementById('screen-deck').classList.toggle('active', tab === 'deck');
       if (tab === 'deck') {
         loadDeckBuilderData();
+        if (typeof pauseBgm === 'function') pauseBgm();
       } else {
         lastRevision = -1;
         fetchState();
+        if (typeof resumeBgmIfEnabled === 'function') resumeBgmIfEnabled();
       }
     }
 
@@ -2269,6 +2274,81 @@
     ensureDeckReady();
     setInterval(fetchState, 1000);
     fetchState();
+
+    // ========== BGM CONTROL ==========
+    const bgmAudio = document.getElementById('battle-bgm');
+    let bgmEnabled = localStorage.getItem('conan_bgm_enabled') !== 'false';
+    let bgmVolume = parseFloat(localStorage.getItem('conan_bgm_volume') || '0.35');
+    if (isNaN(bgmVolume)) bgmVolume = 0.35;
+
+    if (bgmAudio) {
+      bgmAudio.volume = bgmVolume;
+    }
+    const volSlider = document.getElementById('bgm-volume-slider');
+    if (volSlider) {
+      volSlider.value = bgmVolume;
+    }
+
+    function updateBgmUi() {
+      const btn = document.getElementById('bgm-toggle-btn');
+      if (!btn) return;
+      if (bgmEnabled) {
+        btn.innerText = '🔊 BGM';
+        btn.style.borderColor = '#38bdf8';
+      } else {
+        btn.innerText = '🔇 OFF';
+        btn.style.borderColor = '';
+      }
+    }
+
+    function isBattleTabActive() {
+      const el = document.getElementById('screen-battle');
+      return el && el.classList.contains('active');
+    }
+
+    function tryPlayBgm() {
+      if (!bgmAudio || !bgmEnabled || !isBattleTabActive()) return;
+      if (bgmAudio.paused) {
+        bgmAudio.play().catch(() => {
+          // ブラウザの自動再生ポリシーにより未操作時はブロックされる（初回クリック時に再試行）
+        });
+      }
+    }
+
+    function pauseBgm() {
+      if (bgmAudio && !bgmAudio.paused) {
+        bgmAudio.pause();
+      }
+    }
+
+    function resumeBgmIfEnabled() {
+      if (bgmEnabled) tryPlayBgm();
+    }
+
+    function toggleBgm() {
+      bgmEnabled = !bgmEnabled;
+      localStorage.setItem('conan_bgm_enabled', bgmEnabled ? 'true' : 'false');
+      updateBgmUi();
+      if (bgmEnabled) {
+        tryPlayBgm();
+      } else {
+        pauseBgm();
+      }
+    }
+
+    function setBgmVolume(val) {
+      bgmVolume = parseFloat(val);
+      localStorage.setItem('conan_bgm_volume', String(bgmVolume));
+      if (bgmAudio) bgmAudio.volume = bgmVolume;
+    }
+
+    updateBgmUi();
+    // 初回のユーザー操作（クリック・タップ）で自動的にBGM再生を開始
+    document.addEventListener('pointerdown', function onFirstInteract() {
+      if (bgmEnabled && isBattleTabActive() && bgmAudio && bgmAudio.paused) {
+        tryPlayBgm();
+      }
+    });
 
     // URLの ?join=XXXX による自動参加処理
     if (urlParams.has('join')) {
