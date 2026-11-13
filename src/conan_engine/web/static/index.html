@@ -349,6 +349,26 @@
       box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
     }
     .color-pill:hover { opacity: 0.9; }
+    .deck-sticky-toolbar {
+      position: sticky; top: 44px; z-index: 40;
+      background: rgba(30, 41, 59, 0.98); backdrop-filter: blur(8px);
+      border: 1px solid var(--border-color); border-radius: 8px;
+      padding: 8px 10px; display: flex; flex-direction: column; gap: 6px;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+    }
+    .level-filter-bar { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+    .level-pill {
+      padding: 3px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: bold;
+      border: 1px solid #475569; cursor: pointer; background: #0f172a; color: #cbd5e1;
+      transition: 0.15s; display: inline-flex; align-items: center; gap: 3px;
+    }
+    .level-pill.active {
+      background: #2563eb; color: #fff; border-color: #60a5fa;
+      box-shadow: 0 0 8px rgba(37, 99, 235, 0.5);
+    }
+    .level-pill .lv-cnt { color: #64748b; font-size: 0.66rem; }
+    .level-pill .lv-cnt.nonzero { color: #38bdf8; }
+    .level-pill.active .lv-cnt, .level-pill.active .lv-cnt.nonzero { color: #e0f2fe; }
 
     /* Fixed Previews */
     .fixed-preview-card {
@@ -628,8 +648,18 @@
         </div>
       </div>
 
-      <!-- View Selector (Deck vs All Catalog) & Search -->
-      <div style="background:#1e293b; border:1px solid var(--border-color); border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:8px;">
+      <!-- Sticky View Selector, Summary & Filters -->
+      <div id="deck-sticky-toolbar" class="deck-sticky-toolbar">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,0.08);">
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <span style="font-size:0.82rem; font-weight:bold;">🃏 選択中: <span id="sticky-total-count" style="color:var(--accent); font-size:1rem;">0</span> / 40枚</span>
+            <span id="sticky-status-badge" class="deck-valid-badge deck-valid-ng" style="font-size:0.68rem; padding:2px 6px;">不足 (0/40)</span>
+          </div>
+          <button class="btn btn-success" onclick="saveAndApplyDeck()" style="padding:4px 10px; font-size:0.74rem; min-height:26px;">
+            💾 保存
+          </button>
+        </div>
+
         <div style="display:flex; gap:6px;">
           <button id="btn-view-deck" class="view-toggle-btn active" onclick="switchBuilderView('deck')">
             📋 投入カード一覧 (<span id="summary-unique-types">0</span>種 <span id="summary-total-cards">0</span>枚)
@@ -653,6 +683,21 @@
           <button class="color-pill" data-color="赤" style="border-color:#dc2626;" onclick="setColorFilter('赤')">赤</button>
           <button class="color-pill" data-color="黄" style="border-color:#ca8a04;" onclick="setColorFilter('黄')">黄</button>
           <button class="color-pill" data-color="黒" style="border-color:#64748b;" onclick="setColorFilter('黒')">黒</button>
+        </div>
+
+        <!-- Level Filter & Per-Level Deck Count Pills -->
+        <div class="level-filter-bar" id="level-filter-bar">
+          <span style="font-size:0.7rem; color:var(--text-muted); margin-right:2px;">Lv:</span>
+          <button class="level-pill active" data-level="" onclick="setLevelFilter('')">すべて</button>
+          <button class="level-pill" data-level="1" onclick="setLevelFilter('1')">Lv.1 <span class="lv-cnt" id="lv-cnt-1">(0)</span></button>
+          <button class="level-pill" data-level="2" onclick="setLevelFilter('2')">Lv.2 <span class="lv-cnt" id="lv-cnt-2">(0)</span></button>
+          <button class="level-pill" data-level="3" onclick="setLevelFilter('3')">Lv.3 <span class="lv-cnt" id="lv-cnt-3">(0)</span></button>
+          <button class="level-pill" data-level="4" onclick="setLevelFilter('4')">Lv.4 <span class="lv-cnt" id="lv-cnt-4">(0)</span></button>
+          <button class="level-pill" data-level="5" onclick="setLevelFilter('5')">Lv.5 <span class="lv-cnt" id="lv-cnt-5">(0)</span></button>
+          <button class="level-pill" data-level="6" onclick="setLevelFilter('6')">Lv.6 <span class="lv-cnt" id="lv-cnt-6">(0)</span></button>
+          <button class="level-pill" data-level="7" onclick="setLevelFilter('7')">Lv.7 <span class="lv-cnt" id="lv-cnt-7">(0)</span></button>
+          <button class="level-pill" data-level="8" onclick="setLevelFilter('8')">Lv.8 <span class="lv-cnt" id="lv-cnt-8">(0)</span></button>
+          <button class="level-pill" data-level="9+" onclick="setLevelFilter('9+')">Lv.9+ <span class="lv-cnt" id="lv-cnt-9+">(0)</span></button>
         </div>
       </div>
 
@@ -1717,6 +1762,7 @@
 
     let builderViewMode = 'deck'; // 'deck' (投入中カード一覧) or 'catalog' (全カード)
     let selectedColorFilter = ''; // '' or '青', '緑', etc.
+    let selectedLevelFilter = ''; // '' or '1'..'8', '9+'
 
     function formatCardColors(colors) {
       if (!colors || colors.length === 0) return '無色';
@@ -1859,6 +1905,15 @@
       renderBuilderCatalog();
     }
 
+    function setLevelFilter(lv) {
+      selectedLevelFilter = lv;
+      builderPage = 0;
+      document.querySelectorAll('.level-pill').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-level') === lv);
+      });
+      renderBuilderCatalog();
+    }
+
     function onSearchInput(val) {
       builderPage = 0;
       renderBuilderCatalog();
@@ -1867,6 +1922,10 @@
     function clearSearch() {
       const input = document.getElementById('catalog-search-input');
       if (input) input.value = '';
+      selectedLevelFilter = '';
+      document.querySelectorAll('.level-pill').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-level') === '');
+      });
       setColorFilter('');
     }
 
@@ -1922,6 +1981,7 @@
       let total = 0;
       let uniqueTypes = 0;
       const canonicalCounts = {};
+      const levelCounts = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0, '7': 0, '8': 0, '9+': 0 };
       let hasOverLimit = false;
       let overLimitMsg = '';
 
@@ -1930,6 +1990,15 @@
         if (cnt > 0) {
           total += cnt;
           uniqueTypes += 1;
+          const cardObj = catalogData.find(item => item.definitionId === defId);
+          if (cardObj) {
+            const lv = Number(cardObj.level || 0);
+            if (lv >= 9) {
+              levelCounts['9+'] += cnt;
+            } else if (lv >= 1) {
+              levelCounts[String(lv)] = (levelCounts[String(lv)] || 0) + cnt;
+            }
+          }
           const canonId = getCanonicalId(defId);
           canonicalCounts[canonId] = (canonicalCounts[canonId] || 0) + cnt;
           if (canonicalCounts[canonId] > 3) {
@@ -1939,6 +2008,17 @@
         }
       }
       document.getElementById('builder-total-count').innerText = total;
+      const stickyTotal = document.getElementById('sticky-total-count');
+      if (stickyTotal) stickyTotal.innerText = total;
+
+      for (const lvKey in levelCounts) {
+        const el = document.getElementById(`lv-cnt-${lvKey}`);
+        if (el) {
+          const val = levelCounts[lvKey];
+          el.innerText = `(${val})`;
+          el.classList.toggle('nonzero', val > 0);
+        }
+      }
 
       const sumUnique = document.getElementById('summary-unique-types');
       const sumTotal = document.getElementById('summary-total-cards');
@@ -1946,16 +2026,22 @@
       if (sumTotal) sumTotal.innerText = total;
 
       const badge = document.getElementById('builder-status-badge');
-      if (hasOverLimit) {
-        badge.className = 'deck-valid-badge deck-valid-ng';
-        badge.innerText = overLimitMsg;
-      } else if (total === 40) {
-        badge.className = 'deck-valid-badge deck-valid-ok';
-        badge.innerText = '構築完了 (40/40)';
-      } else {
-        badge.className = 'deck-valid-badge deck-valid-ng';
-        badge.innerText = total > 40 ? `超過 (${total}/40)` : `不足 (${total}/40)`;
-      }
+      const stickyBadge = document.getElementById('sticky-status-badge');
+      const applyBadge = (el) => {
+        if (!el) return;
+        if (hasOverLimit) {
+          el.className = 'deck-valid-badge deck-valid-ng';
+          el.innerText = overLimitMsg;
+        } else if (total === 40) {
+          el.className = 'deck-valid-badge deck-valid-ok';
+          el.innerText = '構築完了 (40/40)';
+        } else {
+          el.className = 'deck-valid-badge deck-valid-ng';
+          el.innerText = total > 40 ? `超過 (${total}/40)` : `不足 (${total}/40)`;
+        }
+      };
+      applyBadge(badge);
+      applyBadge(stickyBadge);
 
       // Check color compatibility with Case card
       const caseCard = catalogData.find(c => c.definitionId === currentDeckDef.caseId);
@@ -2016,6 +2102,14 @@
         if (selectedColorFilter) {
           const cols = c.colors || [];
           if (!cols.includes(selectedColorFilter)) return false;
+        }
+        if (selectedLevelFilter) {
+          const lv = Number(c.level || 0);
+          if (selectedLevelFilter === '9+') {
+            if (lv < 9) return false;
+          } else {
+            if (lv !== Number(selectedLevelFilter)) return false;
+          }
         }
         if (query) {
           const title = (c.title || c.dummyName || '').toLowerCase();
