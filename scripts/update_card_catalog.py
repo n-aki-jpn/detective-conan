@@ -46,6 +46,14 @@ for entry in raw.get('data', []):
 
     desc = entry.get('feature') or entry.get('description') or ''
 
+    # Normalize colors: extract distinct colors from raw strings like "青,緑,白,赤,黄" or "青緑"
+    valid_colors = ['青', '緑', '白', '赤', '黄', '黒']
+    raw_color_str = str(entry.get('color') or '')
+    extracted_colors = []
+    for ch in raw_color_str:
+        if ch in valid_colors and ch not in extracted_colors:
+            extracted_colors.append(ch)
+
     # Case level difficulty for case cards
     diff_first = entry.get('difficulty_first')
     diff_second = entry.get('difficulty_second')
@@ -74,7 +82,7 @@ for entry in raw.get('data', []):
         "title": entry.get('title',''),
         "definitionVersion": entry.get('version','1'),
         "cardType": entry.get('type','CHARACTER').upper(),
-        "colors": [entry.get('color')] if entry.get('color') else [],
+        "colors": extracted_colors,
         "level": level,
         "ap": ap,
         "lp": lp,

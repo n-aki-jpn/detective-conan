@@ -257,6 +257,60 @@
       display: flex; justify-content: space-between; align-items: center; margin-top: 6px;
       background: #0f172a; border-radius: 4px; padding: 2px 4px; border: 1px solid rgba(255,255,255,0.08);
     }
+    .color-filter-bar {
+      display: flex; gap: 5px; overflow-x: auto; padding: 4px 0 6px 0;
+      scrollbar-width: none;
+    }
+    .color-filter-bar::-webkit-scrollbar { display: none; }
+    .color-pill {
+      background: #1e293b; color: white; border: 1.5px solid #475569;
+      padding: 4px 10px; border-radius: 20px; font-size: 0.74rem; font-weight: bold;
+      cursor: pointer; white-space: nowrap; transition: all 0.15s ease;
+    }
+    .color-pill.active {
+      background: var(--accent); color: white; border-color: var(--accent);
+      box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+    }
+    .color-pill:hover { opacity: 0.9; }
+
+    /* Fixed Previews */
+    .fixed-preview-card {
+      background: #0f172a; border: 1px solid var(--border-color); border-radius: 6px;
+      padding: 8px; display: flex; flex-direction: column; gap: 4px; cursor: pointer;
+      transition: border-color 0.15s ease; min-height: 90px;
+    }
+    .fixed-preview-card:hover { border-color: var(--accent); }
+    .preview-header {
+      display: flex; justify-content: space-between; align-items: center;
+      font-weight: bold; font-size: 0.76rem;
+    }
+    .preview-colors { display: flex; gap: 3px; align-items: center; }
+    .color-tag {
+      padding: 1px 5px; border-radius: 3px; font-size: 0.65rem; font-weight: bold; color: white;
+    }
+    .color-tag.青 { background: #0284c7; }
+    .color-tag.緑 { background: #16a34a; }
+    .color-tag.白 { background: #64748b; }
+    .color-tag.赤 { background: #dc2626; }
+    .color-tag.黄 { background: #ca8a04; }
+    .color-tag.黒 { background: #334155; border: 1px solid #64748b; }
+    .color-tag.全色 { background: linear-gradient(90deg, #0284c7, #16a34a, #dc2626, #ca8a04); }
+
+    .preview-body {
+      font-size: 0.7rem; color: #cbd5e1; line-height: 1.35; max-height: 60px;
+      overflow-y: auto; white-space: pre-wrap; background: rgba(0,0,0,0.3);
+      padding: 4px 6px; border-radius: 4px;
+    }
+
+    .view-toggle-btn {
+      flex: 1; padding: 7px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: bold;
+      border: 1.5px solid #475569; background: #1e293b; color: #94a3b8; cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .view-toggle-btn.active {
+      background: #0f172a; color: var(--accent); border-color: var(--accent);
+      box-shadow: 0 0 8px rgba(56, 189, 248, 0.25);
+    }
     .qty-btn {
       background: #334155; color: white; border: none; width: 24px; height: 24px;
       border-radius: 4px; font-weight: bold; font-size: 0.9rem; cursor: pointer;
@@ -442,25 +496,57 @@
         </div>
         <div class="fixed-select-row">
           <div class="fixed-select-box">
-            <label style="color:var(--text-muted);">パートナー (1枚)</label>
+            <label style="color:var(--text-muted); font-weight:bold;">パートナー (1枚)</label>
             <select id="builder-partner-select" onchange="updateDeckPartner(this.value)"></select>
           </div>
           <div class="fixed-select-box">
-            <label style="color:var(--text-muted);">事件カード (1枚)</label>
+            <label style="color:var(--text-muted); font-weight:bold;">事件カード (1枚)</label>
             <select id="builder-case-select" onchange="updateDeckCase(this.value)"></select>
           </div>
         </div>
-        <button class="btn btn-success" onclick="saveAndApplyDeck()" style="width:100%; margin-top:4px;">
+
+        <!-- Previews for Partner & Case -->
+        <div id="builder-fixed-previews" style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+          <div id="builder-partner-preview" class="fixed-preview-card"></div>
+          <div id="builder-case-preview" class="fixed-preview-card"></div>
+        </div>
+
+        <div id="builder-color-alert" style="display:none; background:#7f1d1d; color:#fca5a5; padding:6px 10px; border-radius:6px; font-size:0.75rem; font-weight:bold; line-height:1.3;"></div>
+
+        <button class="btn btn-success" onclick="saveAndApplyDeck()" style="width:100%; margin-top:2px;">
           💾 デッキを保存して対戦に反映
         </button>
       </div>
 
-      <div>
-        <div class="catalog-search-bar">
-          <input type="text" id="catalog-search-input" placeholder="🔍 キャラ名・効果・番号で検索..." oninput="filterCatalog(this.value)">
+      <!-- View Selector (Deck vs All Catalog) & Search -->
+      <div style="background:#1e293b; border:1px solid var(--border-color); border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:8px;">
+        <div style="display:flex; gap:6px;">
+          <button id="btn-view-deck" class="view-toggle-btn active" onclick="switchBuilderView('deck')">
+            📋 投入カード一覧 (<span id="summary-unique-types">0</span>種 <span id="summary-total-cards">0</span>枚)
+          </button>
+          <button id="btn-view-catalog" class="view-toggle-btn" onclick="switchBuilderView('catalog')">
+            🔍 全カードから探す (2,466枚)
+          </button>
         </div>
-        <div id="builder-catalog-container"></div>
+
+        <div class="catalog-search-bar" style="margin-bottom:0;">
+          <input type="text" id="catalog-search-input" placeholder="🔍 カード名・効果・番号で絞り込み..." oninput="onSearchInput(this.value)">
+          <button class="btn btn-secondary" onclick="clearSearch()" style="padding:4px 10px; font-size:0.75rem; flex-shrink:0;">クリア</button>
+        </div>
+
+        <!-- Color Filter Pills -->
+        <div class="color-filter-bar">
+          <button class="color-pill active" data-color="" onclick="setColorFilter('')">すべて</button>
+          <button class="color-pill" data-color="青" style="border-color:#0284c7;" onclick="setColorFilter('青')">青</button>
+          <button class="color-pill" data-color="緑" style="border-color:#16a34a;" onclick="setColorFilter('緑')">緑</button>
+          <button class="color-pill" data-color="白" style="border-color:#94a3b8;" onclick="setColorFilter('白')">白</button>
+          <button class="color-pill" data-color="赤" style="border-color:#dc2626;" onclick="setColorFilter('赤')">赤</button>
+          <button class="color-pill" data-color="黄" style="border-color:#ca8a04;" onclick="setColorFilter('黄')">黄</button>
+          <button class="color-pill" data-color="黒" style="border-color:#64748b;" onclick="setColorFilter('黒')">黒</button>
+        </div>
       </div>
+
+      <div id="builder-catalog-container"></div>
     </div>
   </div>
 
@@ -1163,6 +1249,21 @@
       }
     }
 
+    let builderViewMode = 'deck'; // 'deck' (投入中カード一覧) or 'catalog' (全カード)
+    let selectedColorFilter = ''; // '' or '青', '緑', etc.
+
+    function formatCardColors(colors) {
+      if (!colors || colors.length === 0) return '無色';
+      if (colors.length >= 5) return '全色';
+      return colors.join('/');
+    }
+
+    function renderColorTagsHtml(colors) {
+      if (!colors || colors.length === 0) return '<span class="color-tag" style="background:#475569;">無色</span>';
+      if (colors.length >= 5) return '<span class="color-tag 全色">全色</span>';
+      return colors.map(col => `<span class="color-tag ${col}">${col}</span>`).join(' ');
+    }
+
     function populateFixedSelects() {
       const partnerSel = document.getElementById('builder-partner-select');
       const caseSel = document.getElementById('builder-case-select');
@@ -1173,7 +1274,8 @@
       catalogData.filter(c => c.cardType === 'PARTNER' || c.cardType === 'パートナー').forEach(c => {
         const opt = document.createElement('option');
         opt.value = c.definitionId;
-        opt.innerText = `[${c.definitionId}] ${c.title || c.dummyName}`;
+        const colStr = formatCardColors(c.colors);
+        opt.innerText = `[${colStr}] ${c.title || c.dummyName} (${c.definitionId})`;
         if (c.definitionId === currentDeckDef.partnerId) opt.selected = true;
         partnerSel.appendChild(opt);
       });
@@ -1181,14 +1283,126 @@
       catalogData.filter(c => c.cardType === 'CASE' || c.cardType === '事件').forEach(c => {
         const opt = document.createElement('option');
         opt.value = c.definitionId;
-        opt.innerText = `[${c.definitionId}] ${c.title || c.dummyName}`;
+        const colStr = formatCardColors(c.colors);
+        let diffStr = '';
+        if (c.caseLevels) {
+          diffStr = ` (解:先${c.caseLevels.first}/後${c.caseLevels.second})`;
+        }
+        opt.innerText = `[${colStr}] ${c.title || c.dummyName}${diffStr} (${c.definitionId})`;
         if (c.definitionId === currentDeckDef.caseId) opt.selected = true;
         caseSel.appendChild(opt);
       });
+
+      updateFixedPreviews();
     }
 
-    function updateDeckPartner(val) { currentDeckDef.partnerId = val; }
-    function updateDeckCase(val) { currentDeckDef.caseId = val; }
+    function updateDeckPartner(val) {
+      currentDeckDef.partnerId = val;
+      updateFixedPreviews();
+      updateBuilderSummary();
+    }
+
+    function updateDeckCase(val) {
+      currentDeckDef.caseId = val;
+      updateFixedPreviews();
+      updateBuilderSummary();
+    }
+
+    function updateFixedPreviews() {
+      const pCard = catalogData.find(c => c.definitionId === currentDeckDef.partnerId);
+      const cCard = catalogData.find(c => c.definitionId === currentDeckDef.caseId);
+
+      const pBox = document.getElementById('builder-partner-preview');
+      if (pBox) {
+        if (pCard) {
+          const imgHtml = pCard.mainPath
+            ? `<img src="/card-images/${pCard.mainPath}" style="width:36px; height:50px; object-fit:cover; border-radius:3px; flex-shrink:0;">`
+            : '';
+          pBox.innerHTML = `
+            <div style="display:flex; gap:6px; align-items:flex-start;">
+              ${imgHtml}
+              <div style="flex:1; min-width:0;">
+                <div class="preview-header">
+                  <span style="color:#f59e0b; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${pCard.title || pCard.dummyName}</span>
+                </div>
+                <div style="display:flex; gap:4px; margin:2px 0; align-items:center;">
+                  <span style="font-size:0.62rem; color:var(--text-muted);">色:</span>
+                  ${renderColorTagsHtml(pCard.colors)}
+                  <span style="font-size:0.62rem; color:#facc15; margin-left:auto; font-weight:bold;">LP ${pCard.lp ?? 1}</span>
+                </div>
+                <div style="font-size:0.6rem; color:var(--text-muted);">${pCard.definitionId}</div>
+              </div>
+            </div>
+            <div class="preview-body">${pCard.description || '（効果テキストなし）'}</div>
+          `;
+          pBox.onclick = () => showCardModal(pCard);
+        } else {
+          pBox.innerHTML = '<span style="color:var(--text-muted);">パートナー未選択</span>';
+          pBox.onclick = null;
+        }
+      }
+
+      const cBox = document.getElementById('builder-case-preview');
+      if (cBox) {
+        if (cCard) {
+          const imgHtml = cCard.mainPath
+            ? `<img src="/card-images/${cCard.mainPath}" style="width:50px; height:36px; object-fit:cover; border-radius:3px; flex-shrink:0;">`
+            : '';
+          const diffStr = cCard.caseLevels ? `🎯 解決条件: 先攻${cCard.caseLevels.first}枚 / 後攻${cCard.caseLevels.second}枚` : '';
+          const hasEffect = !!cCard.description;
+          cBox.innerHTML = `
+            <div style="display:flex; gap:6px; align-items:flex-start;">
+              ${imgHtml}
+              <div style="flex:1; min-width:0;">
+                <div class="preview-header">
+                  <span style="color:#a855f7; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${cCard.title || cCard.dummyName}</span>
+                </div>
+                <div style="display:flex; gap:4px; margin:2px 0; align-items:center;">
+                  <span style="font-size:0.62rem; color:var(--text-muted);">色:</span>
+                  ${renderColorTagsHtml(cCard.colors)}
+                </div>
+                <div style="font-size:0.6rem; color:#34d399; font-weight:bold;">${diffStr}</div>
+              </div>
+            </div>
+            <div class="preview-body" style="${hasEffect ? 'border:1px solid rgba(168,85,247,0.4);' : ''}">${cCard.description ? `📜 ${cCard.description}` : '（効果なし 通常事件）'}</div>
+          `;
+          cBox.onclick = () => showCardModal(cCard);
+        } else {
+          cBox.innerHTML = '<span style="color:var(--text-muted);">事件カード未選択</span>';
+          cBox.onclick = null;
+        }
+      }
+    }
+
+    function switchBuilderView(mode) {
+      builderViewMode = mode;
+      builderPage = 0;
+      const btnDeck = document.getElementById('btn-view-deck');
+      const btnCat = document.getElementById('btn-view-catalog');
+      if (btnDeck) btnDeck.className = `view-toggle-btn ${mode === 'deck' ? 'active' : ''}`;
+      if (btnCat) btnCat.className = `view-toggle-btn ${mode === 'catalog' ? 'active' : ''}`;
+      renderBuilderCatalog();
+    }
+
+    function setColorFilter(color) {
+      selectedColorFilter = color;
+      builderPage = 0;
+      document.querySelectorAll('.color-pill').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-color') === color);
+      });
+      renderBuilderCatalog();
+    }
+
+    function onSearchInput(val) {
+      builderPage = 0;
+      renderBuilderCatalog();
+    }
+
+    function clearSearch() {
+      const input = document.getElementById('catalog-search-input');
+      if (input) input.value = '';
+      setColorFilter('');
+    }
 
     function getCanonicalId(defId) {
       const card = catalogData.find(c => c.definitionId === defId);
@@ -1227,25 +1441,43 @@
       const qtyEl = document.getElementById(`qty-${defId}`);
       if (qtyEl) qtyEl.innerText = next;
       updateBuilderSummary();
+      if (builderViewMode === 'deck' && next === 0) {
+        renderBuilderCatalog();
+      }
+    }
+
+    function removeCardEntirely(defId) {
+      delete deckQtyMap[defId];
+      updateBuilderSummary();
+      renderBuilderCatalog();
     }
 
     function updateBuilderSummary() {
       let total = 0;
+      let uniqueTypes = 0;
       const canonicalCounts = {};
       let hasOverLimit = false;
       let overLimitMsg = '';
 
       for (const defId in deckQtyMap) {
         const cnt = deckQtyMap[defId];
-        total += cnt;
-        const canonId = getCanonicalId(defId);
-        canonicalCounts[canonId] = (canonicalCounts[canonId] || 0) + cnt;
-        if (canonicalCounts[canonId] > 3) {
-          hasOverLimit = true;
-          overLimitMsg = `同一カードID(${canonId})が4枚以上あります`;
+        if (cnt > 0) {
+          total += cnt;
+          uniqueTypes += 1;
+          const canonId = getCanonicalId(defId);
+          canonicalCounts[canonId] = (canonicalCounts[canonId] || 0) + cnt;
+          if (canonicalCounts[canonId] > 3) {
+            hasOverLimit = true;
+            overLimitMsg = `同一カードID(${canonId})が4枚以上あります`;
+          }
         }
       }
       document.getElementById('builder-total-count').innerText = total;
+
+      const sumUnique = document.getElementById('summary-unique-types');
+      const sumTotal = document.getElementById('summary-total-cards');
+      if (sumUnique) sumUnique.innerText = uniqueTypes;
+      if (sumTotal) sumTotal.innerText = total;
 
       const badge = document.getElementById('builder-status-badge');
       if (hasOverLimit) {
@@ -1258,39 +1490,112 @@
         badge.className = 'deck-valid-badge deck-valid-ng';
         badge.innerText = total > 40 ? `超過 (${total}/40)` : `不足 (${total}/40)`;
       }
+
+      // Check color compatibility with Case card
+      const caseCard = catalogData.find(c => c.definitionId === currentDeckDef.caseId);
+      const alertBox = document.getElementById('builder-color-alert');
+      if (alertBox) {
+        if (caseCard) {
+          const caseCols = caseCard.colors || [];
+          if (caseCols.length > 0 && caseCols.length < 5) {
+            let incompatibleCards = [];
+            for (const defId in deckQtyMap) {
+              if (deckQtyMap[defId] > 0) {
+                const c = catalogData.find(item => item.definitionId === defId);
+                if (c && c.colors && c.colors.length > 0) {
+                  const hasMatch = c.colors.every(col => caseCols.includes(col));
+                  if (!hasMatch) {
+                    incompatibleCards.push(c.title || defId);
+                  }
+                }
+              }
+            }
+            if (incompatibleCards.length > 0) {
+              alertBox.style.display = 'block';
+              alertBox.innerHTML = `⚠️ <b>色不一致注意:</b> 事件カード（${caseCols.join('/')}）と異なる色のカードがデッキに含まれています（例: ${incompatibleCards.slice(0, 3).join(', ')}等）。これらは対戦時に場に出せません。`;
+            } else {
+              alertBox.style.display = 'none';
+            }
+          } else {
+            alertBox.style.display = 'none';
+          }
+        } else {
+          alertBox.style.display = 'none';
+        }
+      }
     }
 
-    function renderBuilderCatalog(filterQuery = '') {
-      const container = document.getElementById('builder-catalog-container') || document.getElementById('builder-catalog-grid');
+    function renderBuilderCatalog() {
+      const container = document.getElementById('builder-catalog-container');
+      if (!container) return;
       container.innerHTML = '';
 
-      const query = (filterQuery || '').trim().toLowerCase();
+      const searchInput = document.getElementById('catalog-search-input');
+      const query = (searchInput ? searchInput.value : '').trim().toLowerCase();
+
       const mainPool = catalogData.filter(c => {
         const t = c.cardType || '';
         return t === 'CHARACTER' || t === 'EVENT' || t === 'キャラ' || t === 'キャラクター' || t === 'イベント';
       });
 
-      const filtered = mainPool.filter(c => {
-        if (!query) return true;
-        const title = (c.title || c.dummyName || '').toLowerCase();
-        const desc = (c.description || '').toLowerCase();
-        const defId = (c.definitionId || '').toLowerCase();
-        return title.includes(query) || desc.includes(query) || defId.includes(query);
+      let sourceCards = [];
+      if (builderViewMode === 'deck') {
+        sourceCards = mainPool.filter(c => (deckQtyMap[c.definitionId] || 0) > 0);
+        sourceCards.sort((a, b) => (a.level - b.level) || a.definitionId.localeCompare(b.definitionId));
+      } else {
+        sourceCards = mainPool;
+      }
+
+      const filtered = sourceCards.filter(c => {
+        if (selectedColorFilter) {
+          const cols = c.colors || [];
+          if (!cols.includes(selectedColorFilter)) return false;
+        }
+        if (query) {
+          const title = (c.title || c.dummyName || '').toLowerCase();
+          const desc = (c.description || '').toLowerCase();
+          const defId = (c.definitionId || '').toLowerCase();
+          const canonId = (c.canonicalId || '').toLowerCase();
+          return title.includes(query) || desc.includes(query) || defId.includes(query) || canonId.includes(query);
+        }
+        return true;
       });
 
-      const start = builderPage * PAGE_SIZE;
-      const pageItems = filtered.slice(start, start + PAGE_SIZE);
+      if (builderViewMode === 'deck' && filtered.length === 0) {
+        const emptyMsg = document.createElement('div');
+        emptyMsg.style.cssText = 'background:#1e293b; border:1px dashed #475569; border-radius:8px; padding:24px; text-align:center; color:#94a3b8; font-size:0.85rem;';
+        if (Object.keys(deckQtyMap).length === 0) {
+          emptyMsg.innerHTML = `
+            <div style="font-size:1.5rem; margin-bottom:6px;">🃏</div>
+            <b>デッキにカードがまだ投入されていません</b>
+            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:4px; margin-bottom:12px;">上部の「全カードから探す」を押してカードを追加してください。</div>
+            <button class="btn btn-secondary" onclick="switchBuilderView('catalog')" style="padding:6px 14px; font-size:0.8rem;">🔍 全カードカタログを開く</button>
+          `;
+        } else {
+          emptyMsg.innerHTML = `
+            <b>検索・色条件に一致するカードがデッキ内にありません</b>
+            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">検索条件をクリアするか色フィルタを変更してください。</div>
+          `;
+        }
+        container.appendChild(emptyMsg);
+        return;
+      }
 
-      // Page info
-      const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+      const PAGE_SIZE_ACTIVE = builderViewMode === 'deck' ? 60 : 36;
+      const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE_ACTIVE));
+      builderPage = Math.min(builderPage, totalPages - 1);
+      const start = builderPage * PAGE_SIZE_ACTIVE;
+      const pageItems = filtered.slice(start, start + PAGE_SIZE_ACTIVE);
+
       const pageInfo = document.createElement('div');
-      pageInfo.style.cssText = 'font-size:0.75rem; color:var(--text-muted); margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;';
+      pageInfo.style.cssText = 'font-size:0.75rem; color:var(--text-muted); margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;';
+      const labelPrefix = builderViewMode === 'deck' ? '投入カード' : 'カタログ';
       pageInfo.innerHTML = `
-        <span>${filtered.length}枚中 ${start+1}〜${Math.min(start+PAGE_SIZE, filtered.length)}枚表示</span>
-        <span style="display:flex;gap:6px;align-items:center;">
-          <button class="qty-btn" style="width:auto;padding:2px 10px;" onclick="builderPage=Math.max(0,builderPage-1);renderBuilderCatalog(document.getElementById('catalog-search-input').value)" ${builderPage===0?'disabled':''}>◀</button>
+        <span>${labelPrefix} ${filtered.length}種 (表示: ${start+1}〜${Math.min(start+PAGE_SIZE_ACTIVE, filtered.length)})</span>
+        <span style="display:flex; gap:6px; align-items:center;">
+          <button class="qty-btn" style="width:auto; padding:2px 10px;" onclick="builderPage=Math.max(0,builderPage-1);renderBuilderCatalog();" ${builderPage===0?'disabled':''}>◀</button>
           <span>${builderPage+1} / ${totalPages}</span>
-          <button class="qty-btn" style="width:auto;padding:2px 10px;" onclick="builderPage=Math.min(${totalPages-1},builderPage+1);renderBuilderCatalog(document.getElementById('catalog-search-input').value)" ${builderPage>=totalPages-1?'disabled':''}>▶</button>
+          <button class="qty-btn" style="width:auto; padding:2px 10px;" onclick="builderPage=Math.min(${totalPages-1},builderPage+1);renderBuilderCatalog();" ${builderPage>=totalPages-1?'disabled':''}>▶</button>
         </span>
       `;
       container.appendChild(pageInfo);
@@ -1303,17 +1608,24 @@
         const qty = deckQtyMap[c.definitionId] || 0;
         const item = document.createElement('div');
         item.className = 'catalog-card-item';
+        if (qty > 0) {
+          item.style.borderColor = 'var(--accent)';
+          item.style.boxShadow = '0 0 8px rgba(56, 189, 248, 0.2)';
+        }
 
         const imgHtml = c.mainPath
-          ? `<img src="/card-images/${c.mainPath}" loading="lazy" style="width:100%;border-radius:4px;margin-bottom:4px;aspect-ratio:2/3;object-fit:cover;" onerror="this.style.display='none'">`
-          : `<div style="width:100%;aspect-ratio:2/3;background:#0f172a;border-radius:4px;margin-bottom:4px;display:flex;align-items:center;justify-content:center;color:#475569;font-size:0.65rem;">NO IMG</div>`;
+          ? `<img src="/card-images/${c.mainPath}" loading="lazy" style="width:100%; border-radius:4px; margin-bottom:4px; aspect-ratio:716/1000; object-fit:cover;" onerror="this.style.display='none'">`
+          : `<div style="width:100%; aspect-ratio:716/1000; background:#0f172a; border-radius:4px; margin-bottom:4px; display:flex; align-items:center; justify-content:center; color:#475569; font-size:0.65rem;">NO IMG</div>`;
 
         item.innerHTML = `
           <div class="card-click-area" style="cursor:pointer; flex:1; display:flex; flex-direction:column;">
             ${imgHtml}
             <div class="card-top">
               <span class="card-badge">${c.cardType === 'EVENT' ? 'イベント' : 'キャラ'}</span>
-              <span>Lv.${c.level}</span>
+              <span style="display:flex; gap:3px; align-items:center;">
+                ${renderColorTagsHtml(c.colors)}
+                <span>Lv.${c.level}</span>
+              </span>
             </div>
             <div class="card-name">${c.title || c.dummyName}</div>
             <div style="font-size:0.58rem; color:var(--text-muted); margin-bottom:2px;">ID: ${c.canonicalId || c.cardId || '-'} (${c.definitionId})</div>
@@ -1326,24 +1638,16 @@
             <button class="qty-btn" onclick="changeCardQty('${c.definitionId}', -1)">−</button>
             <span class="qty-num" id="qty-${c.definitionId}">${qty}</span>
             <button class="qty-btn" onclick="changeCardQty('${c.definitionId}', 1)">＋</button>
+            ${qty > 0 ? `<button class="qty-btn" style="background:#7f1d1d; color:#fca5a5; font-size:0.75rem; width:22px; margin-left:2px;" onclick="removeCardEntirely('${c.definitionId}')" title="デッキから外す">✕</button>` : ''}
           </div>
         `;
-        // Use addEventListener to safely pass the card object (avoids JSON escaping issues)
         item.querySelector('.card-click-area').addEventListener('click', () => showCardModal(c));
         cardGrid.appendChild(item);
       });
-
-      if (filtered.length === 0) {
-        const empty = document.createElement('div');
-        empty.style.cssText = 'color:var(--text-muted);text-align:center;padding:20px;grid-column:1/-1;';
-        empty.innerText = '該当カードが見つかりません';
-        cardGrid.appendChild(empty);
-      }
     }
 
     function filterCatalog(q) {
-      builderPage = 0;
-      renderBuilderCatalog(q);
+      onSearchInput(q);
     }
 
     async function saveAndApplyDeck() {

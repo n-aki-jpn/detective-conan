@@ -72,6 +72,19 @@ pub struct MatchEngine {
     pub action_context: Option<Value>,
 }
 
+fn normalize_color_set(raw_colors: &[String]) -> HashSet<String> {
+    let mut set = HashSet::new();
+    let valid_chars = ['青', '緑', '白', '赤', '黄', '黒'];
+    for s in raw_colors {
+        for ch in s.chars() {
+            if valid_chars.contains(&ch) {
+                set.insert(ch.to_string());
+            }
+        }
+    }
+    set
+}
+
 impl MatchEngine {
     pub fn new(catalog: CardCatalog) -> Self {
         Self {
@@ -447,7 +460,7 @@ impl MatchEngine {
 
         let effective_file = ps.effective_file_count() as i32;
         let case_def = ps.r#case.as_ref().and_then(|c| self.catalog.get(&c.definition_id));
-        let case_colors: HashSet<String> = case_def.map(|d| d.colors.iter().cloned().collect()).unwrap_or_default();
+        let case_colors = case_def.map(|d| normalize_color_set(&d.colors)).unwrap_or_default();
 
         let mut actions: Vec<Value> = vec![];
 
@@ -459,8 +472,9 @@ impl MatchEngine {
             let mut playable_cards = vec![];
             for c in &ps.hand {
                 if let Some(c_def) = self.catalog.get(&c.definition_id) {
-                    let card_colors: HashSet<String> = c_def.colors.iter().cloned().collect();
-                    if c_def.level <= effective_file && card_colors.is_subset(&case_colors) {
+                    let card_colors = normalize_color_set(&c_def.colors);
+                    let color_ok = card_colors.is_empty() || case_colors.is_empty() || card_colors.is_subset(&case_colors);
+                    if c_def.level <= effective_file && color_ok {
                         playable_cards.push(c.instance_id.clone());
                     }
                 }
@@ -607,13 +621,14 @@ impl MatchEngine {
 
                     let effective_file = ps.effective_file_count() as i32;
                     let case_def = ps.r#case.as_ref().and_then(|c| self.catalog.get(&c.definition_id));
-                    let case_colors: HashSet<String> = case_def.map(|d| d.colors.iter().cloned().collect()).unwrap_or_default();
+                    let case_colors = case_def.map(|d| normalize_color_set(&d.colors)).unwrap_or_default();
 
                     if ps.field.len() < 5 {
                         for c in &ps.hand {
                             if let Some(c_def) = self.catalog.get(&c.definition_id) {
-                                let card_colors: HashSet<String> = c_def.colors.iter().cloned().collect();
-                                if c_def.level <= effective_file && card_colors.is_subset(&case_colors) {
+                                let card_colors = normalize_color_set(&c_def.colors);
+                                let color_ok = card_colors.is_empty() || case_colors.is_empty() || card_colors.is_subset(&case_colors);
+                                if c_def.level <= effective_file && color_ok {
                                     playable_cards.push(c.instance_id.clone());
                                 }
                             }

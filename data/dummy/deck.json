@@ -3,7 +3,7 @@
   "deckName": "新デッキ",
   "catalogVersion": "official-raw-v1",
   "partnerId": "PR341_3",
-  "caseId": "B01024",
+  "caseId": "B05120P",
   "mainDeck": [
     {
       "definitionId": "PR205",
@@ -11,10 +11,6 @@
     },
     {
       "definitionId": "PR281",
-      "count": 3
-    },
-    {
-      "definitionId": "PR117",
       "count": 3
     },
     {
@@ -27,7 +23,7 @@
     },
     {
       "definitionId": "B01005P",
-      "count": 3
+      "count": 2
     },
     {
       "definitionId": "B01008",
@@ -46,10 +42,6 @@
       "count": 3
     },
     {
-      "definitionId": "B03002",
-      "count": 3
-    },
-    {
       "definitionId": "B03002P",
       "count": 3
     },
@@ -60,6 +52,18 @@
     {
       "definitionId": "B04005",
       "count": 3
+    },
+    {
+      "definitionId": "PR006",
+      "count": 3
+    },
+    {
+      "definitionId": "D10014",
+      "count": 3
+    },
+    {
+      "definitionId": "D08022",
+      "count": 1
     }
   ]
 }

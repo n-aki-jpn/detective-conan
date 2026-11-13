@@ -3233,7 +3233,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "青緑"
+        "青",
+        "緑"
       ],
       "level": 0,
       "ap": 0,
@@ -3257,7 +3258,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "青緑"
+        "青",
+        "緑"
       ],
       "level": 0,
       "ap": 0,
@@ -3281,7 +3283,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "青白"
+        "青",
+        "白"
       ],
       "level": 0,
       "ap": 0,
@@ -3305,7 +3308,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "青白"
+        "青",
+        "白"
       ],
       "level": 0,
       "ap": 0,
@@ -3329,7 +3333,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "青赤"
+        "青",
+        "赤"
       ],
       "level": 0,
       "ap": 0,
@@ -3353,7 +3358,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "青赤"
+        "青",
+        "赤"
       ],
       "level": 0,
       "ap": 0,
@@ -3377,7 +3383,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "青黄"
+        "青",
+        "黄"
       ],
       "level": 0,
       "ap": 0,
@@ -3401,7 +3408,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "青黄"
+        "青",
+        "黄"
       ],
       "level": 0,
       "ap": 0,
@@ -6500,7 +6508,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "緑,白"
+        "緑",
+        "白"
       ],
       "level": 0,
       "ap": 0,
@@ -6524,7 +6533,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "緑,白"
+        "緑",
+        "白"
       ],
       "level": 0,
       "ap": 0,
@@ -6548,7 +6558,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "緑,赤"
+        "緑",
+        "赤"
       ],
       "level": 0,
       "ap": 0,
@@ -6572,7 +6583,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "緑,黄"
+        "緑",
+        "黄"
       ],
       "level": 0,
       "ap": 0,
@@ -10760,7 +10772,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "白赤"
+        "白",
+        "赤"
       ],
       "level": 0,
       "ap": 0,
@@ -10784,7 +10797,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "白黄"
+        "白",
+        "黄"
       ],
       "level": 0,
       "ap": 0,
@@ -10808,7 +10822,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "赤黄"
+        "赤",
+        "黄"
       ],
       "level": 0,
       "ap": 0,
@@ -17864,7 +17879,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "赤,黒"
+        "赤",
+        "黒"
       ],
       "level": 0,
       "ap": 0,
@@ -17888,7 +17904,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "赤,黒"
+        "赤",
+        "黒"
       ],
       "level": 0,
       "ap": 0,
@@ -17912,7 +17929,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "黄,黒"
+        "黄",
+        "黒"
       ],
       "level": 0,
       "ap": 0,
@@ -17936,7 +17954,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "黄,黒"
+        "黄",
+        "黒"
       ],
       "level": 0,
       "ap": 0,
@@ -17960,7 +17979,11 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "青,緑,白,赤,黄"
+        "青",
+        "緑",
+        "白",
+        "赤",
+        "黄"
       ],
       "level": 0,
       "ap": 0,
@@ -17984,7 +18007,11 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "青,緑,白,赤,黄"
+        "青",
+        "緑",
+        "白",
+        "赤",
+        "黄"
       ],
       "level": 0,
       "ap": 0,
@@ -21740,7 +21767,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "青,黒"
+        "青",
+        "黒"
       ],
       "level": 0,
       "ap": 0,
@@ -21764,7 +21792,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "青,黒"
+        "青",
+        "黒"
       ],
       "level": 0,
       "ap": 0,
@@ -21788,7 +21817,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "緑,黒"
+        "緑",
+        "黒"
       ],
       "level": 0,
       "ap": 0,
@@ -21812,7 +21842,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "緑,黒"
+        "緑",
+        "黒"
       ],
       "level": 0,
       "ap": 0,
@@ -21836,7 +21867,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "白,黒"
+        "白",
+        "黒"
       ],
       "level": 0,
       "ap": 0,
@@ -21860,7 +21892,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "白,黒"
+        "白",
+        "黒"
       ],
       "level": 0,
       "ap": 0,
@@ -21884,7 +21917,11 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "青,緑,白,赤,黄"
+        "青",
+        "緑",
+        "白",
+        "赤",
+        "黄"
       ],
       "level": 0,
       "ap": 0,
@@ -21908,7 +21945,11 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "青,緑,白,赤,黄"
+        "青",
+        "緑",
+        "白",
+        "赤",
+        "黄"
       ],
       "level": 0,
       "ap": 0,
@@ -28610,7 +28651,8 @@
       "definitionVersion": "1",
       "cardType": "キャラ",
       "colors": [
-        "青,黒"
+        "青",
+        "黒"
       ],
       "level": 9,
       "ap": 8000,
@@ -28631,7 +28673,8 @@
       "definitionVersion": "1",
       "cardType": "キャラ",
       "colors": [
-        "青,黒"
+        "青",
+        "黒"
       ],
       "level": 9,
       "ap": 8000,
@@ -28652,7 +28695,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "青,黒"
+        "青",
+        "黒"
       ],
       "level": 0,
       "ap": 0,
@@ -28676,7 +28720,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "青,黒"
+        "青",
+        "黒"
       ],
       "level": 0,
       "ap": 0,
@@ -32411,7 +32456,8 @@
       "definitionVersion": "1",
       "cardType": "キャラ",
       "colors": [
-        "青,緑"
+        "青",
+        "緑"
       ],
       "level": 9,
       "ap": 8000,
@@ -32432,7 +32478,8 @@
       "definitionVersion": "1",
       "cardType": "キャラ",
       "colors": [
-        "青,緑"
+        "青",
+        "緑"
       ],
       "level": 9,
       "ap": 8000,
@@ -32453,7 +32500,8 @@
       "definitionVersion": "1",
       "cardType": "キャラ",
       "colors": [
-        "白,黄"
+        "白",
+        "黄"
       ],
       "level": 9,
       "ap": 8000,
@@ -32474,7 +32522,8 @@
       "definitionVersion": "1",
       "cardType": "キャラ",
       "colors": [
-        "白,黄"
+        "白",
+        "黄"
       ],
       "level": 9,
       "ap": 8000,
@@ -32495,7 +32544,8 @@
       "definitionVersion": "1",
       "cardType": "キャラ",
       "colors": [
-        "赤,黒"
+        "赤",
+        "黒"
       ],
       "level": 9,
       "ap": 8000,
@@ -32516,7 +32566,8 @@
       "definitionVersion": "1",
       "cardType": "キャラ",
       "colors": [
-        "赤,黒"
+        "赤",
+        "黒"
       ],
       "level": 9,
       "ap": 8000,
@@ -32537,7 +32588,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "青,緑"
+        "青",
+        "緑"
       ],
       "level": 0,
       "ap": 0,
@@ -32561,7 +32613,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "青,緑"
+        "青",
+        "緑"
       ],
       "level": 0,
       "ap": 0,
@@ -32585,7 +32638,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "白,黄"
+        "白",
+        "黄"
       ],
       "level": 0,
       "ap": 0,
@@ -32609,7 +32663,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "白,黄"
+        "白",
+        "黄"
       ],
       "level": 0,
       "ap": 0,
@@ -32633,7 +32688,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "赤,黒"
+        "赤",
+        "黒"
       ],
       "level": 0,
       "ap": 0,
@@ -32657,7 +32713,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "赤,黒"
+        "赤",
+        "黒"
       ],
       "level": 0,
       "ap": 0,
@@ -35945,7 +36002,8 @@
       "definitionVersion": "1",
       "cardType": "キャラ",
       "colors": [
-        "青,黒"
+        "青",
+        "黒"
       ],
       "level": 9,
       "ap": 8000,
@@ -35966,7 +36024,8 @@
       "definitionVersion": "1",
       "cardType": "キャラ",
       "colors": [
-        "青,黒"
+        "青",
+        "黒"
       ],
       "level": 9,
       "ap": 8000,
@@ -35987,7 +36046,8 @@
       "definitionVersion": "1",
       "cardType": "キャラ",
       "colors": [
-        "緑,白"
+        "緑",
+        "白"
       ],
       "level": 9,
       "ap": 8000,
@@ -36008,7 +36068,8 @@
       "definitionVersion": "1",
       "cardType": "キャラ",
       "colors": [
-        "緑,白"
+        "緑",
+        "白"
       ],
       "level": 9,
       "ap": 8000,
@@ -36029,7 +36090,8 @@
       "definitionVersion": "1",
       "cardType": "キャラ",
       "colors": [
-        "赤,黄"
+        "赤",
+        "黄"
       ],
       "level": 9,
       "ap": 8000,
@@ -36050,7 +36112,8 @@
       "definitionVersion": "1",
       "cardType": "キャラ",
       "colors": [
-        "赤,黄"
+        "赤",
+        "黄"
       ],
       "level": 9,
       "ap": 8000,
@@ -36071,7 +36134,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "青,黒"
+        "青",
+        "黒"
       ],
       "level": 0,
       "ap": 0,
@@ -36095,7 +36159,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "青,黒"
+        "青",
+        "黒"
       ],
       "level": 0,
       "ap": 0,
@@ -36119,7 +36184,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "緑,白"
+        "緑",
+        "白"
       ],
       "level": 0,
       "ap": 0,
@@ -36143,7 +36209,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "緑,白"
+        "緑",
+        "白"
       ],
       "level": 0,
       "ap": 0,
@@ -36167,7 +36234,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "赤,黄"
+        "赤",
+        "黄"
       ],
       "level": 0,
       "ap": 0,
@@ -36191,7 +36259,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "赤,黄"
+        "赤",
+        "黄"
       ],
       "level": 0,
       "ap": 0,
@@ -39371,7 +39440,8 @@
       "definitionVersion": "1",
       "cardType": "キャラ",
       "colors": [
-        "青,白"
+        "青",
+        "白"
       ],
       "level": 9,
       "ap": 8000,
@@ -39392,7 +39462,8 @@
       "definitionVersion": "1",
       "cardType": "キャラ",
       "colors": [
-        "青,白"
+        "青",
+        "白"
       ],
       "level": 9,
       "ap": 8000,
@@ -39413,7 +39484,8 @@
       "definitionVersion": "1",
       "cardType": "キャラ",
       "colors": [
-        "青,白"
+        "青",
+        "白"
       ],
       "level": 9,
       "ap": 8000,
@@ -39434,7 +39506,8 @@
       "definitionVersion": "1",
       "cardType": "キャラ",
       "colors": [
-        "青,白"
+        "青",
+        "白"
       ],
       "level": 9,
       "ap": 8000,
@@ -39455,7 +39528,8 @@
       "definitionVersion": "1",
       "cardType": "キャラ",
       "colors": [
-        "青,白"
+        "青",
+        "白"
       ],
       "level": 9,
       "ap": 8000,
@@ -39476,7 +39550,8 @@
       "definitionVersion": "1",
       "cardType": "キャラ",
       "colors": [
-        "緑,赤"
+        "緑",
+        "赤"
       ],
       "level": 9,
       "ap": 8000,
@@ -39497,7 +39572,8 @@
       "definitionVersion": "1",
       "cardType": "キャラ",
       "colors": [
-        "緑,赤"
+        "緑",
+        "赤"
       ],
       "level": 9,
       "ap": 8000,
@@ -39518,7 +39594,8 @@
       "definitionVersion": "1",
       "cardType": "キャラ",
       "colors": [
-        "黄,黒"
+        "黄",
+        "黒"
       ],
       "level": 9,
       "ap": 8000,
@@ -39539,7 +39616,8 @@
       "definitionVersion": "1",
       "cardType": "キャラ",
       "colors": [
-        "黄,黒"
+        "黄",
+        "黒"
       ],
       "level": 9,
       "ap": 8000,
@@ -39560,7 +39638,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "青,白"
+        "青",
+        "白"
       ],
       "level": 0,
       "ap": 0,
@@ -39584,7 +39663,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "青,白"
+        "青",
+        "白"
       ],
       "level": 0,
       "ap": 0,
@@ -39608,7 +39688,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "緑,赤"
+        "緑",
+        "赤"
       ],
       "level": 0,
       "ap": 0,
@@ -39632,7 +39713,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "緑,赤"
+        "緑",
+        "赤"
       ],
       "level": 0,
       "ap": 0,
@@ -39656,7 +39738,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "黄,黒"
+        "黄",
+        "黒"
       ],
       "level": 0,
       "ap": 0,
@@ -39680,7 +39763,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "黄,黒"
+        "黄",
+        "黒"
       ],
       "level": 0,
       "ap": 0,
@@ -41777,7 +41861,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "緑,白"
+        "緑",
+        "白"
       ],
       "level": 0,
       "ap": 0,
@@ -41801,7 +41886,8 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "緑,白"
+        "緑",
+        "白"
       ],
       "level": 0,
       "ap": 0,
@@ -45917,7 +46003,12 @@
       "definitionVersion": "1",
       "cardType": "事件",
       "colors": [
-        "青緑白赤黄黒"
+        "青",
+        "緑",
+        "白",
+        "赤",
+        "黄",
+        "黒"
       ],
       "level": 0,
       "ap": 0,

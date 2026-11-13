@@ -677,5 +677,24 @@ mod tests {
         ];
         assert!(validate_deck_counts(&valid_items).is_ok());
     }
+
+    #[test]
+    fn test_color_matching_hand_play() {
+        let path = if std::path::Path::new("data/dummy/cards.json").exists() {
+            "data/dummy/cards.json"
+        } else {
+            "../data/dummy/cards.json"
+        };
+        let catalog = CardCatalog::load_from_json(path).expect("catalog load failed");
+
+        // Verify case card B05120P (all colors or 5 colors)
+        if let Some(case_card) = catalog.get("B05120P") {
+            assert!(case_card.colors.len() >= 5 || case_card.colors.contains(&"青".to_string()));
+        }
+
+        // Verify character card B01005 (blue)
+        let blue_card = catalog.get("B01005").expect("B01005 should exist");
+        assert!(blue_card.colors.contains(&"青".to_string()));
+    }
 }
 
