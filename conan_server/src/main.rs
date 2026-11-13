@@ -962,5 +962,75 @@ mod tests {
         });
         assert!(engine.check_effect_conditions("p1", "【FILE5】効果テキスト"));
     }
+
+    #[test]
+    fn test_on_remove_and_turn_end_triggers() {
+        let path = if std::path::Path::new("data/dummy/cards.json").exists() {
+            "data/dummy/cards.json"
+        } else {
+            "../data/dummy/cards.json"
+        };
+        let catalog = CardCatalog::load_from_json(path).expect("catalog load failed");
+        let mut engine = MatchEngine::new(catalog);
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+
+        // Give p1 a card in deck
+        ps1.deck.push(models::CardInstance {
+            instance_id: "d1".to_string(),
+            definition_id: "B01005".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::DECK,
+            orientation: models::CardOrientation::ACTIVE,
+            entered_turn: 0,
+            face_up: false,
+            temp_ap_bonus: 0,
+            has_rush: false,
+            used_declare_this_turn: false,
+        });
+
+        // Field card with turn end trigger
+        ps1.field.push(models::CardInstance {
+            instance_id: "f1".to_string(),
+            definition_id: "B02088".to_string(), // 自分か相手のターン終了時、自分の証拠を上から1つリムーブする
+            owner_id: "p1".to_string(),
+            zone: models::Zone::FIELD,
+            orientation: models::CardOrientation::ACTIVE,
+            entered_turn: 0,
+            face_up: true,
+            temp_ap_bonus: 0,
+            has_rush: false,
+            used_declare_this_turn: false,
+        });
+        // 1 evidence
+        ps1.evidence.push(models::CardInstance {
+            instance_id: "ev1".to_string(),
+            definition_id: "B01005".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::EVIDENCE,
+            orientation: models::CardOrientation::ACTIVE,
+            entered_turn: 0,
+            face_up: true,
+            temp_ap_bonus: 0,
+            has_rush: false,
+            used_declare_this_turn: false,
+        });
+
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+        engine.turn_player_id = "p2".to_string(); // p2's turn, so p1 is in opponent's turn
+
+        // Test on remove trigger on card D03013 (【相手ターン中】【現場リムーブ時】カードを1枚引く。)
+        assert_eq!(engine.players.get("p1").unwrap().hand.len(), 0);
+        engine.trigger_on_remove("p1", "D03013");
+        assert_eq!(engine.players.get("p1").unwrap().hand.len(), 1);
+
+        // Test turn end trigger on B02088
+        assert_eq!(engine.players.get("p1").unwrap().evidence.len(), 1);
+        engine.trigger_on_turn_end("p1");
+        assert_eq!(engine.players.get("p1").unwrap().evidence.len(), 0);
+        assert_eq!(engine.players.get("p1").unwrap().remove.len(), 1);
+    }
 }
 

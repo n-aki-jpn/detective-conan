@@ -754,6 +754,11 @@ impl MatchEngine {
         match action_type {
             "END_TURN" => {
                 self.log(format!("⏭ {} がターンを終了しました", player_id));
+                // ターン終了時トリガーの解決
+                self.trigger_on_turn_end(player_id);
+                if self.phase == MatchPhase::FINISHED {
+                    return;
+                }
                 let next_turn = self.turn + 1;
                 let next_pid = self.player_order.iter().find(|pid| *pid != player_id).unwrap().clone();
                 self.start_turn(next_turn, &next_pid);
@@ -1188,17 +1193,19 @@ impl MatchEngine {
                     }
                 }
                 "REMOVE" => {
-                    let mut removed = false;
+                    let mut removed_def_id = None;
                     if let Some(opp_ps) = self.players.get_mut(&opp_id) {
                         if let Some(idx) = opp_ps.field.iter().position(|c| c.instance_id == tid) {
                             let mut card = opp_ps.field.remove(idx);
+                            removed_def_id = Some(card.definition_id.clone());
                             card.zone = Zone::REMOVE;
                             opp_ps.remove.push(card);
-                            removed = true;
                         }
                     }
-                    if removed {
+                    if let Some(rem_def) = removed_def_id {
                         self.log(format!("💥 [{}] の効果で相手の [{}] をリムーブしました！", actor_name, target_name));
+                        // 現場リムーブ時トリガーの解決
+                        self.trigger_on_remove(&opp_id, &rem_def);
                     }
                 }
                 "ACTIVATE" => {
@@ -1447,6 +1454,8 @@ impl MatchEngine {
                         defender_ps.remove.push(removed_c);
                     }
                     self.log(format!("💥 バトル決着: [{}] (AP{}) vs [{}] (AP{}) ➔ {} の [{}] をリムーブ！", actor_name, actor_ap, def_name, def_ap, defender_pid, def_name));
+                    // 現場リムーブ時トリガーの解決
+                    self.trigger_on_remove(&defender_pid, &d_def_id);
                 } else {
                     self.log(format!("🛡️ バトル決着: [{}] (AP{}) vs [{}] (AP{}) ➔ AP不足のためリムーブできず（守備成功）", actor_name, actor_ap, def_name, def_ap));
                 }
@@ -1790,6 +1799,208 @@ impl MatchEngine {
             }
         }
 
+        // 3. 【相手ターン中】条件チェック
+        if desc.contains("【相手ターン中】") {
+            let is_turn_player = self.turn_player_id == player_id;
+            if is_turn_player {
+                return false;
+            }
+        }
+
+        // 4. 【自分ターン中】条件チェック
+        if desc.contains("【自分ターン中】") {
+            let is_turn_player = self.turn_player_id == player_id;
+            if !is_turn_player {
+                return false;
+            }
+        }
+
         true
+    }
+
+    /// 現場リムーブ時トリガーを解決する
+    pub fn trigger_on_remove(&mut self, owner_id: &str, definition_id: &str) {
+        let desc = match self.catalog.get(definition_id) {
+            Some(d) => d.description.clone(),
+            None => return,
+        };
+
+        let is_on_remove = desc.contains("【現場リムーブ時】")
+            || desc.contains("リムーブされたとき")
+            || desc.contains("現場から離れたとき");
+
+        if !is_on_remove {
+            return;
+        }
+
+        // 条件判定（【相手ターン中】、【パートナー色】、【FILE】等）
+        if !self.check_effect_conditions(owner_id, &desc) {
+            return;
+        }
+
+        let card_name = self.card_name_by_def(definition_id);
+        self.log(format!("💥 [{}] の【現場リムーブ時】能力が誘発しました！", card_name));
+
+        // ドロー効果
+        let draw_count = parse_draw_count(&desc);
+        if draw_count > 0 {
+            self.draw_cards(owner_id, draw_count);
+            self.log(format!("✨ [{}] の効果でカードを {} 枚引きました", card_name, draw_count));
+        }
+
+        // 証拠獲得
+        let ev_count = parse_evidence_gain(&desc);
+        if ev_count > 0 {
+            self.gain_evidence(owner_id, ev_count);
+            self.log(format!("✨ [{}] の効果で証拠を {} つ獲得しました", card_name, ev_count));
+        }
+
+        // 相手キャラのスリープ
+        if desc.contains("スリープさせる") {
+            let opp_id = self.player_order.iter().find(|p| *p != owner_id).cloned().unwrap_or_default();
+            let mut target_name = None;
+            if let Some(opp_ps) = self.players.get_mut(&opp_id) {
+                for c in opp_ps.field.iter_mut() {
+                    if c.orientation == CardOrientation::ACTIVE {
+                        c.orientation = CardOrientation::SLEEP;
+                        target_name = Some(c.definition_id.clone());
+                        break;
+                    }
+                }
+            }
+            if let Some(tid) = target_name {
+                let tname = self.card_name_by_def(&tid);
+                self.log(format!("💤 [{}] の効果で相手の [{}] をスリープさせました", card_name, tname));
+            }
+        }
+
+        // 相手キャラのスタン
+        if desc.contains("スタンさせる") {
+            let opp_id = self.player_order.iter().find(|p| *p != owner_id).cloned().unwrap_or_default();
+            let mut target_name = None;
+            if let Some(opp_ps) = self.players.get_mut(&opp_id) {
+                for c in opp_ps.field.iter_mut() {
+                    if c.orientation == CardOrientation::ACTIVE || c.orientation == CardOrientation::SLEEP {
+                        c.orientation = CardOrientation::STUN;
+                        target_name = Some(c.definition_id.clone());
+                        break;
+                    }
+                }
+            }
+            if let Some(tid) = target_name {
+                let tname = self.card_name_by_def(&tid);
+                self.log(format!("💫 [{}] の効果で相手の [{}] をスタンさせました", card_name, tname));
+            }
+        }
+
+        // 手札からキャラ登場（例: 「手札からレベル6以下の〜登場させる」）
+        if desc.contains("手札から") && desc.contains("登場させる") {
+            let mut played_c = None;
+            if let Some(ps) = self.players.get_mut(owner_id) {
+                if ps.field.len() < 5 {
+                    if let Some(idx) = ps.hand.iter().position(|c| c.zone == Zone::HAND) {
+                        let mut card = ps.hand.remove(idx);
+                        card.zone = Zone::FIELD;
+                        card.orientation = CardOrientation::SLEEP;
+                        card.face_up = true;
+                        played_c = Some(card.definition_id.clone());
+                        ps.field.push(card);
+                    }
+                }
+            }
+            if let Some(tid) = played_c {
+                let tname = self.card_name_by_def(&tid);
+                self.log(format!("🃏 [{}] の効果で手札から [{}] を登場させました！", card_name, tname));
+            }
+        }
+
+        // リムーブエリアから蘇生（例: 「リムーブエリアにある〜スリープ状態で登場させる」）
+        if desc.contains("リムーブエリアにある") && desc.contains("登場させる") {
+            let mut revived_c = None;
+            if let Some(ps) = self.players.get_mut(owner_id) {
+                if ps.field.len() < 5 {
+                    if let Some(idx) = ps.remove.iter().position(|c| c.zone == Zone::REMOVE) {
+                        let mut card = ps.remove.remove(idx);
+                        card.zone = Zone::FIELD;
+                        card.orientation = CardOrientation::SLEEP;
+                        card.face_up = true;
+                        revived_c = Some(card.definition_id.clone());
+                        ps.field.push(card);
+                    }
+                }
+            }
+            if let Some(tid) = revived_c {
+                let tname = self.card_name_by_def(&tid);
+                self.log(format!("✨ [{}] の効果でリムーブエリアから [{}] を登場させました！", card_name, tname));
+            }
+        }
+    }
+
+    /// ターン終了時トリガーを解決する
+    pub fn trigger_on_turn_end(&mut self, current_turn_pid: &str) {
+        // 現場にいるキャラ・パートナーのターン終了時効果をチェック
+        let mut effects_to_trigger = vec![];
+        if let Some(ps) = self.players.get(current_turn_pid) {
+            for c in &ps.field {
+                if let Some(c_def) = self.catalog.get(&c.definition_id) {
+                    if c_def.description.contains("ターン終了時") {
+                        effects_to_trigger.push((current_turn_pid.to_string(), c.definition_id.clone(), c_def.description.clone()));
+                    }
+                }
+            }
+            if let Some(ref p) = ps.partner {
+                if let Some(p_def) = self.catalog.get(&p.definition_id) {
+                    if p_def.description.contains("ターン終了時") {
+                        effects_to_trigger.push((current_turn_pid.to_string(), p.definition_id.clone(), p_def.description.clone()));
+                    }
+                }
+            }
+        }
+
+        for (pid, def_id, desc) in effects_to_trigger {
+            if !self.check_effect_conditions(&pid, &desc) {
+                continue;
+            }
+
+            let card_name = self.card_name_by_def(&def_id);
+
+            // ドロー効果
+            let draw_count = parse_draw_count(&desc);
+            if draw_count > 0 {
+                self.draw_cards(&pid, draw_count);
+                self.log(format!("✨ [{}] のターン終了時効果: カードを {} 枚引きました", card_name, draw_count));
+            }
+
+            // 手札リムーブ効果（例: 「手札を1枚リムーブする」）
+            let hand_cost = parse_hand_remove_cost(&desc);
+            if hand_cost > 0 {
+                let mut removed_cost_names = vec![];
+                if let Some(ps) = self.players.get_mut(&pid) {
+                    for _ in 0..hand_cost {
+                        if let Some(mut removed_c) = ps.hand.pop() {
+                            removed_c.zone = Zone::REMOVE;
+                            let did = removed_c.definition_id.clone();
+                            ps.remove.push(removed_c);
+                            removed_cost_names.push(did);
+                        }
+                    }
+                }
+                for did in removed_cost_names {
+                    let cost_name = self.card_name_by_def(&did);
+                    self.log(format!("💸 [{}] のターン終了時効果: 手札から [{}] をリムーブしました", card_name, cost_name));
+                }
+            }
+
+            // 証拠リムーブ（例: 「自分の証拠を上から1つリムーブする」）
+            if desc.contains("証拠を上から1つリムーブ") || desc.contains("証拠を1つリムーブ") {
+                if let Some(ps) = self.players.get_mut(&pid) {
+                    if let Some(mut ev) = ps.evidence.pop() {
+                        ev.zone = Zone::REMOVE;
+                        ps.remove.push(ev);
+                        self.log(format!("⚠️ [{}] のターン終了時効果: 証拠を1つリムーブしました", card_name));
+                    }
+                }
+            }
+        }
     }
 }
