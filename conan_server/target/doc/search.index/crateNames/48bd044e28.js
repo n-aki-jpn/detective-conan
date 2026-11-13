@@ -1,1 +1,0 @@
-rd_("lconan_server")

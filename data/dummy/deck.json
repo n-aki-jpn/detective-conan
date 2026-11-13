@@ -1,40 +1,32 @@
 {
-  "deckId": "CUSTOM-USER-DECK",
-  "deckName": "カスタムデッキ",
+  "deckId": "deck_1794570368936",
+  "deckName": "新デッキ",
   "catalogVersion": "official-raw-v1",
-  "partnerId": "B01001",
+  "partnerId": "PR341_3",
   "caseId": "B01024",
   "mainDeck": [
     {
-      "definitionId": "B01019",
+      "definitionId": "PR205",
       "count": 3
     },
     {
-      "definitionId": "B01015",
+      "definitionId": "PR281",
       "count": 3
     },
     {
-      "definitionId": "B01021",
+      "definitionId": "PR117",
       "count": 3
     },
     {
-      "definitionId": "B01011",
+      "definitionId": "PR118",
       "count": 3
     },
     {
-      "definitionId": "B01013",
-      "count": 3
+      "definitionId": "B01005",
+      "count": 1
     },
     {
-      "definitionId": "B01014",
-      "count": 3
-    },
-    {
-      "definitionId": "B01016",
-      "count": 3
-    },
-    {
-      "definitionId": "B01017",
+      "definitionId": "B01005P",
       "count": 3
     },
     {
@@ -42,24 +34,32 @@
       "count": 3
     },
     {
-      "definitionId": "B01018",
+      "definitionId": "B01011",
       "count": 3
     },
     {
-      "definitionId": "B01020",
+      "definitionId": "B02002",
       "count": 3
     },
     {
-      "definitionId": "B01006",
+      "definitionId": "B02007",
       "count": 3
     },
     {
-      "definitionId": "B01010",
-      "count": 2
+      "definitionId": "B03002",
+      "count": 3
     },
     {
-      "definitionId": "B01012",
-      "count": 2
+      "definitionId": "B03002P",
+      "count": 3
+    },
+    {
+      "definitionId": "B03004",
+      "count": 3
+    },
+    {
+      "definitionId": "B04005",
+      "count": 3
     }
   ]
 }

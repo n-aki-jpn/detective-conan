@@ -99,6 +99,10 @@ pub struct CardInstance {
     pub entered_turn: i32,
     #[serde(default)]
     pub face_up: bool,
+    #[serde(default)]
+    pub temp_ap_bonus: i32,
+    #[serde(default)]
+    pub has_rush: bool,
 }
 
 fn default_orientation() -> CardOrientation {

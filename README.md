@@ -1,6 +1,36 @@
-# Detective Conan Card Game Project
+# Detective Conan Card Game Project (名探偵コナンTCG)
 
-名探偵コナンカードゲームの実装仕様・検証用データ・対戦エンジン・シミュレーションスクリプトを管理するリポジトリです。
+名探偵コナン トレーディングカードゲーム（TCG）のルールエンジン、カードカタログ管理、対戦Webアプリケーション、およびデッキ構築ツールを提供するプロジェクトです。
+
+Rustによる高速・安全な対戦サーバー（`conan_server`）と、スマートフォン・PC両対応のWebフロントエンドを備え、オンラインでの対人対戦・CPU対戦・デッキ構築を快適に行うことができます。
+
+---
+
+## 🌟 主な機能・特徴
+
+- **TCGルールエンジン (Rust)**
+  - マリガン、ターン進行（リフレッシュ、ドロー、ファイル、メイン、エンド）、接触・推理・ガード、事件解決などの公式ルール準拠のステートマシン。
+  - カード効果システム（登場時ドロー、突撃、APバフ/一時的修正、証拠追加/除去、リムーブ等）。
+  - CPUエージェント（`RandomAgent`）による自動思考・一人プレイ対戦対応。
+
+- **Web対戦インターフェース**
+  - スマホ・タブレット・PCに最適化したレスポンシブな盤面UI。
+  - 実カード表面画像の高解像度表示、カードタップによる詳細モーダル（拡大画像、効果テキスト、AP/LP、特徴）。
+  - 手札、現場キャラ、アシスト、推理エリア、ファイル、ネクストヒント、証拠、事件カードの視覚的操作。
+
+- **オンラインマルチ対戦・マッチング**
+  - 4桁の合言葉（ルームコード）を発行して、別々のスマホやPCから簡単にマッチング可能。
+  - 同一Wi-Fi環境等でスマホからサーバーのIPアドレスにアクセスするだけで対戦可能。
+
+- **高機能デッキビルダー**
+  - 2,400枚以上の公式カードカタログ（通常版・パラレル版網羅）。
+  - カード名、カード番号、色、カードタイプ（キャラ/パートナー/事件/イベント）、コストによる検索・絞り込み。
+  - 視認性の高いマルチカラムグリッド表示。
+  - **公式ルールに準拠した厳格なバリデーション**:
+    - メインデッキちょうど40枚制限
+    - 同一カードID（通常版・パラレル版を合算）はデッキ内に最大3枚まで
+    - パートナーカード・事件カードの必須チェック
+  - **複数デッキの保存・管理**: デッキスロットの複数保存、アクティブデッキの切り替え、削除。
 
 ---
 
@@ -9,65 +39,101 @@
 ```text
 detective-conan/
 ├── README.md               # プロジェクト総合概要（本ファイル）
-├── docs/                   # 仕様書・ルール設計・JSONスキーマ
-│   ├── README.md           # 仕様書インデックス（v0.3）
-│   ├── v0.3.1-update.md    # v0.3.1 差分更新仕様
-│   ├── rules.md            # 基本ルール仕様
-│   ├── floor-rules.md      # フロアルール要約
-│   ├── resolution-timing.md # タイミング仕様
-│   ├── resolution-timing-addendum.md # タイミング仕様追記
-│   ├── state-machine.md    # 状態遷移モデル
-│   ├── decisions.md        # 入出力契約・エンジンAPI設計
-│   ├── api.md              # 通信API仕様
-│   ├── card-model.md       # カードデータモデル
-│   ├── card-schema.json    # カード定義スキーマ
-│   ├── icon-condition-schema.json # アイコン条件スキーマ
-│   ├── turn-limit-schema.json     # ターン回数制限スキーマ
-│   ├── icon-mapping.md     # アイコン対応表
-│   ├── icon-tests.md       # アイコンテスト仕様
-│   ├── open-issues.md      # 未解決・確認課題
-│   ├── logging-and-simulation.md # ログ・シミュレーション仕様
-│   ├── test-cases.md       # 受入テストケース一覧
-│   └── dummy-card-example.json   # カード定義例
+├── AGENTS.md               # エージェント・開発運用ガイドライン
+│
+├── conan_server/           # Rust バックエンドサーバー (axum + tokio)
+│   ├── Cargo.toml          # Rustクレート構成
+│   └── src/
+│       ├── main.rs         # REST APIエンドポイント・静的配信・部屋管理
+│       ├── models.rs       # カード・ゾーン・フェーズ等の型定義
+│       ├── catalog.rs      # カードカタログ読み込み・検索
+│       ├── engine.rs       # TCG対戦ルールエンジン・効果処理
+│       ├── agent.rs        # CPU意思決定ロジック
+│       └── observation.rs  # プレイヤー視点（手札秘匿等）のデータ変換
 │
 ├── src/
-│   └── conan_engine/       # コア対戦エンジン (MVP実装)
-│       ├── models.py       # カード・ゾーン・フェーズ等のデータ構造
-│       ├── catalog.py      # カードカタログローダー
-│       ├── engine.py       # ルールステートマシン & 対戦エンジン
-│       └── agent.py        # CPUエージェント (RandomAgent)
+│   └── conan_engine/
+│       ├── web/static/     # Webフロントエンド (Vanilla HTML / CSS / JS)
+│       │   ├── index.html  # 対戦盤面 ＆ デッキビルダーUI
+│       │   └── card-images/# カード画像配信用ディレクトリ
+│       ├── models.py       # (Python版レガシー) データモデル
+│       ├── engine.py       # (Python版レガシー) 対戦エンジン
+│       └── agent.py        # (Python版レガシー) CPUエージェント
 │
-├── tests/                  # 単体テスト・受入テスト
-│   └── test_engine.py      # 初期引き直し、リソース配布、推理、アシスト等のテスト
+├── data/                   # カード・デッキ・画像リソース
+│   ├── dummy/
+│   │   ├── cards.json      # 全カードカタログ（canonicalId正規化済み）
+│   │   ├── deck.json       # 現在のアクティブデッキ
+│   │   └── decks.json      # 保存済みデッキスロット一覧
+│   └── private/
+│       └── card-images/    # カード表面画像データ原本
 │
-├── data/                   # データ置き場
-│   └── dummy/              # 検証用ダミーデータ (U06)
-│       ├── README.md       # ダミーデッキ設計概要
-│       ├── cards.json      # ダミーカード定義 (14種類40枚 + パートナー + 事件)
-│       ├── deck.json       # デッキ構成定義
-│       ├── deck-list.csv   # デッキリストCSV
-│       ├── simulation-profile.json # シミュレーション設定
-│       └── validation-report.json  # 検証レポート
+├── docs/                   # 仕様書・設計書・JSONスキーマ
+│   ├── rules.md            # 基本ルール仕様
+│   ├── state-machine.md    # 状態遷移モデル
+│   ├── decisions.md        # 入出力契約・エンジンAPI設計
+│   └── api.md              # 通信API仕様
 │
-└── scripts/                # ユーティリティ・実行スクリプト
-    ├── simulate.py         # ヘッドレス高速対戦シミュレーター
-    ├── save_conan_cards.py # 公式カードデータ取得・保存スクリプト
-    ├── カードデータ保存手順.md  # データ保存スクリプトの実行手順書
-    └── apply_update.py     # docs仕様書差分適用スクリプト
+├── tests/                  # 単体テスト (Python版レガシー)
+└── scripts/                # データ取得・カタログ更新スクリプト
+    ├── update_card_catalog.py # カタログ正規化・canonicalId付与スクリプト
+    └── save_conan_cards.py    # 公式カードデータ取得スクリプト
 ```
 
 ---
 
 ## 🚀 クイックスタート
 
-### 1. 単体テストの実行
-```bash
-$env:PYTHONPATH="src"
-python -m unittest discover -s tests -p "test_*.py"
+### 1. サーバーのビルドと起動 (Rust)
+
+必ずプロジェクトルート（`detective-conan`）を作業ディレクトリとして実行してください。
+
+```powershell
+# プロジェクトルートに移動
+Set-Location C:\dev\detective-conan
+
+# リリースビルド
+cargo build --release --manifest-path conan_server/Cargo.toml
+
+# サーバー起動 (ポート8000)
+.\conan_server\target\release\conan_server.exe 8000
 ```
 
-### 2. 対戦シミュレーションの実行
-ダミーデッキ同士のCPU対戦を高速に実行・検証できます。
-```bash
-python scripts/simulate.py --games 100 --seed 42
+> **開発時のデバッグ実行:**
+> `cargo run --manifest-path conan_server/Cargo.toml` でも起動可能です。
+
+---
+
+### 2. ブラウザでアクセス
+
+- **同じPCから開く場合:**
+  ブラウザで `http://localhost:8000` を開きます。
+- **別端末（スマホ・タブレット等）から開く場合:**
+  サーバーが動いているPCと同じWi-Fiに接続し、PCのローカルIPアドレス（例: `http://192.168.1.XX:8000`）を開きます。
+
+---
+
+### 3. 操作方法
+
+- **上部ヘッダー:**
+  - `⚔️ 対戦`: 盤面での対戦モードを開きます。
+  - `🃏 デッキ構築`: カードカタログからのデッキ作成・保存・切り替えを行います。
+- **対戦画面:**
+  - **一人プレイ（CPU戦）**: 「🤖 CPU対戦」をONにすると、相手プレイヤーの行動（マリガン・ターン行動・ガード等）が自動的に行われます。
+  - **オンライン対戦**: 「新規部屋作成」を押して表示された4桁のコードを別のスマホや端末で「対戦に参加」から入力すると、リアルタイムに対戦できます。
+- **デッキ構築画面:**
+  - パートナーカード（1枚）、事件カード（1枚）、メインデッキ（ちょうど40枚）を選択します。
+  - 同一カードID（通常版とパラレル版を含む）は合計3枚までしか投入できないルール制限が適用されます。
+
+---
+
+### 4. 単体テストの実行
+
+```powershell
+# Rust版のテスト（バリデーションやカードID判定）
+cargo test --manifest-path conan_server/Cargo.toml
+
+# Python版レガシーテスト
+$env:PYTHONPATH="src"
+python -m unittest discover -s tests -p "test_*.py"
 ```

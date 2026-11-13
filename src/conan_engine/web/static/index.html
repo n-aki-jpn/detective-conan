@@ -87,23 +87,26 @@
     /* Cards */
     .card {
       background: #1e293b; border: 1.5px solid #475569; border-radius: 6px;
-      width: 82px; height: 115px; padding: 4px 5px; flex-shrink: 0;
+      width: 82px; height: 118px; padding: 2px; flex-shrink: 0;
       display: flex; flex-direction: column; justify-content: space-between;
       position: relative; box-shadow: 0 2px 4px rgba(0,0,0,0.3); font-size: 0.65rem;
+      cursor: pointer; overflow: hidden;
     }
     .card.CHARACTER { border-top: 3px solid #38bdf8; }
     .card.PARTNER { border-top: 3px solid #f59e0b; }
     .card.CASE { border-top: 3px solid #a855f7; }
     
-    .card.SLEEP { border-color: var(--sleep-color); opacity: 0.8; transform: rotate(4deg); }
+    .card.SLEEP { border-color: var(--sleep-color); opacity: 0.85; transform: rotate(5deg); }
     .card.STUN { border-color: var(--stun-color); filter: grayscale(80%); }
     .card.secret { background: #334155; justify-content: center; align-items: center; color: #94a3b8; font-weight: bold; border-style: dashed; }
     
-    .card-top { display: flex; justify-content: space-between; font-weight: bold; font-size: 0.68rem; line-height: 1; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 2px; }
-    .card-badge { color: #38bdf8; font-size: 0.6rem; }
-    .card-name { font-weight: bold; font-size: 0.72rem; margin: 2px 0 1px 0; color: #f8fafc; line-height: 1.15; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-    .card-desc-preview { font-size: 0.58rem; color: #94a3b8; line-height: 1.15; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-    .card-stats { display: flex; justify-content: space-between; font-weight: bold; font-size: 0.75rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 2px; line-height: 1; }
+    .card-img-thumb {
+      width: 100%; height: 60px; object-fit: cover; border-radius: 3px; display: block;
+    }
+    .card-top { display: flex; justify-content: space-between; font-weight: bold; font-size: 0.64rem; line-height: 1; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 2px; }
+    .card-badge { color: #38bdf8; font-size: 0.58rem; }
+    .card-name { font-weight: bold; font-size: 0.68rem; margin: 1px 0; color: #f8fafc; line-height: 1.15; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .card-stats { display: flex; justify-content: space-between; font-weight: bold; font-size: 0.72rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1px; line-height: 1; }
     .stat-ap { color: #f87171; }
     .stat-lp { color: #facc15; }
 
@@ -121,9 +124,9 @@
       scrollbar-width: none; -webkit-overflow-scrolling: touch;
     }
     .mobile-hand-scroll::-webkit-scrollbar { display: none; }
-    .mobile-hand-scroll .card { width: 95px; height: 130px; font-size: 0.7rem; }
-    .mobile-hand-scroll .card-name { font-size: 0.78rem; }
-    .mobile-hand-scroll .card-desc-preview { font-size: 0.62rem; -webkit-line-clamp: 3; }
+    .mobile-hand-scroll .card { width: 95px; height: 138px; font-size: 0.7rem; }
+    .mobile-hand-scroll .card-img-thumb { height: 75px; }
+    .mobile-hand-scroll .card-name { font-size: 0.74rem; }
 
     .decision-banner {
       background: #1e293b; border: 1.5px solid var(--accent); border-radius: 8px;
@@ -228,9 +231,51 @@
       <button id="tab-deck" class="nav-tab-btn" onclick="switchTab('deck')">🃏 デッキ構築</button>
     </div>
     <div class="nav-actions">
+      <button class="btn btn-secondary" onclick="showRoomModal()" style="padding:4px 8px; font-size:0.75rem; min-height:28px;">📶 対戦ルーム</button>
       <button class="btn btn-secondary" onclick="resetMatch()" style="padding:4px 8px; font-size:0.75rem; min-height:28px;">リセット</button>
     </div>
   </nav>
+
+  <!-- Room Matching Modal -->
+  <div id="room-modal" class="card-modal-backdrop" onclick="closeRoomModal()">
+    <div class="card-modal-content" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <span class="modal-title">📶 オンライン対戦ルーム</span>
+        <button class="qty-btn" onclick="closeRoomModal()">✕</button>
+      </div>
+      <div class="modal-body" style="font-size:0.8rem; display:flex; flex-direction:column; gap:12px;">
+        <div style="background:#0f172a; padding:8px; border-radius:6px; border:1px solid var(--border-color);">
+          <div style="color:var(--text-muted); font-size:0.75rem;">現在の対戦情報:</div>
+          <div>ルームID: <b id="current-room-display" style="color:var(--accent); font-size:1rem;">default</b></div>
+          <div>あなたの視点: <b id="current-player-display" style="color:#34d399;">player1</b></div>
+        </div>
+
+        <!-- Create Room -->
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          <span style="font-weight:bold; color:var(--text);">1. 新しい部屋を作成 (ホスト側)</span>
+          <button class="btn btn-success" onclick="createNewRoom()" style="width:100%;">
+            🆕 ルームを作成する (4桁コード)
+          </button>
+        </div>
+
+        <!-- Join Room -->
+        <div style="display:flex; flex-direction:column; gap:6px; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px;">
+          <span style="font-weight:bold; color:var(--text);">2. 相手の部屋に参加 (スマホ等)</span>
+          <div style="display:flex; gap:6px;">
+            <input type="text" id="join-room-input" placeholder="4桁の部屋番号 (例: 1234)" style="flex:1; background:#0f172a; color:white; border:1px solid var(--border-color); padding:8px; border-radius:6px; font-size:0.85rem; text-align:center;">
+            <button class="btn" onclick="joinExistingRoom()" style="padding:8px 14px;">入室</button>
+          </div>
+        </div>
+
+        <!-- Local reset -->
+        <div style="border-top:1px solid rgba(255,255,255,0.1); padding-top:8px;">
+          <button class="btn btn-secondary" onclick="returnToDefaultRoom()" style="width:100%; font-size:0.75rem; min-height:30px;">
+            🏠 既定のローカル/CPU部屋に戻る
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- ================= SCREEN 1: BATTLE ================= -->
   <div id="screen-battle" class="screen-view active">
@@ -316,7 +361,23 @@
   <!-- ================= SCREEN 2: DECK BUILDER ================= -->
   <div id="screen-deck" class="screen-view">
     <div class="deck-builder-container">
+      <!-- Deck Slot Selector Bar -->
+      <div style="background:#0f172a; border:1px solid var(--border-color); border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-size:0.85rem; font-weight:bold; color:var(--accent);">📂 保存済みデッキ一覧</span>
+          <button class="btn btn-secondary" onclick="createNewDeckPrompt()" style="padding:4px 10px; font-size:0.75rem; min-height:28px;">＋ 新規デッキ作成</button>
+        </div>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <select id="saved-decks-select" onchange="onSelectSavedDeck(this.value)" style="flex:1; background:#1e293b; color:white; border:1px solid #475569; padding:6px 8px; border-radius:6px; font-size:0.8rem;"></select>
+          <button class="btn btn-danger" onclick="deleteCurrentDeckSlot()" style="padding:4px 8px; font-size:0.75rem; min-height:28px;" title="このデッキを削除">🗑 削除</button>
+        </div>
+      </div>
+
       <div class="deck-summary-card">
+        <div style="display:flex; gap:8px; align-items:center;">
+          <label style="font-size:0.78rem; color:var(--text-muted); flex-shrink:0;">デッキ名:</label>
+          <input type="text" id="builder-deck-name" placeholder="デッキ名を入力..." style="flex:1; background:#0f172a; color:white; border:1px solid var(--border-color); padding:5px 8px; border-radius:4px; font-size:0.82rem;" oninput="currentDeckDef.deckName = this.value">
+        </div>
         <div class="deck-count-bar">
           <div>デッキ枚数: <span id="builder-total-count" style="color:var(--accent); font-size:1.1rem;">40</span> / 40枚</div>
           <span id="builder-status-badge" class="deck-valid-badge deck-valid-ok">構築完了</span>
@@ -367,6 +428,7 @@
 
   <script>
     let currentViewingPlayer = "player1";
+    let currentRoomId = "default";
     let lastObs = null;
     let lastRevision = -1;
     let lastDecisionId = null;
@@ -378,6 +440,15 @@
     let deckQtyMap = {}; // defId -> count
     let builderPage = 0;
     const PAGE_SIZE = 60;
+
+    // Check URL parameters for roomId & player (e.g. ?room=1234&player=player2)
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('room')) {
+      currentRoomId = urlParams.get('room');
+    }
+    if (urlParams.has('player')) {
+      currentViewingPlayer = urlParams.get('player');
+    }
 
     // ========== NAVIGATION ==========
     function switchTab(tab) {
@@ -393,10 +464,109 @@
       }
     }
 
+    // ========== ROOM MODAL & MATCHING ==========
+    function showRoomModal() {
+      document.getElementById('current-room-display').innerText = currentRoomId;
+      document.getElementById('current-player-display').innerText = currentViewingPlayer;
+      document.getElementById('room-modal').style.display = 'flex';
+    }
+
+    function closeRoomModal() {
+      document.getElementById('room-modal').style.display = 'none';
+    }
+
+    async function createNewRoom() {
+      try {
+        const res = await fetch('/api/rooms/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ is_cpu: false, deck: currentDeckDef })
+        });
+        const data = await res.json();
+        if (data.roomId) {
+          currentRoomId = data.roomId;
+          currentViewingPlayer = "player1";
+          lastRevision = -1;
+          selectedMulliganIds.clear();
+          
+          updateUrlParams();
+          closeRoomModal();
+          alert(`部屋番号「${currentRoomId}」を作成しました！\n対戦相手のスマホでこの番号を入力して参加してもらってください。`);
+          fetchState();
+        }
+      } catch (e) {
+        alert("部屋作成エラー: " + e.message);
+      }
+    }
+
+    async function joinExistingRoom() {
+      const input = document.getElementById('join-room-input');
+      const roomId = input ? input.value.trim() : '';
+      if (!roomId) {
+        alert("部屋番号を入力してください");
+        return;
+      }
+      try {
+        const res = await fetch('/api/rooms/join', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ roomId: roomId, deck: currentDeckDef })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          currentRoomId = data.roomId;
+          currentViewingPlayer = data.assignedPlayerId || "player2";
+          lastRevision = -1;
+          selectedMulliganIds.clear();
+
+          updateUrlParams();
+          closeRoomModal();
+          alert(`部屋「${currentRoomId}」に ${currentViewingPlayer} として参加しました！`);
+          fetchState();
+        } else {
+          alert(`参加失敗: ${data.error}`);
+        }
+      } catch (e) {
+        alert("通信エラー: " + e.message);
+      }
+    }
+
+    function returnToDefaultRoom() {
+      currentRoomId = "default";
+      currentViewingPlayer = "player1";
+      lastRevision = -1;
+      selectedMulliganIds.clear();
+      updateUrlParams();
+      closeRoomModal();
+      fetchState();
+    }
+
+    function updateUrlParams() {
+      const url = new URL(window.location);
+      if (currentRoomId !== 'default') {
+        url.searchParams.set('room', currentRoomId);
+        url.searchParams.set('player', currentViewingPlayer);
+      } else {
+        url.searchParams.delete('room');
+        url.searchParams.delete('player');
+      }
+      window.history.replaceState({}, '', url);
+
+      const pSel = document.getElementById('player-select');
+      if (pSel) pSel.value = currentViewingPlayer;
+    }
+
     // ========== BATTLE SYSTEM ==========
     async function fetchState() {
       try {
-        const res = await fetch(`/api/state?player_id=${currentViewingPlayer}`);
+        const res = await fetch(`/api/state?player_id=${currentViewingPlayer}&room_id=${currentRoomId}`);
+        if (!res.ok) {
+          if (res.status === 404 && currentRoomId !== 'default') {
+            currentRoomId = 'default';
+            updateUrlParams();
+            return;
+          }
+        }
         const data = await res.json();
         
         const curDecId = data.pendingDecision ? data.pendingDecision.decisionId : null;
@@ -417,6 +587,7 @@
       currentViewingPlayer = pid;
       selectedMulliganIds.clear();
       lastRevision = -1;
+      updateUrlParams();
       fetchState();
     }
 
@@ -424,7 +595,7 @@
       await fetch('/api/set_cpu', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isCpu: isCpu })
+        body: JSON.stringify({ isCpu: isCpu, roomId: currentRoomId })
       });
       fetchState();
     }
@@ -433,7 +604,11 @@
       selectedMulliganIds.clear();
       lastRevision = -1;
       lastDecisionId = null;
-      await fetch('/api/reset', { method: 'POST' });
+      await fetch('/api/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId: currentRoomId })
+      });
       fetchState();
     }
 
@@ -444,6 +619,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           playerId: currentViewingPlayer,
+          roomId: currentRoomId,
           decisionId: lastObs.pendingDecision.decisionId,
           revision: lastObs.revision,
           value: value
@@ -507,16 +683,20 @@
       const typeLabel = card.cardType === 'PARTNER' ? 'パートナー' : (card.cardType === 'CASE' ? '事件' : 'キャラ');
       const stateBadge = card.orientation === 'SLEEP' ? '<span style="color:#f59e0b;">💤</span>' : (card.orientation === 'STUN' ? '<span style="color:#ef4444;">⚡</span>' : '');
 
+      const imgHtml = card.mainPath
+        ? `<img src="/card-images/${card.mainPath}" class="card-img-thumb" loading="lazy" onerror="this.style.display='none'">`
+        : `<div style="height:60px;background:#0f172a;display:flex;align-items:center;justify-content:center;color:#475569;font-size:0.6rem;">NO IMG</div>`;
+
       el.innerHTML = `
+        ${imgHtml}
         <div class="card-top">
           <span class="card-badge">${typeLabel}</span>
           <span>${card.level > 0 ? 'Lv.' + card.level : ''}</span>
         </div>
         <div class="card-name">${card.name || card.definitionId} ${stateBadge}</div>
-        <div class="card-desc-preview">${card.description || ''}</div>
         <div class="card-stats">
-          <span class="stat-ap">AP${card.ap ?? 0}</span>
-          <span class="stat-lp">LP${card.lp ?? 0}</span>
+          <span class="stat-ap">AP${card.ap ?? '-'}</span>
+          <span class="stat-lp">LP${card.lp ?? '-'}</span>
         </div>
       `;
       if (!disableModal) {
@@ -540,7 +720,17 @@
       if (document.getElementById('cpu-toggle')) {
         document.getElementById('cpu-toggle').checked = !!obs.p2IsCpu;
       }
-      document.getElementById('match-info').innerText = `T:${obs.turn} (${obs.turnPlayerId === currentViewingPlayer ? '自ターン' : '相手T'})`;
+      const roomTag = obs.roomId && obs.roomId !== 'default' ? `[部屋:${obs.roomId}] ` : '';
+      document.getElementById('match-info').innerText = `${roomTag}T:${obs.turn} (${obs.turnPlayerId === currentViewingPlayer ? '自ターン' : '相手T'})`;
+
+      if (obs.waitingForPlayer2) {
+        const decBox = document.getElementById('decision-box');
+        decBox.style.display = 'block';
+        document.getElementById('decision-title').innerText = `⏳ 対戦相手の参加を待っています...`;
+        document.getElementById('decision-desc').innerText = `部屋番号は「${obs.roomId}」です。相手の端末でこの番号を入力して参加してください。`;
+        document.getElementById('decision-actions').innerHTML = '';
+        return;
+      }
       
       const me = obs.me;
       const opp = obs.opponent;
@@ -774,12 +964,14 @@
     // ========== DECK BUILDER LOGIC ==========
     async function loadDeckBuilderData() {
       try {
-        const [catRes, deckRes] = await Promise.all([
+        const [catRes, deckRes, decksListRes] = await Promise.all([
           fetch('/api/catalog'),
-          fetch('/api/deck')
+          fetch('/api/deck'),
+          fetch('/api/decks')
         ]);
         const catJson = await catRes.json();
         const deckJson = await deckRes.json();
+        const decksListJson = await decksListRes.json();
 
         catalogData = catJson.cards || [];
         currentDeckDef = deckJson;
@@ -790,11 +982,100 @@
           deckQtyMap[item.definitionId] = item.count;
         });
 
+        // Update deck name input
+        const nameInput = document.getElementById('builder-deck-name');
+        if (nameInput) {
+          nameInput.value = currentDeckDef.deckName || 'カスタムデッキ';
+        }
+
+        renderSavedDecksDropdown(decksListJson.decks || []);
         populateFixedSelects();
         renderBuilderCatalog();
         updateBuilderSummary();
       } catch (e) {
         console.error(e);
+      }
+    }
+
+    function renderSavedDecksDropdown(decks) {
+      const sel = document.getElementById('saved-decks-select');
+      if (!sel) return;
+      sel.innerHTML = '';
+      decks.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.deckId || d.fileId;
+        opt.innerText = `${d.deckName} (${d.totalCards}/40枚)`;
+        if (d.isActive || (currentDeckDef && (currentDeckDef.deckId === d.deckId || currentDeckDef.deckId === d.fileId))) {
+          opt.selected = true;
+        }
+        sel.appendChild(opt);
+      });
+    }
+
+    async function onSelectSavedDeck(deckId) {
+      if (!deckId) return;
+      try {
+        const res = await fetch(`/api/decks/${encodeURIComponent(deckId)}`);
+        if (!res.ok) throw new Error("デッキ読み込みに失敗しました");
+        const deckData = await res.json();
+        
+        currentDeckDef = deckData;
+        deckQtyMap = {};
+        (deckData.mainDeck || []).forEach(item => {
+          deckQtyMap[item.definitionId] = item.count;
+        });
+
+        const nameInput = document.getElementById('builder-deck-name');
+        if (nameInput) {
+          nameInput.value = currentDeckDef.deckName || deckId;
+        }
+
+        populateFixedSelects();
+        renderBuilderCatalog();
+        updateBuilderSummary();
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    function createNewDeckPrompt() {
+      const name = prompt("新しいデッキ名を入力してください:", "新デッキ");
+      if (!name) return;
+      
+      const newId = "deck_" + Date.now();
+      currentDeckDef = {
+        deckId: newId,
+        deckName: name,
+        partnerId: currentDeckDef.partnerId || '',
+        caseId: currentDeckDef.caseId || '',
+        mainDeck: []
+      };
+      deckQtyMap = {};
+
+      const nameInput = document.getElementById('builder-deck-name');
+      if (nameInput) nameInput.value = name;
+
+      populateFixedSelects();
+      renderBuilderCatalog();
+      updateBuilderSummary();
+    }
+
+    async function deleteCurrentDeckSlot() {
+      const deckId = currentDeckDef.deckId;
+      if (!deckId) {
+        alert("削除するデッキが選択されていません");
+        return;
+      }
+      if (!confirm(`デッキ「${currentDeckDef.deckName || deckId}」を削除してもよろしいですか？`)) {
+        return;
+      }
+      try {
+        const res = await fetch(`/api/decks/${encodeURIComponent(deckId)}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error("削除に失敗しました");
+        alert("デッキを削除しました");
+        loadDeckBuilderData();
+      } catch (e) {
+        alert(e.message);
       }
     }
 
@@ -825,8 +1106,34 @@
     function updateDeckPartner(val) { currentDeckDef.partnerId = val; }
     function updateDeckCase(val) { currentDeckDef.caseId = val; }
 
+    function getCanonicalId(defId) {
+      const card = catalogData.find(c => c.definitionId === defId);
+      return (card && (card.canonicalId || card.cardId)) || defId;
+    }
+
+    function getCanonicalTotal(targetDefId, targetDelta = 0) {
+      const targetCanon = getCanonicalId(targetDefId);
+      let total = 0;
+      for (const defId in deckQtyMap) {
+        if (getCanonicalId(defId) === targetCanon) {
+          total += deckQtyMap[defId];
+        }
+      }
+      return total + targetDelta;
+    }
+
     function changeCardQty(defId, delta) {
       const cur = deckQtyMap[defId] || 0;
+      if (delta > 0) {
+        const canonTotal = getCanonicalTotal(defId, 0);
+        if (canonTotal >= 3) {
+          const card = catalogData.find(c => c.definitionId === defId);
+          const cId = getCanonicalId(defId);
+          alert(`同一カードID（${cId}）はパラレル版も含めて合計3枚までです。`);
+          return;
+        }
+      }
+
       const next = Math.max(0, Math.min(3, cur + delta));
       if (next === 0) {
         delete deckQtyMap[defId];
@@ -840,13 +1147,27 @@
 
     function updateBuilderSummary() {
       let total = 0;
+      const canonicalCounts = {};
+      let hasOverLimit = false;
+      let overLimitMsg = '';
+
       for (const defId in deckQtyMap) {
-        total += deckQtyMap[defId];
+        const cnt = deckQtyMap[defId];
+        total += cnt;
+        const canonId = getCanonicalId(defId);
+        canonicalCounts[canonId] = (canonicalCounts[canonId] || 0) + cnt;
+        if (canonicalCounts[canonId] > 3) {
+          hasOverLimit = true;
+          overLimitMsg = `同一カードID(${canonId})が4枚以上あります`;
+        }
       }
       document.getElementById('builder-total-count').innerText = total;
 
       const badge = document.getElementById('builder-status-badge');
-      if (total === 40) {
+      if (hasOverLimit) {
+        badge.className = 'deck-valid-badge deck-valid-ng';
+        badge.innerText = overLimitMsg;
+      } else if (total === 40) {
         badge.className = 'deck-valid-badge deck-valid-ok';
         badge.innerText = '構築完了 (40/40)';
       } else {
@@ -911,6 +1232,7 @@
               <span>Lv.${c.level}</span>
             </div>
             <div class="card-name">${c.title || c.dummyName}</div>
+            <div style="font-size:0.58rem; color:var(--text-muted); margin-bottom:2px;">ID: ${c.canonicalId || c.cardId || '-'} (${c.definitionId})</div>
             <div class="card-stats">
               <span class="stat-ap">AP${c.ap ?? '-'}</span>
               <span class="stat-lp">LP${c.lp ?? '-'}</span>
@@ -960,9 +1282,13 @@
         return;
       }
 
+      const deckNameInput = document.getElementById('builder-deck-name');
+      const chosenName = (deckNameInput && deckNameInput.value.trim()) || currentDeckDef.deckName || "カスタムデッキ";
+      const chosenId = currentDeckDef.deckId || ("deck_" + Date.now());
+
       const savePayload = {
-        deckId: "CUSTOM-USER-DECK",
-        deckName: "カスタムデッキ",
+        deckId: chosenId,
+        deckName: chosenName,
         catalogVersion: "official-raw-v1",
         partnerId: currentDeckDef.partnerId,
         caseId: currentDeckDef.caseId,

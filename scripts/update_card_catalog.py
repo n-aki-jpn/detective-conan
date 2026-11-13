@@ -18,18 +18,68 @@ for entry in raw.get('data', []):
     definition_id = entry.get('card_num') or entry.get('definitionId')
     if not definition_id:
         continue
+
+    # Level is in 'cost' in raw data, description is in 'feature'
+    cost_val = entry.get('cost')
+    level = 0
+    if cost_val is not None:
+        try:
+            level = int(cost_val)
+        except (ValueError, TypeError):
+            level = 0
+
+    ap_val = entry.get('ap')
+    ap = 0
+    if ap_val is not None:
+        try:
+            ap = int(ap_val)
+        except (ValueError, TypeError):
+            ap = 0
+
+    lp_val = entry.get('lp')
+    lp = 0
+    if lp_val is not None:
+        try:
+            lp = int(lp_val)
+        except (ValueError, TypeError):
+            lp = 0
+
+    desc = entry.get('feature') or entry.get('description') or ''
+
+    # Case level difficulty for case cards
+    diff_first = entry.get('difficulty_first')
+    diff_second = entry.get('difficulty_second')
+    case_levels = None
+    if diff_first or diff_second:
+        try:
+            case_levels = {
+                "first": int(diff_first) if diff_first else 6,
+                "second": int(diff_second) if diff_second else 6
+            }
+        except Exception:
+            case_levels = None
+
+    canonical_id = entry.get('card_id') or entry.get('card_num') or definition_id
+    sameid_limit = entry.get('rcp_sameid_limit', 3)
+    try:
+        sameid_limit = int(sameid_limit)
+    except Exception:
+        sameid_limit = 3
+
     card = {
         "definitionId": definition_id,
-        "canonicalId": entry.get('card_num') or definition_id,
+        "canonicalId": str(canonical_id),
+        "sameIdLimit": sameid_limit,
         "dummyName": f"{entry.get('title','')} ({definition_id})",
         "title": entry.get('title',''),
         "definitionVersion": entry.get('version','1'),
         "cardType": entry.get('type','CHARACTER').upper(),
         "colors": [entry.get('color')] if entry.get('color') else [],
-        "level": entry.get('level', 0),
-        "ap": entry.get('ap', 0),
-        "lp": entry.get('lp', 0),
-        "description": entry.get('description',''),
+        "level": level,
+        "ap": ap,
+        "lp": lp,
+        "description": desc,
+        "caseLevels": case_levels,
         "mainThumb": entry.get('main_thumb',''),
         "mainPath": entry.get('main_path',''),
         "subThumb": entry.get('sub_thumb',''),

@@ -25,7 +25,8 @@ pub fn build_player_observation(engine: &MatchEngine, viewing_player_id: &str) -
         let desc = c_def.map(|d| d.description.clone()).unwrap_or_default();
         let colors = c_def.map(|d| d.colors.clone()).unwrap_or_default();
         let level = c_def.map(|d| d.level).unwrap_or(0);
-        let ap = c_def.map(|d| d.ap).unwrap_or(0);
+        let base_ap = c_def.map(|d| d.ap).unwrap_or(0);
+        let effective_ap = base_ap + c.temp_ap_bonus;
         let lp = c_def.map(|d| d.lp).unwrap_or(0);
         let card_type = c_def.map(|d| format!("{:?}", d.card_type)).unwrap_or_else(|| "CHARACTER".to_string());
         let main_thumb = c_def.and_then(|d| d.main_thumb.clone());
@@ -38,7 +39,9 @@ pub fn build_player_observation(engine: &MatchEngine, viewing_player_id: &str) -
             "description": desc,
             "colors": colors,
             "level": level,
-            "ap": ap,
+            "ap": effective_ap,
+            "baseAp": base_ap,
+            "hasRush": c.has_rush,
             "lp": lp,
             "cardType": card_type,
             "orientation": orientation_str,

@@ -114,6 +114,8 @@ impl MatchEngine {
             orientation: CardOrientation::ACTIVE,
             entered_turn: -1,
             face_up: false,
+            temp_ap_bonus: 0,
+            has_rush: false,
         };
         ps.partner = Some(p_inst);
 
@@ -125,6 +127,8 @@ impl MatchEngine {
             orientation: CardOrientation::ACTIVE,
             entered_turn: -1,
             face_up: false,
+            temp_ap_bonus: 0,
+            has_rush: false,
         };
         ps.r#case = Some(c_inst);
 
@@ -138,6 +142,8 @@ impl MatchEngine {
                     orientation: CardOrientation::ACTIVE,
                     entered_turn: -1,
                     face_up: false,
+                    temp_ap_bonus: 0,
+                    has_rush: false,
                 };
                 ps.deck.push(inst);
             }
@@ -304,8 +310,10 @@ impl MatchEngine {
                 }
             }
 
-            // AUTO_ACTIVATE
+            // AUTO_ACTIVATE & Reset turn bonuses
             for c in &mut ps.field {
+                c.temp_ap_bonus = 0;
+                c.has_rush = false;
                 if c.orientation == CardOrientation::STUN {
                     c.orientation = CardOrientation::SLEEP;
                 } else {
@@ -313,6 +321,8 @@ impl MatchEngine {
                 }
             }
             if let Some(ref mut p) = ps.partner {
+                p.temp_ap_bonus = 0;
+                p.has_rush = false;
                 if p.zone == Zone::PARTNER {
                     if p.orientation == CardOrientation::STUN {
                         p.orientation = CardOrientation::SLEEP;
@@ -502,7 +512,8 @@ impl MatchEngine {
             }
         }
         for c in &ps.field {
-            if c.orientation == CardOrientation::ACTIVE && c.entered_turn != self.turn {
+            let can_act = c.orientation == CardOrientation::ACTIVE && (c.entered_turn != self.turn || c.has_rush);
+            if can_act {
                 deduce_actors.push(c.instance_id.clone());
             }
         }
@@ -516,7 +527,8 @@ impl MatchEngine {
         // 7. Action
         let mut action_actors = vec![];
         for c in &ps.field {
-            if c.orientation == CardOrientation::ACTIVE && c.entered_turn != self.turn {
+            let can_act = c.orientation == CardOrientation::ACTIVE && (c.entered_turn != self.turn || c.has_rush);
+            if can_act {
                 action_actors.push(c.instance_id.clone());
             }
         }
@@ -565,9 +577,11 @@ impl MatchEngine {
             "HAND_PLAY" => {
                 let card_id = val.get("cardId").and_then(|v| v.as_str()).unwrap_or("");
                 let turn = self.turn;
+                let mut played_def_id = None;
                 if let Some(ps) = self.players.get_mut(player_id) {
                     if let Some(idx) = ps.hand.iter().position(|c| c.instance_id == card_id) {
                         let mut card = ps.hand.remove(idx);
+                        played_def_id = Some(card.definition_id.clone());
                         card.zone = Zone::FIELD;
                         card.orientation = CardOrientation::ACTIVE;
                         card.entered_turn = turn;
@@ -575,6 +589,9 @@ impl MatchEngine {
                         ps.field.push(card);
                         ps.normal_hand_played_this_turn = true;
                     }
+                }
+                if let Some(def_id) = played_def_id {
+                    self.resolve_on_play_effects(player_id, &def_id);
                 }
                 self.prompt_main_action(player_id);
             }
@@ -706,12 +723,14 @@ impl MatchEngine {
     }
 
     fn handle_hint_play_answer(&mut self, player_id: &str, val: &Value) {
+        let mut played_def_id = None;
         if let Some(card_id) = val.get("cardId").and_then(|v| v.as_str()) {
             let turn = self.turn;
             if let Some(ps) = self.players.get_mut(player_id) {
                 if ps.field.len() < 5 {
                     if let Some(idx) = ps.hand.iter().position(|c| c.instance_id == card_id) {
                         let mut card = ps.hand.remove(idx);
+                        played_def_id = Some(card.definition_id.clone());
                         card.zone = Zone::FIELD;
                         card.orientation = CardOrientation::ACTIVE;
                         card.entered_turn = turn;
@@ -720,6 +739,9 @@ impl MatchEngine {
                     }
                 }
             }
+        }
+        if let Some(def_id) = played_def_id {
+            self.resolve_on_play_effects(player_id, &def_id);
         }
         self.prompt_main_action(player_id);
     }
@@ -782,9 +804,16 @@ impl MatchEngine {
             let def_def_id = self.players.get(&defender_pid)
                 .and_then(|p| p.field.iter().find(|c| c.instance_id == def_cid).map(|c| c.definition_id.clone()));
 
+            let actor_bonus = self.players.get(&attacker_pid)
+                .and_then(|p| p.field.iter().find(|c| c.instance_id == actor_id).map(|c| c.temp_ap_bonus))
+                .unwrap_or(0);
+            let def_bonus = self.players.get(&defender_pid)
+                .and_then(|p| p.field.iter().find(|c| c.instance_id == def_cid).map(|c| c.temp_ap_bonus))
+                .unwrap_or(0);
+
             if let (Some(a_def_id), Some(d_def_id)) = (actor_def_id, def_def_id) {
-                let actor_ap = self.catalog.get(&a_def_id).map(|d| d.ap).unwrap_or(0);
-                let def_ap = self.catalog.get(&d_def_id).map(|d| d.ap).unwrap_or(0);
+                let actor_ap = self.catalog.get(&a_def_id).map(|d| d.ap).unwrap_or(0) + actor_bonus;
+                let def_ap = self.catalog.get(&d_def_id).map(|d| d.ap).unwrap_or(0) + def_bonus;
 
                 if actor_ap >= def_ap {
                     let defender_ps = self.players.get_mut(&defender_pid).unwrap();
@@ -798,5 +827,56 @@ impl MatchEngine {
         }
 
         self.prompt_main_action(&attacker_pid);
+    }
+
+    fn resolve_on_play_effects(&mut self, player_id: &str, definition_id: &str) {
+        let desc = match self.catalog.get(definition_id) {
+            Some(d) => d.description.clone(),
+            None => return,
+        };
+
+        if desc.is_empty() {
+            return;
+        }
+
+        // 1. Rush effect: 突撃
+        if desc.contains("突撃") {
+            if let Some(ps) = self.players.get_mut(player_id) {
+                if let Some(c) = ps.field.iter_mut().find(|c| c.definition_id == definition_id && c.entered_turn == self.turn) {
+                    c.has_rush = true;
+                }
+            }
+        }
+
+        // 2. On Play Draw effect: 【登場】...カードをX枚引く
+        if desc.contains("【登場】") || desc.contains("【登場時】") || desc.contains("登場させたとき") || desc.contains("登場したとき") {
+            if desc.contains("カードを2枚引く") || desc.contains("2枚引く") {
+                self.draw_cards(player_id, 2);
+            } else if desc.contains("カードを1枚引く") || desc.contains("1枚引く") || desc.contains("カードを引く") {
+                self.draw_cards(player_id, 1);
+            }
+
+            // On Play Evidence gain: 証拠をXつ得る
+            if desc.contains("証拠を2つ得る") || desc.contains("証拠を2枚得る") {
+                self.gain_evidence(player_id, 2);
+            } else if desc.contains("証拠を1つ得る") || desc.contains("証拠を得る") {
+                self.gain_evidence(player_id, 1);
+            }
+
+            // AP Buff: AP+1000 / AP+2000
+            let mut ap_bonus = 0;
+            if desc.contains("AP＋2000") || desc.contains("AP+2000") {
+                ap_bonus = 2000;
+            } else if desc.contains("AP＋1000") || desc.contains("AP+1000") {
+                ap_bonus = 1000;
+            }
+            if ap_bonus > 0 {
+                if let Some(ps) = self.players.get_mut(player_id) {
+                    if let Some(c) = ps.field.iter_mut().find(|c| c.definition_id == definition_id && c.entered_turn == self.turn) {
+                        c.temp_ap_bonus += ap_bonus;
+                    }
+                }
+            }
+        }
     }
 }

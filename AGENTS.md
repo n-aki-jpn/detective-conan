@@ -28,9 +28,15 @@
      - `src/observation.rs`: プレイヤー視点（手札秘匿など）のJSONシリアライズ
      - `src/main.rs`: REST APIエンドポイント提供および静的ファイル配信
    - **主なAPIエンドポイント**:
-     - `GET /api/state?player_id=...`: 対戦盤面状態取得
+     - `GET /api/state?player_id=...&room_id=...`: 対戦盤面状態取得（マルチ部屋対応）
      - `GET /api/catalog`: 全カードカタログ情報取得
-     - `GET /api/deck`: 現在のデッキ情報取得
+     - `GET /api/deck`: 現在のアクティブデッキ情報取得
+     - `GET /api/decks`: 保存済みデッキ一覧取得
+     - `GET /api/decks/:id`: 特定デッキ取得
+     - `DELETE /api/decks/:id`: デッキスロット削除
+     - `POST /api/decks/:id/select`: デッキ選択
+     - `POST /api/rooms/create`: オンライン対戦部屋作成（4桁コード生成）
+     - `POST /api/rooms/join`: 対戦部屋入室（P2参加）
      - `POST /api/decision`: プレイヤーの行動・意思決定送信
      - `POST /api/reset`: 対戦状態初期化
      - `POST /api/set_cpu`: CPU対戦の有効化・無効化
