@@ -121,6 +121,16 @@ fn parse_hand_remove_cost(desc: &str) -> usize {
     0
 }
 
+fn parse_deck_search_count(desc: &str) -> usize {
+    if desc.contains("デッキのカードを上から6枚見る") { return 6; }
+    if desc.contains("デッキのカードを上から5枚見る") { return 5; }
+    if desc.contains("デッキのカードを上から4枚見る") { return 4; }
+    if desc.contains("デッキのカードを上から3枚見る") { return 3; }
+    if desc.contains("デッキのカードを上から2枚見る") { return 2; }
+    if desc.contains("デッキのカードを上から1枚見る") { return 1; }
+    0
+}
+
 impl MatchEngine {
     pub fn new(catalog: CardCatalog) -> Self {
         Self {
@@ -330,6 +340,7 @@ impl MatchEngine {
             "guard" => self.handle_guard_answer(player_id, &val),
             "cutin" => self.handle_cutin_answer(player_id, &val),
             "targetSelect" => self.handle_target_select_answer(player_id, &val),
+            "deckSearch" => self.handle_deck_search_answer(player_id, &val),
             _ => return Err(format!("Unknown decision kind: {}", kind)),
         }
 
@@ -1125,6 +1136,54 @@ impl MatchEngine {
             return;
         }
 
+        // デッキサーチ・めくり効果
+        let search_count = parse_deck_search_count(&desc);
+        if search_count > 0 {
+            let mut revealed = vec![];
+            if let Some(ps) = self.players.get_mut(player_id) {
+                let deck_len = ps.deck.len();
+                let actual_count = search_count.min(deck_len);
+                for i in 0..actual_count {
+                    let idx = deck_len - 1 - i;
+                    let card = &mut ps.deck[idx];
+                    card.face_up = true;
+                    revealed.push(card.clone());
+                }
+            }
+
+            if !revealed.is_empty() {
+                let mut candidates: Vec<Value> = vec![];
+                for c in &revealed {
+                    candidates.push(json!({
+                        "instanceId": c.instance_id,
+                        "definitionId": c.definition_id,
+                        "name": self.card_name_by_def(&c.definition_id),
+                        "level": self.catalog.get(&c.definition_id).map(|d| d.level).unwrap_or(0),
+                        "ap": self.catalog.get(&c.definition_id).map(|d| d.ap).unwrap_or(0),
+                        "colors": self.catalog.get(&c.definition_id).map(|d| d.colors.clone()).unwrap_or_default(),
+                    }));
+                }
+
+                let dec_id = self.generate_decision_id();
+                self.pending_decision = Some(json!({
+                    "decisionId": dec_id,
+                    "revision": self.revision,
+                    "playerId": player_id,
+                    "kind": "deckSearch",
+                    "options": {
+                        "actorId": actor_id,
+                        "actorName": card_name,
+                        "searchCount": search_count,
+                        "title": format!("山札の上から{}枚めくりました。手札に加えるカードを1枚選んでください（残りはデッキ下へ）", search_count),
+                        "revealedCards": candidates,
+                        "optional": true
+                    }
+                }));
+                self.log(format!("🔍 [{}] の【宣言】で山札の上から {} 枚めくりました", card_name, search_count));
+                return;
+            }
+        }
+
         self.resolve_declare_effect_immediate(player_id, actor_id, &desc);
         self.prompt_main_action(player_id);
     }
@@ -1242,6 +1301,85 @@ impl MatchEngine {
             }
         } else {
             self.log(format!("{} は [{}] の対象を選択しませんでした（スキップ）", player_id, actor_name));
+        }
+
+        self.prompt_main_action(player_id);
+    }
+
+    /// デッキサーチ・めくり選択の意思決定を処理する
+    fn handle_deck_search_answer(&mut self, player_id: &str, val: &Value) {
+        let chosen_instance_id = val.get("chosenCardId").and_then(|v| v.as_str());
+        let actor_id = val.get("actorId").and_then(|v| v.as_str()).unwrap_or("");
+        let actor_name = self.card_name_by_inst(actor_id);
+
+        let mut revealed_instances = vec![];
+        if let Some(pd) = &self.pending_decision {
+            if let Some(opts) = pd.get("options") {
+                if let Some(cards) = opts.get("revealedCards").and_then(|v| v.as_array()) {
+                    for c in cards {
+                        if let Some(iid) = c.get("instanceId").and_then(|v| v.as_str()) {
+                            revealed_instances.push(iid.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut added_to_hand = false;
+        let mut added_def_id = None;
+
+        if let Some(ps) = self.players.get_mut(player_id) {
+            let mut remaining_cards = vec![];
+            for iid in &revealed_instances {
+                if let Some(pos) = ps.deck.iter().position(|c| &c.instance_id == iid) {
+                    let mut card = ps.deck.remove(pos);
+                    if let Some(chosen_id) = chosen_instance_id {
+                        if chosen_id == iid {
+                            card.zone = Zone::HAND;
+                            card.face_up = true;
+                            added_def_id = Some(card.definition_id.clone());
+                            ps.hand.push(card);
+                            added_to_hand = true;
+                            continue;
+                        }
+                    }
+                    card.face_up = false;
+                    remaining_cards.push(card);
+                }
+            }
+
+            // 残りのカードをデッキの下に移す
+            for c in remaining_cards {
+                ps.deck.insert(0, c);
+            }
+        }
+
+        if added_to_hand {
+            if let Some(did) = added_def_id {
+                let card_name = self.card_name_by_def(&did);
+                self.log(format!("✨ [{}] の効果でデッキから [{}] を手札に加え、残りをデッキ下に移しました", actor_name, card_name));
+            }
+        } else {
+            self.log(format!("{} はカードを手札に加えませんでした（スキップ、残りをデッキ下へ）", player_id));
+        }
+
+        // 手札に加えた場合、手札を1枚リムーブする効果の処理
+        let def_id = self.find_card_def_id(actor_id).unwrap_or_default();
+        let desc = self.catalog.get(&def_id).map(|d| d.description.clone()).unwrap_or_default();
+        if added_to_hand && desc.contains("カードを手札に加えた場合、手札を1枚リムーブする") {
+            let mut removed_name = None;
+            if let Some(ps) = self.players.get_mut(player_id) {
+                if let Some(mut removed_c) = ps.hand.pop() {
+                    removed_c.zone = Zone::REMOVE;
+                    let rdid = removed_c.definition_id.clone();
+                    ps.remove.push(removed_c);
+                    removed_name = Some(rdid);
+                }
+            }
+            if let Some(rdid) = removed_name {
+                let rem_name = self.card_name_by_def(&rdid);
+                self.log(format!("💸 [{}] の効果（手札加えた後の代償）: 手札から [{}] をリムーブしました", actor_name, rem_name));
+            }
         }
 
         self.prompt_main_action(player_id);
@@ -1648,6 +1786,54 @@ impl MatchEngine {
                 }
             }));
             return true;
+        }
+
+        // 3. デッキサーチ・めくり効果（「自分のデッキのカードを上からX枚見る」）
+        let search_count = parse_deck_search_count(&desc);
+        if search_count > 0 {
+            let mut revealed = vec![];
+            if let Some(ps) = self.players.get_mut(player_id) {
+                let deck_len = ps.deck.len();
+                let actual_count = search_count.min(deck_len);
+                for i in 0..actual_count {
+                    let idx = deck_len - 1 - i;
+                    let card = &mut ps.deck[idx];
+                    card.face_up = true;
+                    revealed.push(card.clone());
+                }
+            }
+
+            if !revealed.is_empty() {
+                let mut candidates: Vec<Value> = vec![];
+                for c in &revealed {
+                    candidates.push(json!({
+                        "instanceId": c.instance_id,
+                        "definitionId": c.definition_id,
+                        "name": self.card_name_by_def(&c.definition_id),
+                        "level": self.catalog.get(&c.definition_id).map(|d| d.level).unwrap_or(0),
+                        "ap": self.catalog.get(&c.definition_id).map(|d| d.ap).unwrap_or(0),
+                        "colors": self.catalog.get(&c.definition_id).map(|d| d.colors.clone()).unwrap_or_default(),
+                    }));
+                }
+
+                let dec_id = self.generate_decision_id();
+                self.pending_decision = Some(json!({
+                    "decisionId": dec_id,
+                    "revision": self.revision,
+                    "playerId": player_id,
+                    "kind": "deckSearch",
+                    "options": {
+                        "actorId": actor_id,
+                        "actorName": card_name,
+                        "searchCount": search_count,
+                        "title": format!("山札の上から{}枚めくりました。手札に加えるカードを1枚選んでください（残りはデッキ下へ）", search_count),
+                        "revealedCards": candidates,
+                        "optional": true
+                    }
+                }));
+                self.log(format!("🔍 [{}] の効果で山札の上から {} 枚めくりました", card_name, search_count));
+                return true;
+            }
         }
 
         false

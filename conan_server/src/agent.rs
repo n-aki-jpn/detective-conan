@@ -130,6 +130,26 @@ impl RandomAgent {
                     }
                 })
             }
+            "deckSearch" => {
+                let actor_id = opts.get("actorId").and_then(|v| v.as_str()).unwrap_or("");
+                if let Some(cards) = opts.get("revealedCards").and_then(|v| v.as_array()) {
+                    if let Some(chosen) = cards.choose(&mut rng) {
+                        let cid = chosen.get("instanceId").and_then(|v| v.as_str());
+                        return json!({
+                            "value": {
+                                "chosenCardId": cid,
+                                "actorId": actor_id
+                            }
+                        });
+                    }
+                }
+                json!({
+                    "value": {
+                        "chosenCardId": null,
+                        "actorId": actor_id
+                    }
+                })
+            }
             _ => json!({"value": {}}),
         }
     }

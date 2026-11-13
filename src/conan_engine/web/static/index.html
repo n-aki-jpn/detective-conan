@@ -1495,6 +1495,44 @@
           });
 
           decActs.appendChild(candContainer);
+        } else if (pd.kind === 'deckSearch') {
+          const actorName = pd.options.actorName || '効果';
+          document.getElementById('decision-title').innerText = `🔍 デッキ確認: ${actorName}`;
+          document.getElementById('decision-desc').innerText = pd.options.title || '手札に加えるカードを1枚選んでください';
+
+          if (pd.options.optional) {
+            const btnSkip = document.createElement('button');
+            btnSkip.className = 'btn btn-secondary';
+            btnSkip.innerText = 'スキップ（手札に加えない）';
+            btnSkip.onclick = () => submitDecision({
+              chosenCardId: null,
+              actorId: pd.options.actorId
+            });
+            decActs.appendChild(btnSkip);
+          }
+
+          const cardContainer = document.createElement('div');
+          cardContainer.style.cssText = 'display:flex; flex-wrap:wrap; gap:8px; width:100%; margin-top:6px;';
+
+          (pd.options.revealedCards || []).forEach(card => {
+            const btn = document.createElement('button');
+            btn.className = 'btn';
+            btn.style.cssText = 'background:#1e293b; border:1px solid #38bdf8; font-size:0.8rem; display:flex; flex-direction:column; align-items:flex-start; padding:6px 10px; min-height:auto; text-align:left;';
+            const colorsStr = (card.colors && card.colors.length > 0) ? `[${card.colors.join('/')}] ` : '';
+            btn.innerHTML = `
+              <span style="font-weight:bold; color:#38bdf8;">${colorsStr}${card.name}</span>
+              <span style="font-size:0.68rem; opacity:0.85;">Lv.${card.level} / AP ${card.ap}</span>
+            `;
+
+            btn.onclick = () => submitDecision({
+              chosenCardId: card.instanceId,
+              actorId: pd.options.actorId
+            });
+
+            cardContainer.appendChild(btn);
+          });
+
+          decActs.appendChild(cardContainer);
         }
       } else {
         if (obs.decisionPlayerId) {
