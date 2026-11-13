@@ -1,0 +1,69 @@
+{
+  "deckId": "preset_5color",
+  "deckName": "【プリセット】5色混色",
+  "catalogVersion": "official-raw-v1",
+  "partnerId": "B01001",
+  "caseId": "B06109P",
+  "mainDeck": [
+    {
+      "definitionId": "B01069",
+      "count": 3
+    },
+    {
+      "definitionId": "B02039",
+      "count": 2
+    },
+    {
+      "definitionId": "B05037",
+      "count": 3
+    },
+    {
+      "definitionId": "B07005",
+      "count": 3
+    },
+    {
+      "definitionId": "B08028",
+      "count": 3
+    },
+    {
+      "definitionId": "B09064",
+      "count": 1
+    },
+    {
+      "definitionId": "B10040",
+      "count": 3
+    },
+    {
+      "definitionId": "B11007P",
+      "count": 3
+    },
+    {
+      "definitionId": "B11015",
+      "count": 3
+    },
+    {
+      "definitionId": "B11061",
+      "count": 3
+    },
+    {
+      "definitionId": "D02008",
+      "count": 3
+    },
+    {
+      "definitionId": "D06023",
+      "count": 2
+    },
+    {
+      "definitionId": "D08021",
+      "count": 2
+    },
+    {
+      "definitionId": "PR197",
+      "count": 3
+    },
+    {
+      "definitionId": "PR207",
+      "count": 3
+    }
+  ]
+}

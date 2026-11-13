@@ -514,6 +514,22 @@
       </select>
     </div>
 
+    <div id="battle-deck-bar" style="display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:6px 10px; background:rgba(15,23,42,0.75); border-bottom:1px solid var(--border-color); font-size:0.75rem;">
+      <label style="display:flex; align-items:center; gap:4px; flex:1; min-width:150px;">
+        <span style="color:#38bdf8; font-weight:bold; white-space:nowrap;">P1:</span>
+        <select id="battle-p1-deck" style="flex:1; min-width:0; background:#0f172a; color:white; border:1px solid #475569; padding:4px 6px; border-radius:4px; font-size:0.75rem;">
+          <option value="">(現在のデッキ)</option>
+        </select>
+      </label>
+      <label style="display:flex; align-items:center; gap:4px; flex:1; min-width:150px;">
+        <span style="color:#f87171; font-weight:bold; white-space:nowrap;">CPU/P2:</span>
+        <select id="battle-p2-deck" style="flex:1; min-width:0; background:#0f172a; color:white; border:1px solid #475569; padding:4px 6px; border-radius:4px; font-size:0.75rem;">
+          <option value="">(現在のデッキ)</option>
+        </select>
+      </label>
+      <button class="btn btn-secondary" onclick="resetMatch()" style="padding:4px 10px; font-size:0.75rem; min-height:26px; white-space:nowrap;">🔄 デッキ適用</button>
+    </div>
+
     <div class="board-container">
       <!-- Decision Banner (Mobile Top) -->
       <div id="decision-box" class="decision-banner" style="display:none;">
@@ -1036,15 +1052,58 @@
       fetchState();
     }
 
+    async function loadBattleDecks() {
+      try {
+        const res = await fetch('/api/decks');
+        if (!res.ok) return;
+        const decks = await res.json();
+        const p1Sel = document.getElementById('battle-p1-deck');
+        const p2Sel = document.getElementById('battle-p2-deck');
+        if (!p1Sel || !p2Sel) return;
+
+        const prevP1 = p1Sel.value;
+        const prevP2 = p2Sel.value;
+
+        const sorted = [...decks].sort((a, b) => {
+          const ap = (a.deckId || '').startsWith('preset_') ? 1 : 0;
+          const bp = (b.deckId || '').startsWith('preset_') ? 1 : 0;
+          if (ap !== bp) return ap - bp;
+          return (a.deckName || a.deckId || '').localeCompare(b.deckName || b.deckId || '', 'ja');
+        });
+
+        const buildOptions = (sel, prevVal) => {
+          sel.innerHTML = '<option value="">(現在のデッキ)</option>';
+          for (const d of sorted) {
+            const opt = document.createElement('option');
+            opt.value = d.deckId;
+            opt.textContent = d.deckName || d.deckId;
+            sel.appendChild(opt);
+          }
+          if (prevVal) sel.value = prevVal;
+        };
+
+        buildOptions(p1Sel, prevP1);
+        buildOptions(p2Sel, prevP2);
+      } catch (e) {
+        console.error('Failed to load battle decks:', e);
+      }
+    }
+
     async function resetMatch() {
       selectedMulliganIds.clear();
       lastRevision = -1;
       lastDecisionId = null;
       lastLogCount = 0;
+      const p1DeckId = document.getElementById('battle-p1-deck')?.value || null;
+      const p2DeckId = document.getElementById('battle-p2-deck')?.value || null;
       await fetch('/api/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roomId: currentRoomId })
+        body: JSON.stringify({
+          roomId: currentRoomId,
+          p1DeckId: p1DeckId || undefined,
+          p2DeckId: p2DeckId || undefined
+        })
       });
       fetchState();
     }
@@ -2526,6 +2585,7 @@
     }
 
     updateBgmUi();
+    loadBattleDecks();
     // 初回のユーザー操作（クリック・タップ）で自動的にBGM再生を開始
     document.addEventListener('pointerdown', function onFirstInteract() {
       if (bgmEnabled && isBattleTabActive() && bgmAudio && bgmAudio.paused) {

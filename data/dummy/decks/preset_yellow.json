@@ -1,0 +1,69 @@
+{
+  "deckId": "preset_yellow",
+  "deckName": "【プリセット】黄単",
+  "catalogVersion": "official-raw-v1",
+  "partnerId": "B01079",
+  "caseId": "PR320",
+  "mainDeck": [
+    {
+      "definitionId": "B07083P",
+      "count": 1
+    },
+    {
+      "definitionId": "B08065P",
+      "count": 3
+    },
+    {
+      "definitionId": "B08071",
+      "count": 3
+    },
+    {
+      "definitionId": "B08074",
+      "count": 3
+    },
+    {
+      "definitionId": "B09084",
+      "count": 3
+    },
+    {
+      "definitionId": "B10066P2",
+      "count": 2
+    },
+    {
+      "definitionId": "B11068P",
+      "count": 3
+    },
+    {
+      "definitionId": "B11069P",
+      "count": 3
+    },
+    {
+      "definitionId": "B11074",
+      "count": 3
+    },
+    {
+      "definitionId": "D05012",
+      "count": 3
+    },
+    {
+      "definitionId": "D09020",
+      "count": 2
+    },
+    {
+      "definitionId": "D11015",
+      "count": 3
+    },
+    {
+      "definitionId": "PR324",
+      "count": 3
+    },
+    {
+      "definitionId": "SP010",
+      "count": 2
+    },
+    {
+      "definitionId": "SP011",
+      "count": 3
+    }
+  ]
+}

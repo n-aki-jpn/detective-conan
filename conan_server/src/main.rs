@@ -269,6 +269,10 @@ struct DecisionRequest {
 struct ResetRequest {
     #[serde(rename = "roomId")]
     room_id: Option<String>,
+    #[serde(rename = "p1DeckId")]
+    p1_deck_id: Option<String>,
+    #[serde(rename = "p2DeckId")]
+    p2_deck_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -464,17 +468,50 @@ async fn handle_select_deck(
     (StatusCode::BAD_REQUEST, Json(json!({"error": "Failed to load deck"}))).into_response()
 }
 
+fn load_deck_from_dir(decks_dir: &std::path::Path, id: &str) -> Option<DeckDefinition> {
+    let safe_id: String = id
+        .chars()
+        .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
+        .collect();
+    if safe_id.is_empty() {
+        return None;
+    }
+    let target = decks_dir.join(format!("{}.json", safe_id));
+    let content = std::fs::read_to_string(&target).ok()?;
+    serde_json::from_str::<DeckDefinition>(&content).ok()
+}
+
 async fn handle_reset(
     State(state): State<SharedState>,
     Json(body): Json<Option<ResetRequest>>,
 ) -> impl IntoResponse {
     let mut mgr = state.lock().unwrap();
-    let room_id = body
-        .and_then(|b| b.room_id)
-        .unwrap_or_else(|| "default".to_string());
+    let (room_id, p1_deck_id, p2_deck_id) = match body {
+        Some(b) => (
+            b.room_id.unwrap_or_else(|| "default".to_string()),
+            b.p1_deck_id,
+            b.p2_deck_id,
+        ),
+        None => ("default".to_string(), None, None),
+    };
+
+    let p1_loaded = p1_deck_id
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .and_then(|id| load_deck_from_dir(&mgr.decks_dir, id));
+    let p2_loaded = p2_deck_id
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .and_then(|id| load_deck_from_dir(&mgr.decks_dir, id));
 
     let catalog = mgr.catalog.clone();
     if let Some(room) = mgr.rooms.get_mut(&room_id) {
+        if let Some(d1) = p1_loaded {
+            room.p1_deck = d1;
+        }
+        if let Some(d2) = p2_loaded {
+            room.p2_deck = Some(d2);
+        }
         room.reset_match(&catalog);
         Json(StatusOk { status: "ok" }).into_response()
     } else {

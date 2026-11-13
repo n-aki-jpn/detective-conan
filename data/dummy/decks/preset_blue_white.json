@@ -1,0 +1,69 @@
+{
+  "deckId": "preset_blue_white",
+  "deckName": "【プリセット】青・白",
+  "catalogVersion": "official-raw-v1",
+  "partnerId": "B01001",
+  "caseId": "B11098P",
+  "mainDeck": [
+    {
+      "definitionId": "B02039",
+      "count": 2
+    },
+    {
+      "definitionId": "B03009",
+      "count": 3
+    },
+    {
+      "definitionId": "B03055",
+      "count": 3
+    },
+    {
+      "definitionId": "B06008P",
+      "count": 3
+    },
+    {
+      "definitionId": "B07005",
+      "count": 3
+    },
+    {
+      "definitionId": "B07007P2",
+      "count": 3
+    },
+    {
+      "definitionId": "B10040",
+      "count": 3
+    },
+    {
+      "definitionId": "B11007P",
+      "count": 3
+    },
+    {
+      "definitionId": "B11015",
+      "count": 3
+    },
+    {
+      "definitionId": "D08021",
+      "count": 2
+    },
+    {
+      "definitionId": "D10010",
+      "count": 2
+    },
+    {
+      "definitionId": "PR031",
+      "count": 1
+    },
+    {
+      "definitionId": "PR143",
+      "count": 3
+    },
+    {
+      "definitionId": "PR197",
+      "count": 3
+    },
+    {
+      "definitionId": "PR207",
+      "count": 3
+    }
+  ]
+}
