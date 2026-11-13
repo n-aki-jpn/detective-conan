@@ -104,6 +104,8 @@ pub struct CardInstance {
     #[serde(default)]
     pub has_rush: bool,
     #[serde(default)]
+    pub rush_target: Option<String>,
+    #[serde(default)]
     pub used_declare_this_turn: bool,
 }
 

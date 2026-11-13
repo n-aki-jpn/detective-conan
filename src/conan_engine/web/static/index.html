@@ -1360,7 +1360,8 @@
               });
             } else if (act.type === 'ACTION') {
               act.actorIds.forEach(aid => {
-                act.targetIds.forEach(tid => {
+                const validTargets = (act.actorTargetMap && act.actorTargetMap[aid]) ? act.actorTargetMap[aid] : act.targetIds;
+                validTargets.forEach(tid => {
                   const b = document.createElement('button');
                   b.className = 'btn btn-danger';
                   const actorLabel = getCardLabel(aid, me.field);

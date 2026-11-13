@@ -919,6 +919,7 @@ mod tests {
             face_up: true,
             temp_ap_bonus: 0,
             has_rush: false,
+            rush_target: None,
             used_declare_this_turn: false,
         };
         let mut ps = engine::PlayerState::new("p1".to_string());
@@ -934,6 +935,7 @@ mod tests {
                 face_up: false,
                 temp_ap_bonus: 0,
                 has_rush: false,
+                rush_target: None,
                 used_declare_this_turn: false,
             });
         }
@@ -958,6 +960,7 @@ mod tests {
             face_up: false,
             temp_ap_bonus: 0,
             has_rush: false,
+            rush_target: None,
             used_declare_this_turn: false,
         });
         assert!(engine.check_effect_conditions("p1", "【FILE5】効果テキスト"));
@@ -987,6 +990,7 @@ mod tests {
             face_up: false,
             temp_ap_bonus: 0,
             has_rush: false,
+            rush_target: None,
             used_declare_this_turn: false,
         });
 
@@ -1001,6 +1005,7 @@ mod tests {
             face_up: true,
             temp_ap_bonus: 0,
             has_rush: false,
+            rush_target: None,
             used_declare_this_turn: false,
         });
         // 1 evidence
@@ -1014,6 +1019,7 @@ mod tests {
             face_up: true,
             temp_ap_bonus: 0,
             has_rush: false,
+            rush_target: None,
             used_declare_this_turn: false,
         });
 
@@ -1031,6 +1037,141 @@ mod tests {
         engine.trigger_on_turn_end("p1");
         assert_eq!(engine.players.get("p1").unwrap().evidence.len(), 0);
         assert_eq!(engine.players.get("p1").unwrap().remove.len(), 1);
+    }
+
+    #[test]
+    fn test_trait_condition_rush_restriction_and_contact() {
+        let path = if std::path::Path::new("data/dummy/cards.json").exists() {
+            "data/dummy/cards.json"
+        } else {
+            "../data/dummy/cards.json"
+        };
+        let mut catalog = CardCatalog::load_from_json(path).expect("catalog load failed");
+
+        // Insert synthetic test definitions for deterministic verification
+        catalog.definitions.insert(
+            "TEST_TRAIT_DETECTIVE".to_string(),
+            models::CardDefinition {
+                definition_id: "TEST_TRAIT_DETECTIVE".to_string(),
+                canonical_id: "TEST_TRAIT_DETECTIVE".to_string(),
+                card_type: models::CardType::CHARACTER,
+                colors: vec!["青".to_string()],
+                level: 2,
+                ap: 3000,
+                lp: 1,
+                names: vec!["テスト探偵団".to_string()],
+                description: "このキャラがコンタクトしたとき、AP＋1000する。\n相手の現場にいるキャラがこのキャラとのコンタクトによってリムーブされたとき、カードを1枚引く。".to_string(),
+                traits: vec!["少年探偵団".to_string()],
+                case_levels: None,
+                main_thumb: None,
+                main_path: None,
+            },
+        );
+
+        let mut engine = MatchEngine::new(catalog);
+        engine.turn = 3;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+
+        // Initially no 少年探偵団 on p1's field
+        ps1.deck.push(models::CardInstance {
+            instance_id: "p1_d1".to_string(),
+            definition_id: "B01005".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::DECK,
+            orientation: models::CardOrientation::ACTIVE,
+            entered_turn: 0,
+            face_up: false,
+            temp_ap_bonus: 0,
+            has_rush: false,
+            rush_target: None,
+            used_declare_this_turn: false,
+        });
+
+        // p2 has 1 SLEEP character, 1 case, and 1 evidence
+        ps2.field.push(models::CardInstance {
+            instance_id: "opp_c1".to_string(),
+            definition_id: "B01005".to_string(),
+            owner_id: "p2".to_string(),
+            zone: models::Zone::FIELD,
+            orientation: models::CardOrientation::SLEEP,
+            entered_turn: 1,
+            face_up: true,
+            temp_ap_bonus: 0,
+            has_rush: false,
+            rush_target: None,
+            used_declare_this_turn: false,
+        });
+        ps2.r#case = Some(models::CardInstance {
+            instance_id: "opp_case".to_string(),
+            definition_id: "B01002".to_string(),
+            owner_id: "p2".to_string(),
+            zone: models::Zone::CASE,
+            orientation: models::CardOrientation::ACTIVE,
+            entered_turn: 0,
+            face_up: true,
+            temp_ap_bonus: 0,
+            has_rush: false,
+            rush_target: None,
+            used_declare_this_turn: false,
+        });
+        ps2.evidence.push(models::CardInstance {
+            instance_id: "opp_ev1".to_string(),
+            definition_id: "B01005".to_string(),
+            owner_id: "p2".to_string(),
+            zone: models::Zone::EVIDENCE,
+            orientation: models::CardOrientation::ACTIVE,
+            entered_turn: 0,
+            face_up: false,
+            temp_ap_bonus: 0,
+            has_rush: false,
+            rush_target: None,
+            used_declare_this_turn: false,
+        });
+
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        // 1. Trait condition check (before adding 少年探偵団)
+        let trait_cond = "自分の現場に〚特徴［少年探偵団］〛のキャラがいる場合、カードを1枚引く。";
+        assert!(!engine.check_effect_conditions("p1", trait_cond));
+
+        // Add character with 少年探偵団 trait & 突撃［キャラ］
+        engine.players.get_mut("p1").unwrap().field.push(models::CardInstance {
+            instance_id: "p1_c1".to_string(),
+            definition_id: "TEST_TRAIT_DETECTIVE".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::FIELD,
+            orientation: models::CardOrientation::ACTIVE,
+            entered_turn: 3, // entered this turn
+            face_up: true,
+            temp_ap_bonus: 0,
+            has_rush: true,
+            rush_target: Some("CHAR".to_string()),
+            used_declare_this_turn: false,
+        });
+        assert!(engine.check_effect_conditions("p1", trait_cond));
+
+        // 2. Rush［キャラ］ target restriction check via prompt_main_action
+        engine.prompt_main_action("p1");
+        let pd = engine.pending_decision.as_ref().unwrap();
+        let actions = pd["options"]["actions"].as_array().unwrap();
+        let action_opt = actions.iter().find(|a| a["type"] == "ACTION").unwrap();
+        let valid_targets = action_opt["actorTargetMap"]["p1_c1"].as_array().unwrap();
+        assert_eq!(valid_targets.len(), 1);
+        assert_eq!(valid_targets[0], "opp_c1"); // Case "opp_case" must be excluded
+
+        // 3. Contact trigger & contact win trigger
+        engine.trigger_on_contact("p1", "p1_c1", "p2", "opp_c1");
+        let bonus = engine.players.get("p1").unwrap().field[0].temp_ap_bonus;
+        assert_eq!(bonus, 1000);
+
+        assert_eq!(engine.players.get("p1").unwrap().hand.len(), 0);
+        engine.trigger_on_contact_win("p1", "p1_c1", "TEST_TRAIT_DETECTIVE");
+        assert_eq!(engine.players.get("p1").unwrap().hand.len(), 1);
     }
 }
 

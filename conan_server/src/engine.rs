@@ -131,6 +131,34 @@ fn parse_deck_search_count(desc: &str) -> usize {
     0
 }
 
+fn parse_rush_target(desc: &str) -> Option<String> {
+    if desc.contains("突撃［キャラ］") {
+        Some("CHAR".to_string())
+    } else if desc.contains("突撃［事件］") {
+        Some("CASE".to_string())
+    } else {
+        None
+    }
+}
+
+fn extract_trait_filters(text: &str) -> Vec<String> {
+    let mut traits = Vec::new();
+    let mut rest = text;
+    while let Some(idx) = rest.find("特徴［") {
+        let after = &rest[idx + "特徴［".len()..];
+        if let Some(end_idx) = after.find('］') {
+            let t = &after[..end_idx];
+            if !t.is_empty() && !traits.contains(&t.to_string()) {
+                traits.push(t.to_string());
+            }
+            rest = &after[end_idx + '］'.len_utf8()..];
+        } else {
+            break;
+        }
+    }
+    traits
+}
+
 impl MatchEngine {
     pub fn new(catalog: CardCatalog) -> Self {
         Self {
@@ -225,6 +253,7 @@ impl MatchEngine {
             face_up: false,
             temp_ap_bonus: 0,
             has_rush: false,
+            rush_target: None,
             used_declare_this_turn: false,
         };
         ps.partner = Some(p_inst);
@@ -239,6 +268,7 @@ impl MatchEngine {
             face_up: false,
             temp_ap_bonus: 0,
             has_rush: false,
+            rush_target: None,
             used_declare_this_turn: false,
         };
         ps.r#case = Some(c_inst);
@@ -255,6 +285,7 @@ impl MatchEngine {
                     face_up: false,
                     temp_ap_bonus: 0,
                     has_rush: false,
+                    rush_target: None,
                     used_declare_this_turn: false,
                 };
                 ps.deck.push(inst);
@@ -434,6 +465,7 @@ impl MatchEngine {
             for c in &mut ps.field {
                 c.temp_ap_bonus = 0;
                 c.has_rush = false;
+                c.rush_target = None;
                 c.used_declare_this_turn = false;
                 if c.orientation == CardOrientation::STUN {
                     c.orientation = CardOrientation::SLEEP;
@@ -444,6 +476,7 @@ impl MatchEngine {
             if let Some(ref mut p) = ps.partner {
                 p.temp_ap_bonus = 0;
                 p.has_rush = false;
+                p.rush_target = None;
                 p.used_declare_this_turn = false;
                 if p.zone == Zone::PARTNER {
                     if p.orientation == CardOrientation::STUN {
@@ -568,7 +601,7 @@ impl MatchEngine {
         self.log(format!("🏆 【対戦終了】勝者: {} ({})", winner_id, reason_str));
     }
 
-    fn prompt_main_action(&mut self, player_id: &str) {
+    pub fn prompt_main_action(&mut self, player_id: &str) {
         if self.phase == MatchPhase::FINISHED {
             return;
         }
@@ -661,31 +694,52 @@ impl MatchEngine {
         }
 
         // 7. Action
-        let mut action_actors = vec![];
-        for c in &ps.field {
-            let can_act = c.orientation == CardOrientation::ACTIVE && (c.entered_turn != self.turn || c.has_rush);
-            if can_act {
-                action_actors.push(c.instance_id.clone());
-            }
-        }
-
-        let mut target_ids = vec![];
+        let mut char_target_ids = vec![];
         for opp_c in &opp_ps.field {
             if opp_c.orientation == CardOrientation::SLEEP || opp_c.orientation == CardOrientation::STUN {
-                target_ids.push(opp_c.instance_id.clone());
+                char_target_ids.push(opp_c.instance_id.clone());
             }
         }
+        let mut case_target_id: Option<String> = None;
         if !opp_ps.evidence.is_empty() {
             if let Some(ref opp_case) = opp_ps.r#case {
-                target_ids.push(opp_case.instance_id.clone());
+                case_target_id = Some(opp_case.instance_id.clone());
             }
         }
 
-        if !action_actors.is_empty() && !target_ids.is_empty() {
+        let mut all_target_ids = char_target_ids.clone();
+        if let Some(ref cid) = case_target_id {
+            all_target_ids.push(cid.clone());
+        }
+
+        let mut action_actors = vec![];
+        let mut actor_target_map: HashMap<String, Vec<String>> = HashMap::new();
+        for c in &ps.field {
+            let can_act = c.orientation == CardOrientation::ACTIVE && (c.entered_turn != self.turn || c.has_rush);
+            if !can_act {
+                continue;
+            }
+            let valid_targets = if c.entered_turn == self.turn && c.has_rush {
+                match c.rush_target.as_deref() {
+                    Some("CHAR") => char_target_ids.clone(),
+                    Some("CASE") => case_target_id.iter().cloned().collect(),
+                    _ => all_target_ids.clone(),
+                }
+            } else {
+                all_target_ids.clone()
+            };
+            if !valid_targets.is_empty() {
+                action_actors.push(c.instance_id.clone());
+                actor_target_map.insert(c.instance_id.clone(), valid_targets);
+            }
+        }
+
+        if !action_actors.is_empty() && !all_target_ids.is_empty() {
             actions.push(json!({
                 "type": "ACTION",
                 "actorIds": action_actors,
-                "targetIds": target_ids
+                "targetIds": all_target_ids,
+                "actorTargetMap": actor_target_map
             }));
         }
 
@@ -901,17 +955,49 @@ impl MatchEngine {
                 let actor_id = val.get("actorId").and_then(|v| v.as_str()).unwrap_or("").to_string();
                 let target_id = val.get("targetId").and_then(|v| v.as_str()).unwrap_or("").to_string();
 
+                let opp_pid = self.player_order.iter().find(|p| *p != player_id).unwrap().clone();
+
+                // 突撃の攻撃対象制限チェック
+                let rush_violation = {
+                    let ps = self.players.get(player_id);
+                    let opp_ps = self.players.get(&opp_pid);
+                    if let (Some(ps), Some(opp_ps)) = (ps, opp_ps) {
+                        if let Some(actor_c) = ps.field.iter().find(|c| c.instance_id == actor_id) {
+                            if actor_c.entered_turn == self.turn && actor_c.has_rush {
+                                let is_case_target = opp_ps.r#case.as_ref().map(|c| c.instance_id == target_id).unwrap_or(false);
+                                match actor_c.rush_target.as_deref() {
+                                    Some("CHAR") if is_case_target => Some("〚突撃［キャラ］〛は事件を攻撃できません"),
+                                    Some("CASE") if !is_case_target => Some("〚突撃［事件］〛はキャラを攻撃できません"),
+                                    _ => None,
+                                }
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                };
+                if let Some(msg) = rush_violation {
+                    self.log(format!("⚠️ {}", msg));
+                    self.prompt_main_action(player_id);
+                    return;
+                }
+
                 if let Some(ps) = self.players.get_mut(player_id) {
                     if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == actor_id) {
                         c.orientation = CardOrientation::SLEEP;
                     }
                 }
 
-                let opp_pid = self.player_order.iter().find(|p| *p != player_id).unwrap().clone();
-
                 let actor_name = self.card_name_by_inst(&actor_id);
                 let target_name = self.card_name_by_inst(&target_id);
                 self.log(format!("⚔️ {} の [{}] が {} の [{}] に攻撃を仕掛けました！", player_id, actor_name, opp_pid, target_name));
+
+                // アクション時トリガーの解決
+                self.trigger_on_action(player_id, &actor_id);
 
                 self.action_context = Some(json!({
                     "actorId": actor_id,
@@ -1214,10 +1300,17 @@ impl MatchEngine {
         }
 
         if desc.contains("突撃") && !desc.contains("与え") {
+            let r_target = parse_rush_target(desc);
             if let Some(ps) = self.players.get_mut(player_id) {
                 if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == actor_id) {
                     c.has_rush = true;
-                    self.log(format!("⚡ [{}] の【宣言】で自身に〚突撃〛を付与しました", card_name));
+                    c.rush_target = r_target.clone();
+                    let label = match r_target.as_deref() {
+                        Some("CHAR") => "〚突撃［キャラ］〛",
+                        Some("CASE") => "〚突撃［事件］〛",
+                        _ => "〚突撃〛",
+                    };
+                    self.log(format!("⚡ [{}] の【宣言】で自身に{}を付与しました", card_name, label));
                 }
             }
         }
@@ -1288,10 +1381,19 @@ impl MatchEngine {
                     }
                 }
                 "GIVE_RUSH" => {
+                    let def_id = self.find_card_def_id(actor_id).unwrap_or_default();
+                    let desc = self.catalog.get(&def_id).map(|d| d.description.clone()).unwrap_or_default();
+                    let r_target = parse_rush_target(&desc);
                     if let Some(ps) = self.players.get_mut(player_id) {
                         if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == tid) {
                             c.has_rush = true;
-                            self.log(format!("⚡ [{}] の効果で [{}] に〚突撃〛を与えました！", actor_name, target_name));
+                            c.rush_target = r_target.clone();
+                            let label = match r_target.as_deref() {
+                                Some("CHAR") => "〚突撃［キャラ］〛",
+                                Some("CASE") => "〚突撃［事件］〛",
+                                _ => "〚突撃〛",
+                            };
+                            self.log(format!("⚡ [{}] の効果で [{}] に{}を与えました！", actor_name, target_name, label));
                         }
                     }
                 }
@@ -1565,6 +1667,9 @@ impl MatchEngine {
                 self.log(format!("💥 事件への攻撃！ しかし {} の証拠はすでに0でした", defender_pid));
             }
         } else if let Some(def_cid) = target_field_card_id {
+            // コンタクト時トリガーの解決（バトルAP比較前）
+            self.trigger_on_contact(&attacker_pid, &actor_id, &defender_pid, &def_cid);
+
             let actor_def_id = self.players.get(&attacker_pid)
                 .and_then(|p| p.field.iter().find(|c| c.instance_id == actor_id).map(|c| c.definition_id.clone()));
             let def_def_id = self.players.get(&defender_pid)
@@ -1594,6 +1699,8 @@ impl MatchEngine {
                     self.log(format!("💥 バトル決着: [{}] (AP{}) vs [{}] (AP{}) ➔ {} の [{}] をリムーブ！", actor_name, actor_ap, def_name, def_ap, defender_pid, def_name));
                     // 現場リムーブ時トリガーの解決
                     self.trigger_on_remove(&defender_pid, &d_def_id);
+                    // コンタクト勝利時トリガーの解決
+                    self.trigger_on_contact_win(&attacker_pid, &actor_id, &a_def_id);
                 } else {
                     self.log(format!("🛡️ バトル決着: [{}] (AP{}) vs [{}] (AP{}) ➔ AP不足のためリムーブできず（守備成功）", actor_name, actor_ap, def_name, def_ap));
                 }
@@ -1617,11 +1724,18 @@ impl MatchEngine {
         let card_name = self.card_name_by_def(definition_id);
 
         // 突撃: 登場したターンからすぐにアクション可能
-        if desc.contains("突撃") {
+        if desc.contains("突撃") && !desc.contains("与え") && !desc.contains("コンタクトによってリムーブされたとき") {
+            let r_target = parse_rush_target(&desc);
             if let Some(ps) = self.players.get_mut(player_id) {
                 if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == actor_id) {
                     c.has_rush = true;
-                    self.log(format!("⚡ 〚突撃〛 [{}] は登場ターンから攻撃可能です！", card_name));
+                    c.rush_target = r_target.clone();
+                    let label = match r_target.as_deref() {
+                        Some("CHAR") => "〚突撃［キャラ］〛（キャラ限定）",
+                        Some("CASE") => "〚突撃［事件］〛（事件限定）",
+                        _ => "〚突撃〛",
+                    };
+                    self.log(format!("⚡ {} [{}] は登場ターンから攻撃可能です！", label, card_name));
                 }
             }
         }
@@ -2001,6 +2115,23 @@ impl MatchEngine {
             }
         }
 
+        // 5. 【特徴［〇〇］】条件チェック（自分の現場に該当特徴のキャラがいる場合）
+        if desc.contains("自分の現場に") && desc.contains("特徴［") && (desc.contains("がいる場合") || desc.contains("がいるなら")) {
+            let required_traits = extract_trait_filters(desc);
+            if !required_traits.is_empty() {
+                if let Some(ps) = self.players.get(player_id) {
+                    let has_matching = ps.field.iter().any(|c| {
+                        self.catalog.get(&c.definition_id).map(|def| {
+                            required_traits.iter().any(|rt| def.traits.iter().any(|t| t == rt))
+                        }).unwrap_or(false)
+                    });
+                    if !has_matching {
+                        return false;
+                    }
+                }
+            }
+        }
+
         true
     }
 
@@ -2187,6 +2318,169 @@ impl MatchEngine {
                     }
                 }
             }
+        }
+    }
+
+    /// アクション宣言時トリガーを解決する（「このキャラがアクションしたとき」「〚特徴［〇〇］〛のキャラがアクションしたとき」）
+    pub fn trigger_on_action(&mut self, player_id: &str, actor_id: &str) {
+        let actor_def_id = match self.find_card_def_id(actor_id) {
+            Some(d) => d,
+            None => return,
+        };
+        let actor_traits = self.catalog.get(&actor_def_id).map(|d| d.traits.clone()).unwrap_or_default();
+        let actor_name = self.card_name_by_def(&actor_def_id);
+
+        // 1. 攻撃キャラ自身の「このキャラがアクションしたとき」
+        if let Some(actor_desc) = self.catalog.get(&actor_def_id).map(|d| d.description.clone()) {
+            if actor_desc.contains("このキャラがアクションしたとき") && self.check_effect_conditions(player_id, &actor_desc) {
+                let draw_n = parse_draw_count(&actor_desc);
+                if draw_n > 0 {
+                    self.draw_cards(player_id, draw_n);
+                    self.log(format!("🎴 [{}] のアクション時効果: カードを{}枚引きました", actor_name, draw_n));
+                }
+                let ap_bonus = parse_ap_bonus(&actor_desc);
+                if ap_bonus > 0 {
+                    if let Some(ps) = self.players.get_mut(player_id) {
+                        if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == actor_id) {
+                            c.temp_ap_bonus += ap_bonus;
+                        }
+                    }
+                    self.log(format!("✨ [{}] のアクション時効果: AP +{}", actor_name, ap_bonus));
+                }
+            }
+        }
+
+        // 2. 自分の場の他キャラの「〚特徴［〇〇］〛のキャラがアクションしたとき」
+        let field_cards: Vec<(String, String)> = self.players.get(player_id)
+            .map(|ps| ps.field.iter().map(|c| (c.instance_id.clone(), c.definition_id.clone())).collect())
+            .unwrap_or_default();
+
+        for (_cid, def_id) in field_cards {
+            let desc = match self.catalog.get(&def_id) {
+                Some(d) => d.description.clone(),
+                None => continue,
+            };
+            if !desc.contains("のキャラがアクションしたとき") {
+                continue;
+            }
+            if !self.check_effect_conditions(player_id, &desc) {
+                continue;
+            }
+            let req_traits = extract_trait_filters(&desc);
+            if !req_traits.is_empty() && !req_traits.iter().any(|rt| actor_traits.iter().any(|t| t == rt)) {
+                continue;
+            }
+            let watcher_name = self.card_name_by_def(&def_id);
+            let draw_n = parse_draw_count(&desc);
+            if draw_n > 0 {
+                self.draw_cards(player_id, draw_n);
+                self.log(format!("🎴 [{}] の誘発効果（特徴一致アクション）: カードを{}枚引きました", watcher_name, draw_n));
+            }
+            let ap_bonus = parse_ap_bonus(&desc);
+            if ap_bonus > 0 {
+                if let Some(ps) = self.players.get_mut(player_id) {
+                    if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == actor_id) {
+                        c.temp_ap_bonus += ap_bonus;
+                    }
+                }
+                self.log(format!("✨ [{}] の誘発効果（特徴一致アクション）: [{}] のAP +{}", watcher_name, actor_name, ap_bonus));
+            }
+        }
+    }
+
+    /// コンタクト突入時トリガーを解決する
+    pub fn trigger_on_contact(&mut self, attacker_pid: &str, actor_id: &str, defender_pid: &str, def_cid: &str) {
+        // 攻撃側「このキャラがコンタクトしたとき」
+        if let Some(a_def_id) = self.find_card_def_id(actor_id) {
+            let desc = self.catalog.get(&a_def_id).map(|d| d.description.clone()).unwrap_or_default();
+            if desc.contains("このキャラがコンタクトしたとき") && self.check_effect_conditions(attacker_pid, &desc) {
+                let ap_bonus = parse_ap_bonus(&desc);
+                if ap_bonus > 0 {
+                    if let Some(ps) = self.players.get_mut(attacker_pid) {
+                        if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == actor_id) {
+                            c.temp_ap_bonus += ap_bonus;
+                        }
+                    }
+                    let name = self.card_name_by_def(&a_def_id);
+                    self.log(format!("⚔️ [{}] のコンタクト時効果: AP +{}", name, ap_bonus));
+                }
+            }
+        }
+
+        // 防御側「このキャラを指定してアクションしたとき」
+        if let Some(d_def_id) = self.find_card_def_id(def_cid) {
+            let desc = self.catalog.get(&d_def_id).map(|d| d.description.clone()).unwrap_or_default();
+            if desc.contains("このキャラを指定してアクションしたとき") && self.check_effect_conditions(defender_pid, &desc) {
+                let ap_bonus = parse_ap_bonus(&desc);
+                if ap_bonus > 0 {
+                    if let Some(ps) = self.players.get_mut(defender_pid) {
+                        if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == def_cid) {
+                            c.temp_ap_bonus += ap_bonus;
+                        }
+                    }
+                    let name = self.card_name_by_def(&d_def_id);
+                    self.log(format!("🛡️ [{}] の被コンタクト時効果: AP +{}", name, ap_bonus));
+                }
+            }
+        }
+    }
+
+    /// コンタクトによる相手キャラリムーブ時のトリガーを解決する
+    pub fn trigger_on_contact_win(&mut self, attacker_pid: &str, actor_id: &str, actor_def_id: &str) {
+        let desc = match self.catalog.get(actor_def_id) {
+            Some(d) => d.description.clone(),
+            None => return,
+        };
+        if !desc.contains("コンタクトによってリムーブされたとき") {
+            return;
+        }
+        if !self.check_effect_conditions(attacker_pid, &desc) {
+            return;
+        }
+
+        let card_name = self.card_name_by_def(actor_def_id);
+
+        // 1. ドロー
+        let draw_n = parse_draw_count(&desc);
+        if draw_n > 0 {
+            self.draw_cards(attacker_pid, draw_n);
+            self.log(format!("🎴 [{}] のコンタクト勝利時効果: カードを{}枚引きました", card_name, draw_n));
+        }
+
+        // 2. 証拠獲得（手札リムーブ任意コスト付きの場合も含む）
+        let ev_n = parse_evidence_gain(&desc);
+        if ev_n > 0 {
+            let hand_cost = parse_hand_remove_cost(&desc);
+            if hand_cost > 0 {
+                let can_pay = self.players.get(attacker_pid).map(|p| p.hand.len() >= hand_cost).unwrap_or(false);
+                if can_pay {
+                    if let Some(ps) = self.players.get_mut(attacker_pid) {
+                        for _ in 0..hand_cost {
+                            if let Some(mut c) = ps.hand.pop() {
+                                c.zone = Zone::REMOVE;
+                                ps.remove.push(c);
+                            }
+                        }
+                    }
+                    self.gain_evidence(attacker_pid, ev_n);
+                    self.log(format!("🔍 [{}] のコンタクト勝利時効果: 手札を{}枚リムーブし証拠を{}つ獲得！", card_name, hand_cost, ev_n));
+                }
+            } else {
+                self.gain_evidence(attacker_pid, ev_n);
+                self.log(format!("🔍 [{}] のコンタクト勝利時効果: 証拠を{}つ獲得！", card_name, ev_n));
+            }
+        }
+
+        // 3. 突撃付与
+        if desc.contains("突撃") && (desc.contains("持つ") || desc.contains("得る")) {
+            let r_target = parse_rush_target(&desc);
+            if let Some(ps) = self.players.get_mut(attacker_pid) {
+                if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == actor_id) {
+                    c.has_rush = true;
+                    c.rush_target = r_target;
+                }
+            }
+            self.log(format!("⚡ [{}] のコンタクト勝利時効果: ターン終了時まで〚突撃〛を獲得！", card_name));
         }
     }
 }

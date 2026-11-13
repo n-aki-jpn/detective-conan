@@ -63,9 +63,19 @@ impl RandomAgent {
                     if let Some(act) = actions.iter().find(|a| a.get("type").and_then(|t| t.as_str()) == Some("ACTION")) {
                         let actor_ids = act.get("actorIds").and_then(|v| v.as_array());
                         let target_ids = act.get("targetIds").and_then(|v| v.as_array());
-                        if let (Some(aids), Some(tids)) = (actor_ids, target_ids) {
-                            if let (Some(aid), Some(tid)) = (aids.choose(&mut rng), tids.choose(&mut rng)) {
-                                return json!({"value": {"type": "ACTION", "actorId": aid, "targetId": tid}});
+                        let actor_target_map = act.get("actorTargetMap").and_then(|v| v.as_object());
+                        if let Some(aids) = actor_ids {
+                            if let Some(aid_val) = aids.choose(&mut rng) {
+                                let aid_str = aid_val.as_str().unwrap_or("");
+                                let valid_tids = actor_target_map
+                                    .and_then(|m| m.get(aid_str))
+                                    .and_then(|v| v.as_array())
+                                    .or(target_ids);
+                                if let Some(tids) = valid_tids {
+                                    if let Some(tid) = tids.choose(&mut rng) {
+                                        return json!({"value": {"type": "ACTION", "actorId": aid_val, "targetId": tid}});
+                                    }
+                                }
                             }
                         }
                     }
