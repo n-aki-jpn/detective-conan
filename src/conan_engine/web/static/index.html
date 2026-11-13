@@ -1750,11 +1750,12 @@
         const opt = document.createElement('option');
         opt.value = c.definitionId;
         const colStr = formatCardColors(c.colors);
-        let diffStr = '';
-        if (c.caseLevels) {
-          diffStr = ` (解:先${c.caseLevels.first}/後${c.caseLevels.second})`;
-        }
-        opt.innerText = `[${colStr}] ${c.title || c.dummyName}${diffStr} (${c.definitionId})`;
+        const rawDesc = (c.description || '').replace(/<br\s*\/?>/gi, ' ').replace(/\r?\n/g, ' ').trim();
+        const effectSummary = rawDesc
+          ? ` | ⚡${rawDesc.length > 42 ? rawDesc.slice(0, 42) + '…' : rawDesc}`
+          : ' | （効果なし）';
+        opt.innerText = `[${colStr}] ${c.title || c.dummyName} (${c.definitionId})${effectSummary}`;
+        if (rawDesc) opt.title = rawDesc;
         if (c.definitionId === currentDeckDef.caseId) opt.selected = true;
         caseSel.appendChild(opt);
       });
@@ -1814,7 +1815,6 @@
           const imgHtml = cCard.mainPath
             ? `<img src="/card-images/${cCard.mainPath}" style="width:50px; height:36px; object-fit:cover; border-radius:3px; flex-shrink:0;">`
             : '';
-          const diffStr = cCard.caseLevels ? `🎯 解決条件: 先攻${cCard.caseLevels.first}枚 / 後攻${cCard.caseLevels.second}枚` : '';
           const hasEffect = !!cCard.description;
           cBox.innerHTML = `
             <div style="display:flex; gap:6px; align-items:flex-start;">
@@ -1826,8 +1826,8 @@
                 <div style="display:flex; gap:4px; margin:2px 0; align-items:center;">
                   <span style="font-size:0.62rem; color:var(--text-muted);">色:</span>
                   ${renderColorTagsHtml(cCard.colors)}
+                  <span style="font-size:0.6rem; color:var(--text-muted); margin-left:auto;">${cCard.definitionId}</span>
                 </div>
-                <div style="font-size:0.6rem; color:#34d399; font-weight:bold;">${diffStr}</div>
               </div>
             </div>
             <div class="preview-body" style="${hasEffect ? 'border:1px solid rgba(168,85,247,0.4);' : ''}">${cCard.description ? `📜 ${cCard.description}` : '（効果なし 通常事件）'}</div>
