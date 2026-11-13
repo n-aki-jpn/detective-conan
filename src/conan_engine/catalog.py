@@ -18,12 +18,27 @@ class CardCatalog:
         path = Path(file_path)
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        
+
         catalog = cls(catalog_version=data.get("catalogVersion", "official-raw-v1"))
         for card_data in data.get("cards", []):
-            raw_type = card_data.get("cardType", card_data.get("type", "CHARACTER")).upper()
+            # Normalize card type: accept both English enum names and Japanese labels
+            raw_type_raw = card_data.get("cardType", card_data.get("type", "CHARACTER"))
+            # Map common Japanese terms to the Enum keys
+            type_map = {
+                "パートナー": "PARTNER",
+                "事件": "CASE",
+                "キャラ": "CHARACTER",
+                "キャラクター": "CHARACTER",
+                "イベント": "EVENT",
+                "EVENT": "EVENT",
+                "CASE": "CASE",
+                "PARTNER": "PARTNER",
+                "CHARACTER": "CHARACTER",
+            }
+            raw_type = type_map.get(str(raw_type_raw).strip(), str(raw_type_raw).strip().upper())
+
             card_type = CardType[raw_type]
-            
+
             c_def = CardDefinition(
                 definitionId=card_data["definitionId"],
                 canonicalId=card_data.get("canonicalId", card_data["definitionId"]),

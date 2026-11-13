@@ -54,6 +54,8 @@ manager = MatchManager()
 STATIC_DIR = Path(__file__).parent / "static"
 
 class ConanHttpHandler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
     def do_GET(self):
         parsed = urlparse(self.path)
         
@@ -73,8 +75,26 @@ class ConanHttpHandler(http.server.SimpleHTTPRequestHandler):
             
         # 2. Catalog & Deck API for Deck Builder
         elif parsed.path == "/api/catalog":
+            # Build catalog response from parsed definitions (with normalized English cardType)
+            type_map = {
+                "パートナー": "PARTNER",
+                "事件": "CASE",
+                "キャラ": "CHARACTER",
+                "キャラクター": "CHARACTER",
+                "イベント": "EVENT",
+            }
             with open(manager.catalog_path, "r", encoding="utf-8") as f:
-                cat_data = json.load(f)
+                raw_data = json.load(f)
+            normalized_cards = []
+            for c in raw_data.get("cards", []):
+                raw_type = c.get("cardType", c.get("type", "CHARACTER"))
+                c["cardType"] = type_map.get(str(raw_type).strip(), str(raw_type).strip().upper())
+                normalized_cards.append(c)
+            cat_data = {
+                "catalogVersion": raw_data.get("catalogVersion", "official-raw-v1"),
+                "totalCards": len(normalized_cards),
+                "cards": normalized_cards,
+            }
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.end_headers()

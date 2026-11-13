@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["handle_catalog","handle_decision","handle_deck","handle_reset","handle_save_deck","handle_set_cpu","handle_state","main"],"mod":["agent","catalog","engine","models","observation"],"struct":["DecisionRequest","MatchManager","PlayerIdQuery","SetCpuRequest","StatusOk"],"type":["SharedState"]};

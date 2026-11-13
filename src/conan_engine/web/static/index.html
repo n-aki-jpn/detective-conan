@@ -171,12 +171,26 @@
       padding: 8px 12px; border-radius: 6px; font-size: 0.82rem; outline: none;
     }
     .catalog-grid {
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(105px, 1fr)); gap: 8px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 10px;
+      width: 100%;
+    }
+    @media (min-width: 640px) {
+      .catalog-grid {
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      }
+    }
+    @media (min-width: 1024px) {
+      .catalog-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      }
     }
     .catalog-card-item {
       background: #1e293b; border: 1.5px solid #475569; border-radius: 8px;
       padding: 6px; display: flex; flex-direction: column; justify-content: space-between;
       min-height: 155px; position: relative; font-size: 0.7rem; box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+      box-sizing: border-box;
     }
     .card-qty-controller {
       display: flex; justify-content: space-between; align-items: center; margin-top: 6px;
@@ -326,7 +340,7 @@
         <div class="catalog-search-bar">
           <input type="text" id="catalog-search-input" placeholder="🔍 キャラ名・効果・番号で検索..." oninput="filterCatalog(this.value)">
         </div>
-        <div id="builder-catalog-grid" class="catalog-grid"></div>
+        <div id="builder-catalog-container"></div>
       </div>
     </div>
   </div>
@@ -362,6 +376,8 @@
     let catalogData = [];
     let currentDeckDef = { partnerId: '', caseId: '', mainDeck: [] };
     let deckQtyMap = {}; // defId -> count
+    let builderPage = 0;
+    const PAGE_SIZE = 60;
 
     // ========== NAVIGATION ==========
     function switchTab(tab) {
@@ -438,14 +454,32 @@
     }
 
     function showCardModal(card) {
-      if (!card || !card.name) return;
-      document.getElementById('modal-card-name').innerText = card.name;
-      document.getElementById('modal-card-badge').innerText = card.cardType === 'PARTNER' ? 'パートナー' : (card.cardType === 'CASE' ? '事件' : 'キャラ');
-      document.getElementById('modal-card-level').innerText = card.level > 0 ? `Lv.${card.level} (${(card.colors || []).join('')})` : `${(card.colors || []).join('')}`;
-      document.getElementById('modal-card-ap').innerText = `AP ${card.ap ?? 0}`;
-      document.getElementById('modal-card-lp').innerText = `LP ${card.lp ?? 0}`;
+      if (!card) return;
+      const name = card.title || card.name || card.dummyName || card.definitionId;
+      const typeLabelMap = { PARTNER: 'パートナー', CASE: '事件', CHARACTER: 'キャラ', EVENT: 'イベント' };
+      document.getElementById('modal-card-name').innerText = name;
+      document.getElementById('modal-card-badge').innerText = typeLabelMap[card.cardType] || card.cardType;
+      document.getElementById('modal-card-level').innerText = (card.level > 0 ? `Lv.${card.level} ` : '') + `(${(card.colors || []).join('')})`;
+      document.getElementById('modal-card-ap').innerText = `AP ${card.ap ?? '-'}`;
+      document.getElementById('modal-card-lp').innerText = `LP ${card.lp ?? '-'}`;
       document.getElementById('modal-card-desc').innerText = card.description || 'テキストなし';
       document.getElementById('modal-card-id').innerText = card.definitionId || '';
+      // Show card image if available
+      let imgEl = document.getElementById('modal-card-img');
+      if (!imgEl) {
+        imgEl = document.createElement('img');
+        imgEl.id = 'modal-card-img';
+        imgEl.style.cssText = 'width:100%; max-width:280px; border-radius:8px; margin-bottom:10px; display:block; margin-left:auto; margin-right:auto;';
+        const descEl = document.getElementById('modal-card-desc');
+        descEl.parentNode.insertBefore(imgEl, descEl);
+      }
+      if (card.mainPath) {
+        imgEl.src = `/card-images/${card.mainPath}`;
+        imgEl.style.display = 'block';
+        imgEl.onerror = () => { imgEl.style.display = 'none'; };
+      } else {
+        imgEl.style.display = 'none';
+      }
       document.getElementById('card-modal').style.display = 'flex';
     }
 
@@ -771,7 +805,7 @@
       partnerSel.innerHTML = '';
       caseSel.innerHTML = '';
 
-      catalogData.filter(c => c.cardType === 'PARTNER').forEach(c => {
+      catalogData.filter(c => c.cardType === 'PARTNER' || c.cardType === 'パートナー').forEach(c => {
         const opt = document.createElement('option');
         opt.value = c.definitionId;
         opt.innerText = `[${c.definitionId}] ${c.title || c.dummyName}`;
@@ -779,7 +813,7 @@
         partnerSel.appendChild(opt);
       });
 
-      catalogData.filter(c => c.cardType === 'CASE').forEach(c => {
+      catalogData.filter(c => c.cardType === 'CASE' || c.cardType === '事件').forEach(c => {
         const opt = document.createElement('option');
         opt.value = c.definitionId;
         opt.innerText = `[${c.definitionId}] ${c.title || c.dummyName}`;
@@ -822,36 +856,64 @@
     }
 
     function renderBuilderCatalog(filterQuery = '') {
-      const grid = document.getElementById('builder-catalog-grid');
-      grid.innerHTML = '';
+      const container = document.getElementById('builder-catalog-container') || document.getElementById('builder-catalog-grid');
+      container.innerHTML = '';
 
       const query = (filterQuery || '').trim().toLowerCase();
-      const mainPool = catalogData.filter(c => c.cardType === 'CHARACTER' || c.cardType === 'EVENT');
+      const mainPool = catalogData.filter(c => {
+        const t = c.cardType || '';
+        return t === 'CHARACTER' || t === 'EVENT' || t === 'キャラ' || t === 'キャラクター' || t === 'イベント';
+      });
 
-      mainPool.forEach(c => {
+      const filtered = mainPool.filter(c => {
+        if (!query) return true;
         const title = (c.title || c.dummyName || '').toLowerCase();
         const desc = (c.description || '').toLowerCase();
         const defId = (c.definitionId || '').toLowerCase();
+        return title.includes(query) || desc.includes(query) || defId.includes(query);
+      });
 
-        if (query && !title.includes(query) && !desc.includes(query) && !defId.includes(query)) {
-          return;
-        }
+      const start = builderPage * PAGE_SIZE;
+      const pageItems = filtered.slice(start, start + PAGE_SIZE);
 
+      // Page info
+      const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+      const pageInfo = document.createElement('div');
+      pageInfo.style.cssText = 'font-size:0.75rem; color:var(--text-muted); margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;';
+      pageInfo.innerHTML = `
+        <span>${filtered.length}枚中 ${start+1}〜${Math.min(start+PAGE_SIZE, filtered.length)}枚表示</span>
+        <span style="display:flex;gap:6px;align-items:center;">
+          <button class="qty-btn" style="width:auto;padding:2px 10px;" onclick="builderPage=Math.max(0,builderPage-1);renderBuilderCatalog(document.getElementById('catalog-search-input').value)" ${builderPage===0?'disabled':''}>◀</button>
+          <span>${builderPage+1} / ${totalPages}</span>
+          <button class="qty-btn" style="width:auto;padding:2px 10px;" onclick="builderPage=Math.min(${totalPages-1},builderPage+1);renderBuilderCatalog(document.getElementById('catalog-search-input').value)" ${builderPage>=totalPages-1?'disabled':''}>▶</button>
+        </span>
+      `;
+      container.appendChild(pageInfo);
+
+      const cardGrid = document.createElement('div');
+      cardGrid.className = 'catalog-grid';
+      container.appendChild(cardGrid);
+
+      pageItems.forEach(c => {
         const qty = deckQtyMap[c.definitionId] || 0;
         const item = document.createElement('div');
         item.className = 'catalog-card-item';
 
+        const imgHtml = c.mainPath
+          ? `<img src="/card-images/${c.mainPath}" loading="lazy" style="width:100%;border-radius:4px;margin-bottom:4px;aspect-ratio:2/3;object-fit:cover;" onerror="this.style.display='none'">`
+          : `<div style="width:100%;aspect-ratio:2/3;background:#0f172a;border-radius:4px;margin-bottom:4px;display:flex;align-items:center;justify-content:center;color:#475569;font-size:0.65rem;">NO IMG</div>`;
+
         item.innerHTML = `
-          <div onclick="showCardModal(${JSON.stringify(c).replace(/"/g, '&quot;')})" style="cursor:pointer; flex:1; display:flex; flex-direction:column; justify-content:space-between;">
+          <div class="card-click-area" style="cursor:pointer; flex:1; display:flex; flex-direction:column;">
+            ${imgHtml}
             <div class="card-top">
               <span class="card-badge">${c.cardType === 'EVENT' ? 'イベント' : 'キャラ'}</span>
               <span>Lv.${c.level}</span>
             </div>
             <div class="card-name">${c.title || c.dummyName}</div>
-            <div class="card-desc-preview">${c.description || ''}</div>
             <div class="card-stats">
-              <span class="stat-ap">AP${c.ap}</span>
-              <span class="stat-lp">LP${c.lp}</span>
+              <span class="stat-ap">AP${c.ap ?? '-'}</span>
+              <span class="stat-lp">LP${c.lp ?? '-'}</span>
             </div>
           </div>
           <div class="card-qty-controller">
@@ -860,11 +922,21 @@
             <button class="qty-btn" onclick="changeCardQty('${c.definitionId}', 1)">＋</button>
           </div>
         `;
-        grid.appendChild(item);
+        // Use addEventListener to safely pass the card object (avoids JSON escaping issues)
+        item.querySelector('.card-click-area').addEventListener('click', () => showCardModal(c));
+        cardGrid.appendChild(item);
       });
+
+      if (filtered.length === 0) {
+        const empty = document.createElement('div');
+        empty.style.cssText = 'color:var(--text-muted);text-align:center;padding:20px;grid-column:1/-1;';
+        empty.innerText = '該当カードが見つかりません';
+        cardGrid.appendChild(empty);
+      }
     }
 
     function filterCatalog(q) {
+      builderPage = 0;
       renderBuilderCatalog(q);
     }
 

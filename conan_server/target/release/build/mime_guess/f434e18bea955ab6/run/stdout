@@ -1,0 +1,1 @@
+cargo:rustc-env=MIME_TYPES_GENERATED_PATH=C:\dev\detective-conan\conan_server\target\release\build\mime_guess/f434e18bea955ab6\out\mime_types_generated.rs

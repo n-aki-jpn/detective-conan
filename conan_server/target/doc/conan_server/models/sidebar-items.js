@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CardOrientation","CardType","CasePhase","MatchPhase","Zone"],"fn":["default_entered_turn","default_orientation"],"struct":["CardDefinition","CardInstance","DeckCardItem","DeckDefinition"]};
