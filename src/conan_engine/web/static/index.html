@@ -77,36 +77,94 @@
     .counter-pill b { display: block; font-size: 0.82rem; color: var(--accent); }
 
     .zone-content { display: flex; gap: 6px; align-items: stretch; }
-    .fixed-cards-col { display: flex; flex-direction: column; gap: 4px; width: 85px; flex-shrink: 0; }
+    .fixed-cards-col {
+      display: flex; flex-direction: column; gap: 6px; width: 95px; flex-shrink: 0;
+      justify-content: center; align-items: center;
+    }
     .field-slots {
-      flex: 1; display: flex; gap: 6px; background: rgba(0,0,0,0.25);
+      flex: 1; display: flex; gap: 8px; background: rgba(0,0,0,0.25);
       padding: 6px; border-radius: 6px; overflow-x: auto;
-      scrollbar-width: thin; min-height: 125px; align-items: center;
+      scrollbar-width: thin; min-height: 130px; align-items: center;
     }
 
     /* Cards */
     .card {
       background: #1e293b; border: 1.5px solid #475569; border-radius: 6px;
-      width: 82px; height: 118px; padding: 2px; flex-shrink: 0;
+      width: 84px; height: 118px; padding: 0; flex-shrink: 0;
       display: flex; flex-direction: column; justify-content: space-between;
-      position: relative; box-shadow: 0 2px 4px rgba(0,0,0,0.3); font-size: 0.65rem;
-      cursor: pointer; overflow: hidden;
+      position: relative; box-shadow: 0 2px 5px rgba(0,0,0,0.35); font-size: 0.65rem;
+      cursor: pointer; overflow: hidden; box-sizing: border-box;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
     }
-    .card.CHARACTER { border-top: 3px solid #38bdf8; }
-    .card.PARTNER { border-top: 3px solid #f59e0b; }
-    .card.CASE { border-top: 3px solid #a855f7; }
+    .card:hover {
+      box-shadow: 0 4px 10px rgba(56, 189, 248, 0.3);
+    }
+    .card.CHARACTER { border-color: #38bdf8; }
+    .card.PARTNER { border-color: #f59e0b; }
+    .card.CASE {
+      width: 95px; height: 68px; border-color: #a855f7;
+    }
     
     .card.SLEEP { border-color: var(--sleep-color); opacity: 0.85; transform: rotate(5deg); }
     .card.STUN { border-color: var(--stun-color); filter: grayscale(80%); }
-    .card.secret { background: #334155; justify-content: center; align-items: center; color: #94a3b8; font-weight: bold; border-style: dashed; }
+    .card.secret {
+      background: #334155; justify-content: center; align-items: center;
+      color: #94a3b8; font-weight: bold; border-style: dashed;
+    }
     
-    .card-img-thumb {
-      width: 100%; height: 60px; object-fit: cover; border-radius: 3px; display: block;
+    /* Full image card layout */
+    .card-img-container {
+      width: 100%; height: 100%; position: relative; display: flex; flex-direction: column;
+    }
+    .card-img-full {
+      width: 100%; height: 100%; object-fit: cover; display: block;
+      border-radius: 4px;
+    }
+    .card.CASE .card-img-full {
+      object-fit: cover;
+    }
+    
+    /* Overlays on top of the image */
+    .card-overlay-top {
+      position: absolute; top: 2px; left: 3px; right: 3px;
+      display: flex; justify-content: space-between; align-items: center;
+      pointer-events: none; z-index: 2;
+    }
+    .badge-lv {
+      background: rgba(15, 23, 42, 0.85); color: #38bdf8; font-weight: bold;
+      font-size: 0.62rem; padding: 1px 4px; border-radius: 3px; border: 1px solid rgba(56, 189, 248, 0.4);
+      line-height: 1.1;
+    }
+    .badge-state {
+      font-size: 0.75rem; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.8));
+    }
+    
+    .card-overlay-bottom {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: linear-gradient(to top, rgba(15, 23, 42, 0.95) 0%, rgba(15, 23, 42, 0.7) 65%, rgba(15, 23, 42, 0) 100%);
+      padding: 12px 3px 2px 3px;
+      display: flex; justify-content: space-between; align-items: center;
+      pointer-events: none; font-weight: bold; font-size: 0.68rem; line-height: 1;
+      z-index: 2;
+    }
+    .overlay-ap {
+      color: #f87171; text-shadow: 0 1px 2px #000;
+      background: rgba(0,0,0,0.55); padding: 1px 4px; border-radius: 3px;
+    }
+    .overlay-lp {
+      color: #facc15; text-shadow: 0 1px 2px #000;
+      background: rgba(0,0,0,0.55); padding: 1px 4px; border-radius: 3px;
+    }
+
+    /* Fallback layout when image is not present */
+    .card-fallback {
+      width: 100%; height: 100%; padding: 4px; box-sizing: border-box;
+      display: flex; flex-direction: column; justify-content: space-between;
     }
     .card-top { display: flex; justify-content: space-between; font-weight: bold; font-size: 0.64rem; line-height: 1; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 2px; }
     .card-badge { color: #38bdf8; font-size: 0.58rem; }
-    .card-name { font-weight: bold; font-size: 0.68rem; margin: 1px 0; color: #f8fafc; line-height: 1.15; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-    .card-stats { display: flex; justify-content: space-between; font-weight: bold; font-size: 0.72rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1px; line-height: 1; }
+    .card-name { font-weight: bold; font-size: 0.66rem; margin: 2px 0; color: #f8fafc; line-height: 1.15; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .card-stats { display: flex; justify-content: space-between; font-weight: bold; font-size: 0.72rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 2px; line-height: 1; }
     .stat-ap { color: #f87171; }
     .stat-lp { color: #facc15; }
 
@@ -124,9 +182,9 @@
       scrollbar-width: none; -webkit-overflow-scrolling: touch;
     }
     .mobile-hand-scroll::-webkit-scrollbar { display: none; }
-    .mobile-hand-scroll .card { width: 95px; height: 138px; font-size: 0.7rem; }
-    .mobile-hand-scroll .card-img-thumb { height: 75px; }
-    .mobile-hand-scroll .card-name { font-size: 0.74rem; }
+    .mobile-hand-scroll .card { width: 95px; height: 135px; font-size: 0.7rem; }
+    .mobile-hand-scroll .card .badge-lv { font-size: 0.65rem; padding: 2px 5px; }
+    .mobile-hand-scroll .card .card-overlay-bottom { font-size: 0.74rem; padding-bottom: 3px; }
 
     .decision-banner {
       background: #1e293b; border: 1.5px solid var(--accent); border-radius: 8px;
@@ -645,7 +703,7 @@
       if (!imgEl) {
         imgEl = document.createElement('img');
         imgEl.id = 'modal-card-img';
-        imgEl.style.cssText = 'width:100%; max-width:280px; border-radius:8px; margin-bottom:10px; display:block; margin-left:auto; margin-right:auto;';
+        imgEl.style.cssText = 'width:100%; max-width:280px; max-height:380px; object-fit:contain; border-radius:8px; margin-bottom:10px; display:block; margin-left:auto; margin-right:auto; box-shadow:0 4px 15px rgba(0,0,0,0.6);';
         const descEl = document.getElementById('modal-card-desc');
         descEl.parentNode.insertBefore(imgEl, descEl);
       }
@@ -681,24 +739,50 @@
       }
 
       const typeLabel = card.cardType === 'PARTNER' ? 'パートナー' : (card.cardType === 'CASE' ? '事件' : 'キャラ');
-      const stateBadge = card.orientation === 'SLEEP' ? '<span style="color:#f59e0b;">💤</span>' : (card.orientation === 'STUN' ? '<span style="color:#ef4444;">⚡</span>' : '');
+      const stateBadge = card.orientation === 'SLEEP' ? '<span class="badge-state">💤</span>' : (card.orientation === 'STUN' ? '<span class="badge-state">⚡</span>' : '');
 
-      const imgHtml = card.mainPath
-        ? `<img src="/card-images/${card.mainPath}" class="card-img-thumb" loading="lazy" onerror="this.style.display='none'">`
-        : `<div style="height:60px;background:#0f172a;display:flex;align-items:center;justify-content:center;color:#475569;font-size:0.6rem;">NO IMG</div>`;
+      if (card.mainPath) {
+        el.innerHTML = `
+          <div class="card-img-container">
+            <img src="/card-images/${card.mainPath}" class="card-img-full" loading="lazy" onerror="this.parentElement.style.display='none'; this.parentElement.nextElementSibling.style.display='flex';">
+            <div class="card-overlay-top">
+              ${card.level > 0 ? `<span class="badge-lv">Lv.${card.level}</span>` : `<span></span>`}
+              ${stateBadge}
+            </div>
+            ${card.cardType !== 'CASE' ? `
+            <div class="card-overlay-bottom">
+              <span class="overlay-ap">AP ${card.ap ?? '-'}</span>
+              <span class="overlay-lp">LP ${card.lp ?? '-'}</span>
+            </div>` : ''}
+          </div>
+          <div class="card-fallback" style="display:none;">
+            <div class="card-top">
+              <span class="card-badge">${typeLabel}</span>
+              <span>${card.level > 0 ? 'Lv.' + card.level : ''}</span>
+            </div>
+            <div class="card-name">${card.name || card.definitionId} ${stateBadge}</div>
+            <div class="card-stats">
+              <span class="stat-ap">AP${card.ap ?? '-'}</span>
+              <span class="stat-lp">LP${card.lp ?? '-'}</span>
+            </div>
+          </div>
+        `;
+      } else {
+        el.innerHTML = `
+          <div class="card-fallback">
+            <div class="card-top">
+              <span class="card-badge">${typeLabel}</span>
+              <span>${card.level > 0 ? 'Lv.' + card.level : ''}</span>
+            </div>
+            <div class="card-name">${card.name || card.definitionId} ${stateBadge}</div>
+            <div class="card-stats">
+              <span class="stat-ap">AP${card.ap ?? '-'}</span>
+              <span class="stat-lp">LP${card.lp ?? '-'}</span>
+            </div>
+          </div>
+        `;
+      }
 
-      el.innerHTML = `
-        ${imgHtml}
-        <div class="card-top">
-          <span class="card-badge">${typeLabel}</span>
-          <span>${card.level > 0 ? 'Lv.' + card.level : ''}</span>
-        </div>
-        <div class="card-name">${card.name || card.definitionId} ${stateBadge}</div>
-        <div class="card-stats">
-          <span class="stat-ap">AP${card.ap ?? '-'}</span>
-          <span class="stat-lp">LP${card.lp ?? '-'}</span>
-        </div>
-      `;
       if (!disableModal) {
         el.onclick = (e) => {
           e.stopPropagation();
