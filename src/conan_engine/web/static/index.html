@@ -1,8 +1,10 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>名探偵コナンTCG モバイルWeb対戦 & デッキ構築</title>
   <style>
     :root {
@@ -17,191 +19,519 @@
       --stun-color: #ef4444;
       --safe-bottom: env(safe-area-inset-bottom, 0px);
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
-    body { background-color: var(--bg-color); color: var(--text); padding-bottom: calc(180px + var(--safe-bottom)); user-select: none; }
-    
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text);
+      padding-bottom: calc(180px + var(--safe-bottom));
+      user-select: none;
+    }
+
     /* Navigation Bar */
     .nav-bar {
-      position: sticky; top: 0; z-index: 100;
-      background: rgba(15, 23, 42, 0.98); backdrop-filter: blur(10px);
-      padding: 6px 12px; border-bottom: 1px solid var(--border-color);
-      display: flex; justify-content: space-between; align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(15, 23, 42, 0.98);
+      backdrop-filter: blur(10px);
+      padding: 6px 12px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
-    .nav-tabs { display: flex; gap: 6px; }
+
+    .nav-tabs {
+      display: flex;
+      gap: 6px;
+    }
+
     .nav-tab-btn {
-      background: #1e293b; color: var(--text-muted); border: 1px solid var(--border-color);
-      padding: 6px 12px; border-radius: 6px; font-weight: bold; font-size: 0.82rem; cursor: pointer; transition: 0.2s;
+      background: #1e293b;
+      color: var(--text-muted);
+      border: 1px solid var(--border-color);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-weight: bold;
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: 0.2s;
     }
+
     .nav-tab-btn.active {
-      background: #2563eb; color: #fff; border-color: #3b82f6; box-shadow: 0 0 10px rgba(37,99,235,0.4);
+      background: #2563eb;
+      color: #fff;
+      border-color: #3b82f6;
+      box-shadow: 0 0 10px rgba(37, 99, 235, 0.4);
     }
-    .nav-actions { display: flex; align-items: center; gap: 6px; }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
 
     .btn {
-      background: #2563eb; color: white; border: none; padding: 8px 14px;
-      border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.85rem;
-      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-      transition: 0.15s; min-height: 38px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 0.85rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: 0.15s;
+      min-height: 38px;
     }
-    .btn:active { transform: scale(0.96); opacity: 0.9; }
-    .btn-secondary { background: #475569; }
-    .btn-danger { background: #dc2626; }
-    .btn-success { background: #10b981; }
+
+    .btn:active {
+      transform: scale(0.96);
+      opacity: 0.9;
+    }
+
+    .btn-secondary {
+      background: #475569;
+    }
+
+    .btn-danger {
+      background: #dc2626;
+    }
+
+    .btn-success {
+      background: #10b981;
+    }
 
     /* Screen Views */
-    .screen-view { display: none; }
-    .screen-view.active { display: block; }
+    .screen-view {
+      display: none;
+    }
+
+    .screen-view.active {
+      display: block;
+    }
 
     /* ========== BATTLE SCREEN STYLES ========== */
     .battle-header {
-      background: rgba(30, 41, 59, 0.8); padding: 6px 12px;
-      border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;
+      background: rgba(30, 41, 59, 0.8);
+      padding: 6px 12px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
-    .status-badge { background: #0f172a; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 0.78rem; color: var(--accent); }
-    .board-container { padding: 8px; display: flex; flex-direction: column; gap: 8px; }
-    .player-zone { background: var(--panel-bg); border-radius: 8px; padding: 8px 10px; border: 1px solid var(--border-color); }
-    
-    .zone-header {
-      display: flex; justify-content: space-between; align-items: center;
-      margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.08);
-    }
-    .player-title { font-weight: bold; font-size: 0.85rem; }
-    
-    .counters-grid {
-      display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-bottom: 6px;
-    }
-    .counter-pill {
-      background: rgba(15, 23, 42, 0.6); padding: 3px 2px; border-radius: 4px;
-      text-align: center; font-size: 0.68rem; color: var(--text-muted); border: 1px solid rgba(255,255,255,0.05);
-    }
-    .counter-pill b { display: block; font-size: 0.82rem; color: var(--accent); }
 
-    .zone-content { display: flex; gap: 6px; align-items: stretch; }
-    .fixed-cards-col {
-      display: flex; flex-direction: column; gap: 6px; width: 95px; flex-shrink: 0;
-      justify-content: center; align-items: center;
+    .status-badge {
+      background: #0f172a;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-weight: bold;
+      font-size: 0.78rem;
+      color: var(--accent);
     }
+
+    .board-container {
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .player-zone {
+      background: var(--panel-bg);
+      border-radius: 8px;
+      padding: 8px 10px;
+      border: 1px solid var(--border-color);
+    }
+
+    .zone-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .player-title {
+      font-weight: bold;
+      font-size: 0.85rem;
+    }
+
+    .counters-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 4px;
+      margin-bottom: 6px;
+    }
+
+    .counter-pill {
+      background: rgba(15, 23, 42, 0.6);
+      padding: 3px 2px;
+      border-radius: 4px;
+      text-align: center;
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .counter-pill b {
+      display: block;
+      font-size: 0.82rem;
+      color: var(--accent);
+    }
+
+    .zone-content {
+      display: flex;
+      gap: 6px;
+      align-items: stretch;
+    }
+
+    .fixed-cards-col {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      width: 95px;
+      flex-shrink: 0;
+      justify-content: center;
+      align-items: center;
+    }
+
     .field-slots {
-      flex: 1; display: flex; gap: 8px; background: rgba(0,0,0,0.25);
-      padding: 6px; border-radius: 6px; overflow-x: auto;
-      scrollbar-width: thin; min-height: 130px; align-items: center;
+      flex: 1;
+      display: flex;
+      gap: 8px;
+      background: rgba(0, 0, 0, 0.25);
+      padding: 6px;
+      border-radius: 6px;
+      overflow-x: auto;
+      scrollbar-width: thin;
+      min-height: 130px;
+      align-items: center;
     }
 
     /* Cards */
     .card {
-      background: #1e293b; border: 1.5px solid #475569; border-radius: 6px;
-      width: 84px; height: 118px; padding: 0; flex-shrink: 0;
-      display: flex; flex-direction: column; justify-content: space-between;
-      position: relative; box-shadow: 0 2px 5px rgba(0,0,0,0.35); font-size: 0.65rem;
-      cursor: pointer; overflow: hidden; box-sizing: border-box;
+      background: #1e293b;
+      border: 1.5px solid #475569;
+      border-radius: 6px;
+      width: 84px;
+      height: 118px;
+      padding: 0;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.35);
+      font-size: 0.65rem;
+      cursor: pointer;
+      overflow: hidden;
+      box-sizing: border-box;
       transition: transform 0.15s ease, box-shadow 0.15s ease;
     }
+
     .card:hover {
       box-shadow: 0 4px 10px rgba(56, 189, 248, 0.3);
     }
-    .card.CHARACTER { border-color: #38bdf8; }
-    .card.PARTNER { border-color: #f59e0b; }
+
+    .card.CHARACTER {
+      border-color: #38bdf8;
+    }
+
+    .card.PARTNER {
+      border-color: #f59e0b;
+    }
+
     .card.CASE {
-      width: 95px; height: 68px; border-color: #a855f7;
+      width: 95px;
+      height: 68px;
+      border-color: #a855f7;
     }
-    
-    .card.SLEEP { border-color: var(--sleep-color); opacity: 0.85; transform: rotate(5deg); }
-    .card.STUN { border-color: var(--stun-color); filter: grayscale(80%); }
+
+    .card.SLEEP {
+      border-color: var(--sleep-color);
+      opacity: 0.85;
+      transform: rotate(5deg);
+    }
+
+    .card.STUN {
+      border-color: var(--stun-color);
+      filter: grayscale(80%);
+    }
+
     .card.secret {
-      background: #334155; justify-content: center; align-items: center;
-      color: #94a3b8; font-weight: bold; border-style: dashed;
+      background: #334155;
+      justify-content: center;
+      align-items: center;
+      color: #94a3b8;
+      font-weight: bold;
+      border-style: dashed;
     }
-    
+
     /* Full image card layout */
     .card-img-container {
-      width: 100%; height: 100%; position: relative; display: flex; flex-direction: column;
+      width: 100%;
+      height: 100%;
+      position: relative;
+      display: flex;
+      flex-direction: column;
     }
+
     .card-img-full {
-      width: 100%; height: 100%; object-fit: cover; display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
       border-radius: 4px;
     }
+
     .card.CASE .card-img-full {
       object-fit: cover;
     }
-    
+
     /* Overlays on top of the image */
     .card-overlay-top {
-      position: absolute; top: 2px; left: 3px; right: 3px;
-      display: flex; justify-content: space-between; align-items: center;
-      pointer-events: none; z-index: 2;
-    }
-    .badge-lv {
-      background: rgba(15, 23, 42, 0.85); color: #38bdf8; font-weight: bold;
-      font-size: 0.62rem; padding: 1px 4px; border-radius: 3px; border: 1px solid rgba(56, 189, 248, 0.4);
-      line-height: 1.1;
-    }
-    .badge-state {
-      font-size: 0.75rem; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.8));
-    }
-    
-    .card-overlay-bottom {
-      position: absolute; bottom: 0; left: 0; right: 0;
-      background: linear-gradient(to top, rgba(15, 23, 42, 0.95) 0%, rgba(15, 23, 42, 0.7) 65%, rgba(15, 23, 42, 0) 100%);
-      padding: 12px 3px 2px 3px;
-      display: flex; justify-content: space-between; align-items: center;
-      pointer-events: none; font-weight: bold; font-size: 0.68rem; line-height: 1;
+      position: absolute;
+      top: 2px;
+      left: 3px;
+      right: 3px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: none;
       z-index: 2;
     }
-    .overlay-ap {
-      color: #f87171; text-shadow: 0 1px 2px #000;
-      background: rgba(0,0,0,0.55); padding: 1px 4px; border-radius: 3px;
+
+    .badge-lv {
+      background: rgba(15, 23, 42, 0.85);
+      color: #38bdf8;
+      font-weight: bold;
+      font-size: 0.62rem;
+      padding: 1px 4px;
+      border-radius: 3px;
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      line-height: 1.1;
     }
+
+    .badge-state {
+      font-size: 0.75rem;
+      filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8));
+    }
+
+    .card-overlay-bottom {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(to top, rgba(15, 23, 42, 0.95) 0%, rgba(15, 23, 42, 0.7) 65%, rgba(15, 23, 42, 0) 100%);
+      padding: 12px 3px 2px 3px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: none;
+      font-weight: bold;
+      font-size: 0.68rem;
+      line-height: 1;
+      z-index: 2;
+    }
+
+    .overlay-ap {
+      color: #f87171;
+      text-shadow: 0 1px 2px #000;
+      background: rgba(0, 0, 0, 0.55);
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+
     .overlay-lp {
-      color: #facc15; text-shadow: 0 1px 2px #000;
-      background: rgba(0,0,0,0.55); padding: 1px 4px; border-radius: 3px;
+      color: #facc15;
+      text-shadow: 0 1px 2px #000;
+      background: rgba(0, 0, 0, 0.55);
+      padding: 1px 4px;
+      border-radius: 3px;
     }
 
     /* Fallback layout when image is not present */
     .card-fallback {
-      width: 100%; height: 100%; padding: 4px; box-sizing: border-box;
-      display: flex; flex-direction: column; justify-content: space-between;
+      width: 100%;
+      height: 100%;
+      padding: 4px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
     }
-    .card-top { display: flex; justify-content: space-between; font-weight: bold; font-size: 0.64rem; line-height: 1; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 2px; }
-    .card-badge { color: #38bdf8; font-size: 0.58rem; }
-    .card-name { font-weight: bold; font-size: 0.66rem; margin: 2px 0; color: #f8fafc; line-height: 1.15; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-    .card-stats { display: flex; justify-content: space-between; font-weight: bold; font-size: 0.72rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 2px; line-height: 1; }
-    .stat-ap { color: #f87171; }
-    .stat-lp { color: #facc15; }
+
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      font-weight: bold;
+      font-size: 0.64rem;
+      line-height: 1;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 2px;
+    }
+
+    .card-badge {
+      color: #38bdf8;
+      font-size: 0.58rem;
+    }
+
+    .card-name {
+      font-weight: bold;
+      font-size: 0.66rem;
+      margin: 2px 0;
+      color: #f8fafc;
+      line-height: 1.15;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .card-stats {
+      display: flex;
+      justify-content: space-between;
+      font-weight: bold;
+      font-size: 0.72rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      padding-top: 2px;
+      line-height: 1;
+    }
+
+    .stat-ap {
+      color: #f87171;
+    }
+
+    .stat-lp {
+      color: #facc15;
+    }
 
     /* Bottom Dock */
     .bottom-dock {
-      position: fixed; bottom: 0; left: 0; right: 0; z-index: 90;
-      background: rgba(15, 23, 42, 0.98); backdrop-filter: blur(12px);
-      border-top: 2px solid var(--accent); padding: 8px 10px calc(8px + var(--safe-bottom)) 10px;
-      box-shadow: 0 -4px 15px rgba(0,0,0,0.5);
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 90;
+      background: rgba(15, 23, 42, 0.98);
+      backdrop-filter: blur(12px);
+      border-top: 2px solid var(--accent);
+      padding: 8px 10px calc(8px + var(--safe-bottom)) 10px;
+      box-shadow: 0 -4px 15px rgba(0, 0, 0, 0.5);
     }
-    .dock-tabs { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-    .dock-title { font-size: 0.82rem; font-weight: bold; color: var(--accent); }
+
+    .dock-tabs {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .dock-title {
+      font-size: 0.82rem;
+      font-weight: bold;
+      color: var(--accent);
+    }
+
     .mobile-hand-scroll {
-      display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px;
-      scrollbar-width: none; -webkit-overflow-scrolling: touch;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 4px 2px;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
     }
-    .mobile-hand-scroll::-webkit-scrollbar { display: none; }
-    .mobile-hand-scroll .card { width: 95px; height: 135px; font-size: 0.7rem; }
-    .mobile-hand-scroll .card .badge-lv { font-size: 0.65rem; padding: 2px 5px; }
-    .mobile-hand-scroll .card .card-overlay-bottom { font-size: 0.74rem; padding-bottom: 3px; }
+
+    .mobile-hand-scroll::-webkit-scrollbar {
+      display: none;
+    }
+
+    .mobile-hand-scroll .card {
+      width: 95px;
+      height: 135px;
+      font-size: 0.7rem;
+    }
+
+    .mobile-hand-scroll .card .badge-lv {
+      font-size: 0.65rem;
+      padding: 2px 5px;
+    }
+
+    .mobile-hand-scroll .card .card-overlay-bottom {
+      font-size: 0.74rem;
+      padding-bottom: 3px;
+    }
 
     .decision-banner {
-      background: #1e293b; border: 1.5px solid var(--accent); border-radius: 8px;
-      padding: 10px; margin-bottom: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+      background: #1e293b;
+      border: 1.5px solid var(--accent);
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 8px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
     }
-    .decision-title { font-size: 0.88rem; font-weight: bold; color: var(--accent); margin-bottom: 4px; }
-    .decision-desc { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 8px; }
-    .decision-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+
+    .decision-title {
+      font-size: 0.88rem;
+      font-weight: bold;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+
+    .decision-desc {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .decision-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
 
     /* Mulligan Selector */
-    .mulligan-scroll { display: flex; gap: 8px; overflow-x: auto; padding: 6px 0; }
-    .mulligan-item {
-      display: flex; flex-direction: column; align-items: center; gap: 4px;
-      padding: 4px; border-radius: 6px; border: 2px solid transparent; cursor: pointer;
+    .mulligan-scroll {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 6px 0;
     }
-    .mulligan-item.selected { border-color: #ef4444; background: rgba(239, 68, 68, 0.2); }
-    .mulligan-item.selected::after { content: "✕ 戻す"; color: #ef4444; font-size: 0.7rem; font-weight: bold; }
+
+    .mulligan-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 4px;
+      border-radius: 6px;
+      border: 2px solid transparent;
+      cursor: pointer;
+    }
+
+    .mulligan-item.selected {
+      border-color: #ef4444;
+      background: rgba(239, 68, 68, 0.2);
+    }
+
+    .mulligan-item.selected::after {
+      content: "✕ 戻す";
+      color: #ef4444;
+      font-size: 0.7rem;
+      font-weight: bold;
+    }
 
     /* ========== BATTLE ACTION LOG STYLES ========== */
     .battle-log-zone {
@@ -210,8 +540,9 @@
       border-radius: 8px;
       padding: 8px 10px;
       margin-top: 4px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
     }
+
     .battle-log-header {
       display: flex;
       justify-content: space-between;
@@ -219,6 +550,7 @@
       cursor: pointer;
       user-select: none;
     }
+
     .battle-log-latest {
       font-size: 0.72rem;
       color: #cbd5e1;
@@ -231,6 +563,7 @@
       text-overflow: ellipsis;
       border-left: 3px solid var(--accent);
     }
+
     .battle-log-list {
       max-height: 180px;
       overflow-y: auto;
@@ -243,6 +576,7 @@
       border-top: 1px solid rgba(255, 255, 255, 0.08);
       scrollbar-width: thin;
     }
+
     .log-item {
       padding: 2px 6px;
       border-radius: 4px;
@@ -250,6 +584,7 @@
       color: #e2e8f0;
       word-break: break-all;
     }
+
     .log-turn-divider {
       background: rgba(56, 189, 248, 0.15);
       color: var(--accent);
@@ -258,22 +593,27 @@
       padding: 3px 6px;
       margin-top: 4px;
     }
+
     .log-attack {
       border-left: 3px solid #ef4444;
       background: rgba(239, 68, 68, 0.1);
     }
+
     .log-cutin {
       border-left: 3px solid #a855f7;
       background: rgba(168, 85, 247, 0.1);
     }
+
     .log-guard {
       border-left: 3px solid #eab308;
       background: rgba(234, 179, 8, 0.1);
     }
+
     .log-play {
       border-left: 3px solid #3b82f6;
       background: rgba(59, 130, 246, 0.1);
     }
+
     .log-finish {
       border-left: 3px solid #10b981;
       background: rgba(16, 185, 129, 0.2);
@@ -281,157 +621,407 @@
     }
 
     /* ========== DECK BUILDER STYLES ========== */
-    .deck-builder-container { padding: 10px; display: flex; flex-direction: column; gap: 12px; }
+    .deck-builder-container {
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
     .deck-summary-card {
-      background: #1e293b; border: 1px solid var(--border-color); border-radius: 8px;
-      padding: 12px; display: flex; flex-direction: column; gap: 8px;
+      background: #1e293b;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
+
     .deck-count-bar {
-      display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; font-weight: bold;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.9rem;
+      font-weight: bold;
     }
-    .deck-valid-badge { padding: 3px 8px; border-radius: 4px; font-size: 0.78rem; font-weight: bold; }
-    .deck-valid-ok { background: #065f46; color: #34d399; }
-    .deck-valid-ng { background: #7f1d1d; color: #f87171; }
+
+    .deck-valid-badge {
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.78rem;
+      font-weight: bold;
+    }
+
+    .deck-valid-ok {
+      background: #065f46;
+      color: #34d399;
+    }
+
+    .deck-valid-ng {
+      background: #7f1d1d;
+      color: #f87171;
+    }
 
     .fixed-select-row {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.8rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      font-size: 0.8rem;
     }
+
     .fixed-select-box select {
-      width: 100%; background: #0f172a; color: white; border: 1px solid var(--border-color);
-      padding: 6px; border-radius: 6px; font-size: 0.78rem; margin-top: 4px;
+      width: 100%;
+      background: #0f172a;
+      color: white;
+      border: 1px solid var(--border-color);
+      padding: 6px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      margin-top: 4px;
     }
 
     .catalog-search-bar {
-      display: flex; gap: 6px; margin-bottom: 8px;
+      display: flex;
+      gap: 6px;
+      margin-bottom: 8px;
     }
+
     .catalog-search-bar input {
-      flex: 1; background: #0f172a; color: white; border: 1px solid var(--border-color);
-      padding: 8px 12px; border-radius: 6px; font-size: 0.82rem; outline: none;
+      flex: 1;
+      background: #0f172a;
+      color: white;
+      border: 1px solid var(--border-color);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      outline: none;
     }
+
     .catalog-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
       gap: 10px;
       width: 100%;
     }
+
     @media (min-width: 640px) {
       .catalog-grid {
         grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
       }
     }
+
     @media (min-width: 1024px) {
       .catalog-grid {
         grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
       }
     }
+
     .catalog-card-item {
-      background: #1e293b; border: 1.5px solid #475569; border-radius: 8px;
-      padding: 6px; display: flex; flex-direction: column; justify-content: space-between;
-      min-height: 155px; position: relative; font-size: 0.7rem; box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+      background: #1e293b;
+      border: 1.5px solid #475569;
+      border-radius: 8px;
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 155px;
+      position: relative;
+      font-size: 0.7rem;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
       box-sizing: border-box;
     }
+
     .card-qty-controller {
-      display: flex; justify-content: space-between; align-items: center; margin-top: 6px;
-      background: #0f172a; border-radius: 4px; padding: 2px 4px; border: 1px solid rgba(255,255,255,0.08);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 6px;
+      background: #0f172a;
+      border-radius: 4px;
+      padding: 2px 4px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
     }
+
     .color-filter-bar {
-      display: flex; gap: 5px; overflow-x: auto; padding: 4px 0 6px 0;
+      display: flex;
+      gap: 5px;
+      overflow-x: auto;
+      padding: 4px 0 6px 0;
       scrollbar-width: none;
     }
-    .color-filter-bar::-webkit-scrollbar { display: none; }
-    .color-pill {
-      background: #1e293b; color: white; border: 1.5px solid #475569;
-      padding: 4px 10px; border-radius: 20px; font-size: 0.74rem; font-weight: bold;
-      cursor: pointer; white-space: nowrap; transition: all 0.15s ease;
+
+    .color-filter-bar::-webkit-scrollbar {
+      display: none;
     }
+
+    .color-pill {
+      background: #1e293b;
+      color: white;
+      border: 1.5px solid #475569;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.74rem;
+      font-weight: bold;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+    }
+
     .color-pill.active {
-      background: var(--accent); color: white; border-color: var(--accent);
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
       box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
     }
-    .color-pill:hover { opacity: 0.9; }
+
+    .color-pill:hover {
+      opacity: 0.9;
+    }
+
     .deck-sticky-toolbar {
-      position: sticky; top: 44px; z-index: 40;
-      background: rgba(30, 41, 59, 0.98); backdrop-filter: blur(8px);
-      border: 1px solid var(--border-color); border-radius: 8px;
-      padding: 8px 10px; display: flex; flex-direction: column; gap: 6px;
+      position: sticky;
+      top: 44px;
+      z-index: 40;
+      background: rgba(30, 41, 59, 0.98);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
       box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
     }
-    .level-filter-bar { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
-    .level-pill {
-      padding: 3px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: bold;
-      border: 1px solid #475569; cursor: pointer; background: #0f172a; color: #cbd5e1;
-      transition: 0.15s; display: inline-flex; align-items: center; gap: 3px;
+
+    .level-filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: center;
     }
+
+    .level-pill {
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: bold;
+      border: 1px solid #475569;
+      cursor: pointer;
+      background: #0f172a;
+      color: #cbd5e1;
+      transition: 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+
     .level-pill.active {
-      background: #2563eb; color: #fff; border-color: #60a5fa;
+      background: #2563eb;
+      color: #fff;
+      border-color: #60a5fa;
       box-shadow: 0 0 8px rgba(37, 99, 235, 0.5);
     }
-    .level-pill .lv-cnt { color: #64748b; font-size: 0.66rem; }
-    .level-pill .lv-cnt.nonzero { color: #38bdf8; }
-    .level-pill.active .lv-cnt, .level-pill.active .lv-cnt.nonzero { color: #e0f2fe; }
+
+    .level-pill .lv-cnt {
+      color: #64748b;
+      font-size: 0.66rem;
+    }
+
+    .level-pill .lv-cnt.nonzero {
+      color: #38bdf8;
+    }
+
+    .level-pill.active .lv-cnt,
+    .level-pill.active .lv-cnt.nonzero {
+      color: #e0f2fe;
+    }
 
     /* Fixed Previews */
     .fixed-preview-card {
-      background: #0f172a; border: 1px solid var(--border-color); border-radius: 6px;
-      padding: 8px; display: flex; flex-direction: column; gap: 4px; cursor: pointer;
-      transition: border-color 0.15s ease; min-height: 90px;
+      background: #0f172a;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      cursor: pointer;
+      transition: border-color 0.15s ease;
+      min-height: 90px;
     }
-    .fixed-preview-card:hover { border-color: var(--accent); }
+
+    .fixed-preview-card:hover {
+      border-color: var(--accent);
+    }
+
     .preview-header {
-      display: flex; justify-content: space-between; align-items: center;
-      font-weight: bold; font-size: 0.76rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: bold;
+      font-size: 0.76rem;
     }
-    .preview-colors { display: flex; gap: 3px; align-items: center; }
+
+    .preview-colors {
+      display: flex;
+      gap: 3px;
+      align-items: center;
+    }
+
     .color-tag {
-      padding: 1px 5px; border-radius: 3px; font-size: 0.65rem; font-weight: bold; color: white;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 0.65rem;
+      font-weight: bold;
+      color: white;
     }
-    .color-tag.青 { background: #0284c7; }
-    .color-tag.緑 { background: #16a34a; }
-    .color-tag.白 { background: #64748b; }
-    .color-tag.赤 { background: #dc2626; }
-    .color-tag.黄 { background: #ca8a04; }
-    .color-tag.黒 { background: #334155; border: 1px solid #64748b; }
-    .color-tag.全色 { background: linear-gradient(90deg, #0284c7, #16a34a, #dc2626, #ca8a04); }
+
+    .color-tag.青 {
+      background: #0284c7;
+    }
+
+    .color-tag.緑 {
+      background: #16a34a;
+    }
+
+    .color-tag.白 {
+      background: #64748b;
+    }
+
+    .color-tag.赤 {
+      background: #dc2626;
+    }
+
+    .color-tag.黄 {
+      background: #ca8a04;
+    }
+
+    .color-tag.黒 {
+      background: #334155;
+      border: 1px solid #64748b;
+    }
+
+    .color-tag.全色 {
+      background: linear-gradient(90deg, #0284c7, #16a34a, #dc2626, #ca8a04);
+    }
 
     .preview-body {
-      font-size: 0.7rem; color: #cbd5e1; line-height: 1.35; max-height: 60px;
-      overflow-y: auto; white-space: pre-wrap; background: rgba(0,0,0,0.3);
-      padding: 4px 6px; border-radius: 4px;
+      font-size: 0.7rem;
+      color: #cbd5e1;
+      line-height: 1.35;
+      max-height: 60px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 4px 6px;
+      border-radius: 4px;
     }
 
     .view-toggle-btn {
-      flex: 1; padding: 7px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: bold;
-      border: 1.5px solid #475569; background: #1e293b; color: #94a3b8; cursor: pointer;
+      flex: 1;
+      padding: 7px 10px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: bold;
+      border: 1.5px solid #475569;
+      background: #1e293b;
+      color: #94a3b8;
+      cursor: pointer;
       transition: all 0.15s ease;
     }
+
     .view-toggle-btn.active {
-      background: #0f172a; color: var(--accent); border-color: var(--accent);
+      background: #0f172a;
+      color: var(--accent);
+      border-color: var(--accent);
       box-shadow: 0 0 8px rgba(56, 189, 248, 0.25);
     }
+
     .qty-btn {
-      background: #334155; color: white; border: none; width: 24px; height: 24px;
-      border-radius: 4px; font-weight: bold; font-size: 0.9rem; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
+      background: #334155;
+      color: white;
+      border: none;
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      font-weight: bold;
+      font-size: 0.9rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-    .qty-btn:active { background: #2563eb; }
-    .qty-num { font-weight: bold; color: var(--accent); font-size: 0.85rem; }
+
+    .qty-btn:active {
+      background: #2563eb;
+    }
+
+    .qty-num {
+      font-weight: bold;
+      color: var(--accent);
+      font-size: 0.85rem;
+    }
 
     /* Modal */
     .card-modal-backdrop {
-      position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 200;
-      background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px);
-      display: none; justify-content: center; align-items: center; padding: 20px;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 200;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(4px);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
     }
+
     .card-modal-content {
-      background: #1e293b; border: 2px solid var(--accent); border-radius: 12px;
-      width: 100%; max-width: 320px; padding: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      background: #1e293b;
+      border: 2px solid var(--accent);
+      border-radius: 12px;
+      width: 100%;
+      max-width: 320px;
+      padding: 16px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
     }
-    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; }
-    .modal-title { font-size: 1rem; font-weight: bold; color: #f8fafc; }
-    .modal-body { font-size: 0.82rem; line-height: 1.4; color: #cbd5e1; white-space: pre-wrap; margin-bottom: 14px; max-height: 200px; overflow-y: auto; }
-    .modal-footer { display: flex; justify-content: space-between; align-items: center; }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 6px;
+    }
+
+    .modal-title {
+      font-size: 1rem;
+      font-weight: bold;
+      color: #f8fafc;
+    }
+
+    .modal-body {
+      font-size: 0.82rem;
+      line-height: 1.4;
+      color: #cbd5e1;
+      white-space: pre-wrap;
+      margin-bottom: 14px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .modal-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
   </style>
 </head>
+
 <body>
   <!-- Top Navigation Bar -->
   <nav class="nav-bar">
@@ -440,10 +1030,14 @@
       <button id="tab-deck" class="nav-tab-btn" onclick="switchTab('deck')">🃏 デッキ構築</button>
     </div>
     <div class="nav-actions">
-      <button id="bgm-toggle-btn" class="btn btn-secondary" onclick="toggleBgm()" style="padding:4px 8px; font-size:0.75rem; min-height:28px;" title="対戦BGMのON/OFF">🔊 BGM</button>
-      <input id="bgm-volume-slider" type="range" min="0" max="1" step="0.05" value="0.35" oninput="setBgmVolume(this.value)" style="width:54px; accent-color:#38bdf8; cursor:pointer;" title="BGM音量">
-      <button class="btn btn-secondary" onclick="showRoomModal()" style="padding:4px 8px; font-size:0.75rem; min-height:28px;">📶 対戦ルーム</button>
-      <button class="btn btn-secondary" onclick="resetMatch()" style="padding:4px 8px; font-size:0.75rem; min-height:28px;">リセット</button>
+      <button id="bgm-toggle-btn" class="btn btn-secondary" onclick="toggleBgm()"
+        style="padding:4px 8px; font-size:0.75rem; min-height:28px;" title="対戦BGMのON/OFF">🔊 BGM</button>
+      <input id="bgm-volume-slider" type="range" min="0" max="1" step="0.05" value="0.35"
+        oninput="setBgmVolume(this.value)" style="width:54px; accent-color:#38bdf8; cursor:pointer;" title="BGM音量">
+      <button class="btn btn-secondary" onclick="showRoomModal()"
+        style="padding:4px 8px; font-size:0.75rem; min-height:28px;">📶 対戦ルーム</button>
+      <button class="btn btn-secondary" onclick="resetMatch()"
+        style="padding:4px 8px; font-size:0.75rem; min-height:28px;">リセット</button>
     </div>
   </nav>
   <audio id="battle-bgm" src="/audio/battle.mp3" loop preload="auto"></audio>
@@ -471,29 +1065,37 @@
           <button class="btn btn-success" onclick="createNewRoom()" style="width:100%;">
             🆕 ルームを作成する (4桁コード)
           </button>
-          <div id="room-created-info" style="display:none; background:#0f172a; padding:8px; border-radius:6px; border:1px solid #38bdf8; margin-top:4px;">
+          <div id="room-created-info"
+            style="display:none; background:#0f172a; padding:8px; border-radius:6px; border:1px solid #38bdf8; margin-top:4px;">
             <div style="font-size:0.75rem; color:var(--text-muted);">作成された部屋番号:</div>
-            <div id="room-code-display" style="font-size:1.4rem; font-weight:bold; color:#38bdf8; text-align:center; font-family:monospace;">-</div>
+            <div id="room-code-display"
+              style="font-size:1.4rem; font-weight:bold; color:#38bdf8; text-align:center; font-family:monospace;">-
+            </div>
             <div style="font-size:0.72rem; color:var(--text-muted); margin-top:4px;">相手用参加URL:</div>
-            <input type="text" id="room-join-url-input" readonly style="width:100%; background:#1e293b; color:white; border:1px solid var(--border-color); padding:4px 6px; border-radius:4px; font-size:0.72rem; margin-top:2px;">
-            <button class="btn btn-secondary" onclick="copyJoinUrl()" style="width:100%; margin-top:6px; font-size:0.75rem; min-height:28px;">
+            <input type="text" id="room-join-url-input" readonly
+              style="width:100%; background:#1e293b; color:white; border:1px solid var(--border-color); padding:4px 6px; border-radius:4px; font-size:0.72rem; margin-top:2px;">
+            <button class="btn btn-secondary" onclick="copyJoinUrl()"
+              style="width:100%; margin-top:6px; font-size:0.75rem; min-height:28px;">
               📋 参加URLをコピー
             </button>
           </div>
         </div>
 
         <!-- Join Room -->
-        <div style="display:flex; flex-direction:column; gap:6px; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px;">
+        <div
+          style="display:flex; flex-direction:column; gap:6px; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px;">
           <span style="font-weight:bold; color:var(--text);">2. 相手の部屋に参加 (スマホ等)</span>
           <div style="display:flex; gap:6px;">
-            <input type="text" id="join-room-input" placeholder="4桁の部屋番号 (例: 1234)" style="flex:1; background:#0f172a; color:white; border:1px solid var(--border-color); padding:8px; border-radius:6px; font-size:0.85rem; text-align:center;">
+            <input type="text" id="join-room-input" placeholder="4桁の部屋番号 (例: 1234)"
+              style="flex:1; background:#0f172a; color:white; border:1px solid var(--border-color); padding:8px; border-radius:6px; font-size:0.85rem; text-align:center;">
             <button class="btn" onclick="joinExistingRoom()" style="padding:8px 14px;">入室</button>
           </div>
         </div>
 
         <!-- Local reset -->
         <div style="border-top:1px solid rgba(255,255,255,0.1); padding-top:8px;">
-          <button class="btn btn-secondary" onclick="returnToDefaultRoom()" style="width:100%; font-size:0.75rem; min-height:30px;">
+          <button class="btn btn-secondary" onclick="returnToDefaultRoom()"
+            style="width:100%; font-size:0.75rem; min-height:30px;">
             🏠 既定のローカル/CPU部屋に戻る
           </button>
         </div>
@@ -506,31 +1108,37 @@
     <div class="battle-header">
       <div style="display:flex; align-items:center; gap:6px;">
         <span class="status-badge" id="match-info">T:1</span>
-        <label style="font-size:0.75rem; display:flex; align-items:center; gap:3px; background:#0f172a; padding:4px 6px; border-radius:4px; border:1px solid #475569;">
+        <label
+          style="font-size:0.75rem; display:flex; align-items:center; gap:3px; background:#0f172a; padding:4px 6px; border-radius:4px; border:1px solid #475569;">
           <input type="checkbox" id="cpu-toggle" onchange="toggleCpu(this.checked)" checked>
           <span>CPU</span>
         </label>
       </div>
-      <select id="player-select" onchange="switchView(this.value)" style="background:#0f172a; color:white; border:1px solid #475569; padding:4px; border-radius:4px; font-size:0.75rem;">
+      <select id="player-select" onchange="switchView(this.value)"
+        style="background:#0f172a; color:white; border:1px solid #475569; padding:4px; border-radius:4px; font-size:0.75rem;">
         <option value="player1">P1視点</option>
         <option value="player2">P2視点</option>
       </select>
     </div>
 
-    <div id="battle-deck-bar" style="display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:6px 10px; background:rgba(15,23,42,0.75); border-bottom:1px solid var(--border-color); font-size:0.75rem;">
+    <div id="battle-deck-bar"
+      style="display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:6px 10px; background:rgba(15,23,42,0.75); border-bottom:1px solid var(--border-color); font-size:0.75rem;">
       <label style="display:flex; align-items:center; gap:4px; flex:1; min-width:150px;">
         <span style="color:#38bdf8; font-weight:bold; white-space:nowrap;">P1:</span>
-        <select id="battle-p1-deck" style="flex:1; min-width:0; background:#0f172a; color:white; border:1px solid #475569; padding:4px 6px; border-radius:4px; font-size:0.75rem;">
+        <select id="battle-p1-deck"
+          style="flex:1; min-width:0; background:#0f172a; color:white; border:1px solid #475569; padding:4px 6px; border-radius:4px; font-size:0.75rem;">
           <option value="">(現在のデッキ)</option>
         </select>
       </label>
       <label style="display:flex; align-items:center; gap:4px; flex:1; min-width:150px;">
         <span style="color:#f87171; font-weight:bold; white-space:nowrap;">CPU/P2:</span>
-        <select id="battle-p2-deck" style="flex:1; min-width:0; background:#0f172a; color:white; border:1px solid #475569; padding:4px 6px; border-radius:4px; font-size:0.75rem;">
+        <select id="battle-p2-deck"
+          style="flex:1; min-width:0; background:#0f172a; color:white; border:1px solid #475569; padding:4px 6px; border-radius:4px; font-size:0.75rem;">
           <option value="">(現在のデッキ)</option>
         </select>
       </label>
-      <button class="btn btn-secondary" onclick="resetMatch()" style="padding:4px 10px; font-size:0.75rem; min-height:26px; white-space:nowrap;">🔄 デッキ適用</button>
+      <button class="btn btn-secondary" onclick="resetMatch()"
+        style="padding:4px 10px; font-size:0.75rem; min-height:26px; white-space:nowrap;">🔄 デッキ適用</button>
     </div>
 
     <div class="board-container">
@@ -551,8 +1159,12 @@
           <div class="counter-pill">山札<b id="opp-deck">-</b></div>
           <div class="counter-pill">手札<b id="opp-hand-count">-</b></div>
           <div class="counter-pill">FILE<b id="opp-file">-</b></div>
-          <div class="counter-pill" onclick="openZoneModal('opp', 'evidence')" style="cursor:pointer; border:1px solid rgba(56,189,248,0.5);" title="タップで相手の証拠を確認">🔍証拠<b id="opp-evidence">-</b></div>
-          <div class="counter-pill" onclick="openZoneModal('opp', 'remove')" style="cursor:pointer; border:1px solid rgba(148,163,184,0.5);" title="タップで相手の除外カード一覧を確認">🗑️除外<b id="opp-remove">-</b></div>
+          <div class="counter-pill" onclick="openZoneModal('opp', 'evidence')"
+            style="cursor:pointer; border:1px solid rgba(56,189,248,0.5);" title="タップで相手の証拠を確認">🔍証拠<b
+              id="opp-evidence">-</b></div>
+          <div class="counter-pill" onclick="openZoneModal('opp', 'remove')"
+            style="cursor:pointer; border:1px solid rgba(148,163,184,0.5);" title="タップで相手の除外カード一覧を確認">🗑️除外<b
+              id="opp-remove">-</b></div>
         </div>
         <div class="zone-content">
           <div class="fixed-cards-col">
@@ -573,8 +1185,12 @@
           <div class="counter-pill">山札<b id="me-deck">-</b></div>
           <div class="counter-pill">手札<b id="me-hand-count">-</b></div>
           <div class="counter-pill">FILE<b id="me-file">-</b></div>
-          <div class="counter-pill" onclick="openZoneModal('me', 'evidence')" style="cursor:pointer; border:1px solid rgba(56,189,248,0.5);" title="タップで自分の証拠を確認">🔍証拠<b id="me-evidence">-</b></div>
-          <div class="counter-pill" onclick="openZoneModal('me', 'remove')" style="cursor:pointer; border:1px solid rgba(148,163,184,0.5);" title="タップで自分の除外カード一覧を確認">🗑️除外<b id="me-remove">-</b></div>
+          <div class="counter-pill" onclick="openZoneModal('me', 'evidence')"
+            style="cursor:pointer; border:1px solid rgba(56,189,248,0.5);" title="タップで自分の証拠を確認">🔍証拠<b
+              id="me-evidence">-</b></div>
+          <div class="counter-pill" onclick="openZoneModal('me', 'remove')"
+            style="cursor:pointer; border:1px solid rgba(148,163,184,0.5);" title="タップで自分の除外カード一覧を確認">🗑️除外<b
+              id="me-remove">-</b></div>
         </div>
         <div class="zone-content">
           <div class="fixed-cards-col">
@@ -590,10 +1206,12 @@
         <div class="battle-log-header" onclick="toggleLogExpanded()">
           <div style="display:flex; align-items:center; gap:6px;">
             <span style="font-weight:bold; font-size:0.82rem; color:var(--text);">📜 対戦ログ / 履歴</span>
-            <span id="log-count-badge" style="font-size:0.65rem; background:#1e293b; color:var(--accent); border:1px solid #475569; padding:1px 6px; border-radius:10px;">0件</span>
+            <span id="log-count-badge"
+              style="font-size:0.65rem; background:#1e293b; color:var(--accent); border:1px solid #475569; padding:1px 6px; border-radius:10px;">0件</span>
           </div>
           <div style="display:flex; align-items:center; gap:6px;">
-            <button class="btn btn-secondary" onclick="event.stopPropagation(); scrollLogToBottom();" style="font-size:0.65rem; padding:2px 8px; min-height:22px;">⬇ 最新</button>
+            <button class="btn btn-secondary" onclick="event.stopPropagation(); scrollLogToBottom();"
+              style="font-size:0.65rem; padding:2px 8px; min-height:22px;">⬇ 最新</button>
             <span id="log-toggle-icon" style="font-size:0.75rem; color:var(--text-muted);">▲ 閉じる</span>
           </div>
         </div>
@@ -618,24 +1236,31 @@
   <div id="screen-deck" class="screen-view">
     <div class="deck-builder-container">
       <!-- Deck Slot Selector Bar -->
-      <div style="background:#0f172a; border:1px solid var(--border-color); border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:8px;">
+      <div
+        style="background:#0f172a; border:1px solid var(--border-color); border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:8px;">
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <span style="font-size:0.85rem; font-weight:bold; color:var(--accent);">📂 保存済みデッキ一覧 (ブラウザ保存)</span>
-          <button class="btn btn-secondary" onclick="createNewDeckPrompt()" style="padding:4px 10px; font-size:0.75rem; min-height:28px;">＋ 新規デッキ作成</button>
+          <button class="btn btn-secondary" onclick="createNewDeckPrompt()"
+            style="padding:4px 10px; font-size:0.75rem; min-height:28px;">＋ 新規デッキ作成</button>
         </div>
         <div style="display:flex; gap:6px; align-items:center;">
-          <select id="saved-decks-select" onchange="onSelectSavedDeck(this.value)" style="flex:1; background:#1e293b; color:white; border:1px solid #475569; padding:6px 8px; border-radius:6px; font-size:0.8rem;"></select>
-          <button class="btn btn-danger" onclick="deleteCurrentDeckSlot()" style="padding:4px 8px; font-size:0.75rem; min-height:28px;" title="このデッキを削除">🗑 削除</button>
+          <select id="saved-decks-select" onchange="onSelectSavedDeck(this.value)"
+            style="flex:1; background:#1e293b; color:white; border:1px solid #475569; padding:6px 8px; border-radius:6px; font-size:0.8rem;"></select>
+          <button class="btn btn-danger" onclick="deleteCurrentDeckSlot()"
+            style="padding:4px 8px; font-size:0.75rem; min-height:28px;" title="このデッキを削除">🗑 削除</button>
         </div>
       </div>
 
       <div class="deck-summary-card">
         <div style="display:flex; gap:8px; align-items:center;">
           <label style="font-size:0.78rem; color:var(--text-muted); flex-shrink:0;">デッキ名:</label>
-          <input type="text" id="builder-deck-name" placeholder="デッキ名を入力..." style="flex:1; background:#0f172a; color:white; border:1px solid var(--border-color); padding:5px 8px; border-radius:4px; font-size:0.82rem;" oninput="currentDeckDef.deckName = this.value">
+          <input type="text" id="builder-deck-name" placeholder="デッキ名を入力..."
+            style="flex:1; background:#0f172a; color:white; border:1px solid var(--border-color); padding:5px 8px; border-radius:4px; font-size:0.82rem;"
+            oninput="currentDeckDef.deckName = this.value">
         </div>
         <div class="deck-count-bar">
-          <div>デッキ枚数: <span id="builder-total-count" style="color:var(--accent); font-size:1.1rem;">40</span> / 40枚</div>
+          <div>デッキ枚数: <span id="builder-total-count" style="color:var(--accent); font-size:1.1rem;">40</span> / 40枚
+          </div>
           <span id="builder-status-badge" class="deck-valid-badge deck-valid-ok">構築完了</span>
         </div>
         <div class="fixed-select-row">
@@ -655,13 +1280,16 @@
           <div id="builder-case-preview" class="fixed-preview-card"></div>
         </div>
 
-        <div id="builder-color-alert" style="display:none; background:#7f1d1d; color:#fca5a5; padding:6px 10px; border-radius:6px; font-size:0.75rem; font-weight:bold; line-height:1.3;"></div>
+        <div id="builder-color-alert"
+          style="display:none; background:#7f1d1d; color:#fca5a5; padding:6px 10px; border-radius:6px; font-size:0.75rem; font-weight:bold; line-height:1.3;">
+        </div>
 
         <div style="display:flex; gap:6px; margin-top:2px;">
           <button class="btn btn-success" onclick="saveAndApplyDeck()" style="flex:1;">
             💾 デッキ保存
           </button>
-          <button id="btn-publish-deck" class="btn" onclick="publishOfficialDeck()" style="background:#0284c7; flex:1;" title="タカラトミー公式デッキレシピコードを発行">
+          <button id="btn-publish-deck" class="btn" onclick="publishOfficialDeck()" style="background:#0284c7; flex:1;"
+            title="タカラトミー公式デッキレシピコードを発行">
             🌐 公式コード発行
           </button>
         </div>
@@ -669,12 +1297,16 @@
 
       <!-- Sticky View Selector, Summary & Filters -->
       <div id="deck-sticky-toolbar" class="deck-sticky-toolbar">
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,0.08);">
+        <div
+          style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,0.08);">
           <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-            <span style="font-size:0.82rem; font-weight:bold;">🃏 選択中: <span id="sticky-total-count" style="color:var(--accent); font-size:1rem;">0</span> / 40枚</span>
-            <span id="sticky-status-badge" class="deck-valid-badge deck-valid-ng" style="font-size:0.68rem; padding:2px 6px;">不足 (0/40)</span>
+            <span style="font-size:0.82rem; font-weight:bold;">🃏 選択中: <span id="sticky-total-count"
+                style="color:var(--accent); font-size:1rem;">0</span> / 40枚</span>
+            <span id="sticky-status-badge" class="deck-valid-badge deck-valid-ng"
+              style="font-size:0.68rem; padding:2px 6px;">不足 (0/40)</span>
           </div>
-          <button class="btn btn-success" onclick="saveAndApplyDeck()" style="padding:4px 10px; font-size:0.74rem; min-height:26px;">
+          <button class="btn btn-success" onclick="saveAndApplyDeck()"
+            style="padding:4px 10px; font-size:0.74rem; min-height:26px;">
             💾 保存
           </button>
         </div>
@@ -689,34 +1321,51 @@
         </div>
 
         <div class="catalog-search-bar" style="margin-bottom:0;">
-          <input type="text" id="catalog-search-input" placeholder="🔍 カード名・効果・番号で絞り込み..." oninput="onSearchInput(this.value)">
-          <button class="btn btn-secondary" onclick="clearSearch()" style="padding:4px 10px; font-size:0.75rem; flex-shrink:0;">クリア</button>
+          <input type="text" id="catalog-search-input" placeholder="🔍 カード名・効果・番号で絞り込み..."
+            oninput="onSearchInput(this.value)">
+          <button class="btn btn-secondary" onclick="clearSearch()"
+            style="padding:4px 10px; font-size:0.75rem; flex-shrink:0;">クリア</button>
         </div>
 
         <!-- Color Filter Pills -->
         <div class="color-filter-bar">
           <button class="color-pill active" data-color="" onclick="setColorFilter('')">すべて</button>
-          <button class="color-pill" data-color="青" style="border-color:#0284c7;" onclick="setColorFilter('青')">青</button>
-          <button class="color-pill" data-color="緑" style="border-color:#16a34a;" onclick="setColorFilter('緑')">緑</button>
-          <button class="color-pill" data-color="白" style="border-color:#94a3b8;" onclick="setColorFilter('白')">白</button>
-          <button class="color-pill" data-color="赤" style="border-color:#dc2626;" onclick="setColorFilter('赤')">赤</button>
-          <button class="color-pill" data-color="黄" style="border-color:#ca8a04;" onclick="setColorFilter('黄')">黄</button>
-          <button class="color-pill" data-color="黒" style="border-color:#64748b;" onclick="setColorFilter('黒')">黒</button>
+          <button class="color-pill" data-color="青" style="border-color:#0284c7;"
+            onclick="setColorFilter('青')">青</button>
+          <button class="color-pill" data-color="緑" style="border-color:#16a34a;"
+            onclick="setColorFilter('緑')">緑</button>
+          <button class="color-pill" data-color="白" style="border-color:#94a3b8;"
+            onclick="setColorFilter('白')">白</button>
+          <button class="color-pill" data-color="赤" style="border-color:#dc2626;"
+            onclick="setColorFilter('赤')">赤</button>
+          <button class="color-pill" data-color="黄" style="border-color:#ca8a04;"
+            onclick="setColorFilter('黄')">黄</button>
+          <button class="color-pill" data-color="黒" style="border-color:#64748b;"
+            onclick="setColorFilter('黒')">黒</button>
         </div>
 
         <!-- Level Filter & Per-Level Deck Count Pills -->
         <div class="level-filter-bar" id="level-filter-bar">
           <span style="font-size:0.7rem; color:var(--text-muted); margin-right:2px;">Lv:</span>
           <button class="level-pill active" data-level="" onclick="setLevelFilter('')">すべて</button>
-          <button class="level-pill" data-level="1" onclick="setLevelFilter('1')">Lv.1 <span class="lv-cnt" id="lv-cnt-1">(0)</span></button>
-          <button class="level-pill" data-level="2" onclick="setLevelFilter('2')">Lv.2 <span class="lv-cnt" id="lv-cnt-2">(0)</span></button>
-          <button class="level-pill" data-level="3" onclick="setLevelFilter('3')">Lv.3 <span class="lv-cnt" id="lv-cnt-3">(0)</span></button>
-          <button class="level-pill" data-level="4" onclick="setLevelFilter('4')">Lv.4 <span class="lv-cnt" id="lv-cnt-4">(0)</span></button>
-          <button class="level-pill" data-level="5" onclick="setLevelFilter('5')">Lv.5 <span class="lv-cnt" id="lv-cnt-5">(0)</span></button>
-          <button class="level-pill" data-level="6" onclick="setLevelFilter('6')">Lv.6 <span class="lv-cnt" id="lv-cnt-6">(0)</span></button>
-          <button class="level-pill" data-level="7" onclick="setLevelFilter('7')">Lv.7 <span class="lv-cnt" id="lv-cnt-7">(0)</span></button>
-          <button class="level-pill" data-level="8" onclick="setLevelFilter('8')">Lv.8 <span class="lv-cnt" id="lv-cnt-8">(0)</span></button>
-          <button class="level-pill" data-level="9+" onclick="setLevelFilter('9+')">Lv.9+ <span class="lv-cnt" id="lv-cnt-9+">(0)</span></button>
+          <button class="level-pill" data-level="1" onclick="setLevelFilter('1')">Lv.1 <span class="lv-cnt"
+              id="lv-cnt-1">(0)</span></button>
+          <button class="level-pill" data-level="2" onclick="setLevelFilter('2')">Lv.2 <span class="lv-cnt"
+              id="lv-cnt-2">(0)</span></button>
+          <button class="level-pill" data-level="3" onclick="setLevelFilter('3')">Lv.3 <span class="lv-cnt"
+              id="lv-cnt-3">(0)</span></button>
+          <button class="level-pill" data-level="4" onclick="setLevelFilter('4')">Lv.4 <span class="lv-cnt"
+              id="lv-cnt-4">(0)</span></button>
+          <button class="level-pill" data-level="5" onclick="setLevelFilter('5')">Lv.5 <span class="lv-cnt"
+              id="lv-cnt-5">(0)</span></button>
+          <button class="level-pill" data-level="6" onclick="setLevelFilter('6')">Lv.6 <span class="lv-cnt"
+              id="lv-cnt-6">(0)</span></button>
+          <button class="level-pill" data-level="7" onclick="setLevelFilter('7')">Lv.7 <span class="lv-cnt"
+              id="lv-cnt-7">(0)</span></button>
+          <button class="level-pill" data-level="8" onclick="setLevelFilter('8')">Lv.8 <span class="lv-cnt"
+              id="lv-cnt-8">(0)</span></button>
+          <button class="level-pill" data-level="9+" onclick="setLevelFilter('9+')">Lv.9+ <span class="lv-cnt"
+              id="lv-cnt-9+">(0)</span></button>
         </div>
       </div>
 
@@ -732,18 +1381,25 @@
         <button class="qty-btn" onclick="closePublishModal()">✕</button>
       </div>
       <div class="modal-body" style="font-size:0.8rem; display:flex; flex-direction:column; gap:10px; max-height:none;">
-        <div style="text-align:center; padding:12px; background:#0f172a; border-radius:8px; border:1px solid var(--accent);">
+        <div
+          style="text-align:center; padding:12px; background:#0f172a; border-radius:8px; border:1px solid var(--accent);">
           <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:4px;">発行された公式デッキコード:</div>
-          <div id="publish-code-text" style="font-size:1.8rem; font-weight:bold; color:#38bdf8; letter-spacing:2px; font-family:monospace; user-select:all;">-</div>
-          <button class="btn btn-secondary" onclick="copyPublishCode()" style="margin-top:8px; width:100%; min-height:30px; font-size:0.78rem;">
+          <div id="publish-code-text"
+            style="font-size:1.8rem; font-weight:bold; color:#38bdf8; letter-spacing:2px; font-family:monospace; user-select:all;">
+            -</div>
+          <button class="btn btn-secondary" onclick="copyPublishCode()"
+            style="margin-top:8px; width:100%; min-height:30px; font-size:0.78rem;">
             📋 デッキコードをコピー
           </button>
         </div>
 
-        <div style="background:#0f172a; padding:10px; border-radius:6px; border:1px solid var(--border-color); display:flex; flex-direction:column; gap:6px;">
+        <div
+          style="background:#0f172a; padding:10px; border-radius:6px; border:1px solid var(--border-color); display:flex; flex-direction:column; gap:6px;">
           <div style="font-size:0.72rem; color:var(--text-muted);">公式デッキレシピURL:</div>
-          <a id="publish-url-link" href="#" target="_blank" rel="noopener noreferrer" style="color:#38bdf8; font-size:0.72rem; word-break:break-all; text-decoration:underline;">-</a>
-          <button class="btn btn-secondary" onclick="copyPublishUrl()" style="font-size:0.75rem; min-height:28px; padding:3px 8px;">
+          <a id="publish-url-link" href="#" target="_blank" rel="noopener noreferrer"
+            style="color:#38bdf8; font-size:0.72rem; word-break:break-all; text-decoration:underline;">-</a>
+          <button class="btn btn-secondary" onclick="copyPublishUrl()"
+            style="font-size:0.75rem; min-height:28px; padding:3px 8px;">
             🔗 レシピURLをコピー
           </button>
         </div>
@@ -753,7 +1409,8 @@
         </div>
       </div>
       <div class="modal-footer" style="justify-content:flex-end;">
-        <button class="btn btn-secondary" onclick="closePublishModal()" style="padding:5px 16px; font-size:0.8rem; min-height:30px;">閉じる</button>
+        <button class="btn btn-secondary" onclick="closePublishModal()"
+          style="padding:5px 16px; font-size:0.8rem; min-height:30px;">閉じる</button>
       </div>
     </div>
   </div>
@@ -766,9 +1423,12 @@
         <button class="qty-btn" onclick="closeZoneModal()">✕</button>
       </div>
       <div id="zone-modal-subtitle" style="font-size:0.75rem; color:var(--text-muted); margin-bottom:8px;"></div>
-      <div id="zone-modal-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(110px, 1fr)); gap:8px; max-height:58vh; overflow-y:auto; padding:2px;"></div>
+      <div id="zone-modal-grid"
+        style="display:grid; grid-template-columns:repeat(auto-fill, minmax(110px, 1fr)); gap:8px; max-height:58vh; overflow-y:auto; padding:2px;">
+      </div>
       <div class="modal-footer" style="justify-content:flex-end; margin-top:10px;">
-        <button class="btn btn-secondary" onclick="closeZoneModal()" style="padding:5px 14px; font-size:0.8rem; min-height:30px;">閉じる</button>
+        <button class="btn btn-secondary" onclick="closeZoneModal()"
+          style="padding:5px 14px; font-size:0.8rem; min-height:30px;">閉じる</button>
       </div>
     </div>
   </div>
@@ -780,7 +1440,8 @@
         <span id="modal-card-name" class="modal-title">カード名</span>
         <span id="modal-card-badge" class="card-badge" style="font-size:0.75rem;">キャラ</span>
       </div>
-      <div id="modal-card-stats" style="display:flex; justify-content:space-between; font-weight:bold; margin-bottom:8px; font-size:0.85rem;">
+      <div id="modal-card-stats"
+        style="display:flex; justify-content:space-between; font-weight:bold; margin-bottom:8px; font-size:0.85rem;">
         <span id="modal-card-level">Lv.-</span>
         <span id="modal-card-ap" class="stat-ap">AP -</span>
         <span id="modal-card-lp" class="stat-lp">LP -</span>
@@ -788,7 +1449,8 @@
       <div id="modal-card-desc" class="modal-body"></div>
       <div class="modal-footer">
         <span id="modal-card-id" style="font-size:0.75rem; color:var(--text-muted);">B01001</span>
-        <button class="btn btn-secondary" onclick="closeCardModal()" style="padding:5px 12px; font-size:0.8rem; min-height:30px;">閉じる</button>
+        <button class="btn btn-secondary" onclick="closeCardModal()"
+          style="padding:5px 12px; font-size:0.8rem; min-height:30px;">閉じる</button>
       </div>
     </div>
   </div>
@@ -859,10 +1521,12 @@
       document.getElementById('screen-deck').classList.toggle('active', tab === 'deck');
       if (tab === 'deck') {
         loadDeckBuilderData();
+        if (typeof pauseBgm === 'function') pauseBgm();
         if (typeof syncBgm === 'function') syncBgm();
       } else {
         lastRevision = -1;
         fetchState();
+        if (typeof resumeBgmIfEnabled === 'function') resumeBgmIfEnabled();
         if (typeof syncBgm === 'function') syncBgm();
       }
     }
@@ -927,7 +1591,7 @@
           lastRevision = -1;
           lastWaitingP2 = null;
           selectedMulliganIds.clear();
-          
+
           updateUrlParams();
           showRoomCreatedInfo(currentRoomId);
           document.getElementById('current-room-display').innerText = currentRoomId;
@@ -1017,13 +1681,13 @@
           }
         }
         const data = await res.json();
-        
+
         const curDecId = data.pendingDecision ? data.pendingDecision.decisionId : null;
         const curWaitingP2 = !!data.waitingForPlayer2;
         const curPhase = data.phase || '';
         const curLogsLen = (data.logs || []).length;
         const hasChanged = (data.revision !== lastRevision) || (curDecId !== lastDecisionId) || (curWaitingP2 !== lastWaitingP2) || (curPhase !== lastPhase) || (curLogsLen !== lastLogCount);
-        
+
         lastObs = data;
         if (hasChanged) {
           lastRevision = data.revision;
@@ -1059,7 +1723,8 @@
       try {
         const res = await fetch('/api/decks');
         if (!res.ok) return;
-        const decks = await res.json();
+        const raw = await res.json();
+        const decks = Array.isArray(raw) ? raw : (raw.decks || []);
         const p1Sel = document.getElementById('battle-p1-deck');
         const p2Sel = document.getElementById('battle-p2-deck');
         if (!p1Sel || !p2Sel) return;
@@ -1241,7 +1906,7 @@
       const el = document.createElement('div');
       const cType = card ? (card.cardType || '') : '';
       el.className = `card ${cType} ${card ? (card.orientation || '') : ''}`;
-      
+
       if (!card) {
         el.style.opacity = '0.25';
         el.style.borderStyle = 'dashed';
@@ -1398,7 +2063,7 @@
           <button class="btn btn-secondary" style="font-size:0.75rem; padding:4px 10px;" onclick="navigator.clipboard.writeText('${joinUrl}').then(()=>alert('参加URLをコピーしました！'))">📋 参加URLをコピー</button>
         `;
       }
-      
+
       const me = obs.me;
       const opp = obs.opponent;
       if (!me || !opp) return;
@@ -1459,7 +2124,7 @@
       if (obs.pendingDecision) {
         decBox.style.display = 'block';
         const pd = obs.pendingDecision;
-        
+
         if (pd.kind === 'mulligan') {
           document.getElementById('decision-title').innerText = `🃏 初期手札マリガン (引き直し)`;
           document.getElementById('decision-desc').innerText = `戻したいカードをタップして選択してください`;
@@ -1870,7 +2535,7 @@
     function createNewDeckPrompt() {
       const name = prompt("新しいデッキ名を入力してください:", "新デッキ");
       if (!name) return;
-      
+
       const newId = "deck_" + Date.now();
       const newDeck = {
         deckId: newId,
@@ -2306,11 +2971,11 @@
       pageInfo.style.cssText = 'font-size:0.75rem; color:var(--text-muted); margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;';
       const labelPrefix = builderViewMode === 'deck' ? '投入カード' : 'カタログ';
       pageInfo.innerHTML = `
-        <span>${labelPrefix} ${filtered.length}種 (表示: ${start+1}〜${Math.min(start+PAGE_SIZE_ACTIVE, filtered.length)})</span>
+        <span>${labelPrefix} ${filtered.length}種 (表示: ${start + 1}〜${Math.min(start + PAGE_SIZE_ACTIVE, filtered.length)})</span>
         <span style="display:flex; gap:6px; align-items:center;">
-          <button class="qty-btn" style="width:auto; padding:2px 10px;" onclick="builderPage=Math.max(0,builderPage-1);renderBuilderCatalog();" ${builderPage===0?'disabled':''}>◀</button>
-          <span>${builderPage+1} / ${totalPages}</span>
-          <button class="qty-btn" style="width:auto; padding:2px 10px;" onclick="builderPage=Math.min(${totalPages-1},builderPage+1);renderBuilderCatalog();" ${builderPage>=totalPages-1?'disabled':''}>▶</button>
+          <button class="qty-btn" style="width:auto; padding:2px 10px;" onclick="builderPage=Math.max(0,builderPage-1);renderBuilderCatalog();" ${builderPage === 0 ? 'disabled' : ''}>◀</button>
+          <span>${builderPage + 1} / ${totalPages}</span>
+          <button class="qty-btn" style="width:auto; padding:2px 10px;" onclick="builderPage=Math.min(${totalPages - 1},builderPage+1);renderBuilderCatalog();" ${builderPage >= totalPages - 1 ? 'disabled' : ''}>▶</button>
         </span>
       `;
       container.appendChild(pageInfo);
@@ -2525,6 +3190,7 @@
     fetchState();
 
     // ========== BGM CONTROL ==========
+    const bgmAudio = document.getElementById('battle-bgm');
     const bgmTracks = {
       battle: document.getElementById('battle-bgm'),
       deck: document.getElementById('deck-bgm'),
@@ -2535,6 +3201,9 @@
     let bgmVolume = parseFloat(localStorage.getItem('conan_bgm_volume') || '0.35');
     if (isNaN(bgmVolume)) bgmVolume = 0.35;
 
+    if (bgmAudio) {
+      bgmAudio.volume = bgmVolume;
+    }
     Object.values(bgmTracks).forEach(a => {
       if (a) a.volume = bgmVolume;
     });
@@ -2634,17 +3303,18 @@
       syncBgm();
     });
 
-    // URLの ?join=XXXX による自動参加処理
-    if (urlParams.has('join')) {
-      const joinCode = urlParams.get('join').trim();
-      if (joinCode) {
-        setTimeout(() => {
-          if (confirm(`部屋「${joinCode}」に対戦相手（P2）として参加しますか？`)) {
-            joinExistingRoom(joinCode);
+        // URLの ?join=XXXX による自動参加処理
+        if (urlParams.has('join')) {
+          const joinCode = urlParams.get('join').trim();
+          if (joinCode) {
+            setTimeout(() => {
+              if (confirm(`部屋「${joinCode}」に対戦相手（P2）として参加しますか？`)) {
+                joinExistingRoom(joinCode);
+              }
+            }, 500);
           }
-        }, 500);
-      }
-    }
+        }
   </script>
 </body>
+
 </html>
