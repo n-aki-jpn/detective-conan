@@ -1173,5 +1173,194 @@ mod tests {
         engine.trigger_on_contact_win("p1", "p1_c1", "TEST_TRAIT_DETECTIVE");
         assert_eq!(engine.players.get("p1").unwrap().hand.len(), 1);
     }
+
+    #[test]
+    fn test_cutin_target_passive_ap_and_disguise() {
+        let path = if std::path::Path::new("data/dummy/cards.json").exists() {
+            "data/dummy/cards.json"
+        } else {
+            "../data/dummy/cards.json"
+        };
+        let mut catalog = CardCatalog::load_from_json(path).expect("catalog load failed");
+
+        catalog.definitions.insert(
+            "TEST_PASSIVE_OPP_TURN".to_string(),
+            models::CardDefinition {
+                definition_id: "TEST_PASSIVE_OPP_TURN".to_string(),
+                canonical_id: "TEST_PASSIVE_OPP_TURN".to_string(),
+                card_type: models::CardType::CHARACTER,
+                colors: vec!["青".to_string()],
+                level: 3,
+                ap: 3000,
+                lp: 1,
+                names: vec!["守備キャラ".to_string()],
+                description: "【相手ターン中】AP＋1000".to_string(),
+                traits: vec![],
+                case_levels: None,
+                main_thumb: None,
+                main_path: None,
+            },
+        );
+        catalog.definitions.insert(
+            "TEST_CUTIN_SELECT".to_string(),
+            models::CardDefinition {
+                definition_id: "TEST_CUTIN_SELECT".to_string(),
+                canonical_id: "TEST_CUTIN_SELECT".to_string(),
+                card_type: models::CardType::CHARACTER,
+                colors: vec!["青".to_string()],
+                level: 2,
+                ap: 2000,
+                lp: 1,
+                names: vec!["カットイン選択".to_string()],
+                description: "【カットイン】相手の現場にいるキャラを1枚まで選び、スリープさせる。".to_string(),
+                traits: vec![],
+                case_levels: None,
+                main_thumb: None,
+                main_path: None,
+            },
+        );
+        catalog.definitions.insert(
+            "TEST_DISGUISE_KID".to_string(),
+            models::CardDefinition {
+                definition_id: "TEST_DISGUISE_KID".to_string(),
+                canonical_id: "TEST_DISGUISE_KID".to_string(),
+                card_type: models::CardType::CHARACTER,
+                colors: vec!["白".to_string()],
+                level: 4,
+                ap: 4000,
+                lp: 1,
+                names: vec!["テストキッド".to_string()],
+                description: "【変装時】カードを1枚引く。このキャラをAP＋1000する。".to_string(),
+                traits: vec![],
+                case_levels: None,
+                main_thumb: None,
+                main_path: None,
+            },
+        );
+
+        let mut engine = MatchEngine::new(catalog);
+        engine.turn = 2;
+        engine.turn_player_id = "p2".to_string(); // p2's turn -> opponent turn for p1
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+
+        let passive_card = models::CardInstance {
+            instance_id: "p1_def".to_string(),
+            definition_id: "TEST_PASSIVE_OPP_TURN".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::FIELD,
+            orientation: models::CardOrientation::ACTIVE,
+            entered_turn: 1,
+            face_up: true,
+            temp_ap_bonus: 0,
+            has_rush: false,
+            rush_target: None,
+            used_declare_this_turn: false,
+        };
+        ps1.field.push(passive_card.clone());
+        ps1.hand.push(models::CardInstance {
+            instance_id: "p1_cutin".to_string(),
+            definition_id: "TEST_CUTIN_SELECT".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::HAND,
+            orientation: models::CardOrientation::ACTIVE,
+            entered_turn: 0,
+            face_up: true,
+            temp_ap_bonus: 0,
+            has_rush: false,
+            rush_target: None,
+            used_declare_this_turn: false,
+        });
+        ps1.deck.push(models::CardInstance {
+            instance_id: "p1_dk1".to_string(),
+            definition_id: "B01005".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::DECK,
+            orientation: models::CardOrientation::ACTIVE,
+            entered_turn: 0,
+            face_up: false,
+            temp_ap_bonus: 0,
+            has_rush: false,
+            rush_target: None,
+            used_declare_this_turn: false,
+        });
+
+        ps2.field.push(models::CardInstance {
+            instance_id: "p2_atk".to_string(),
+            definition_id: "B01005".to_string(),
+            owner_id: "p2".to_string(),
+            zone: models::Zone::FIELD,
+            orientation: models::CardOrientation::ACTIVE,
+            entered_turn: 1,
+            face_up: true,
+            temp_ap_bonus: 0,
+            has_rush: false,
+            rush_target: None,
+            used_declare_this_turn: false,
+        });
+
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        // 1. Passive AP check: opponent turn -> 3000 + 1000 = 4000
+        assert_eq!(engine.get_effective_ap("p1", &passive_card), 4000);
+        // Switch turn to p1 -> own turn -> 3000
+        engine.turn_player_id = "p1".to_string();
+        assert_eq!(engine.get_effective_ap("p1", &passive_card), 3000);
+        engine.turn_player_id = "p2".to_string();
+
+        // 2. Cut-in target select check
+        engine.action_context = Some(serde_json::json!({
+            "actorId": "p2_atk",
+            "targetId": "p1_def",
+            "attackerPlayerId": "p2",
+            "defenderPlayerId": "p1"
+        }));
+        let dec_id = engine.generate_decision_id();
+        engine.pending_decision = Some(serde_json::json!({
+            "decisionId": dec_id,
+            "revision": engine.revision,
+            "playerId": "p1",
+            "kind": "guard",
+            "options": {"guardCardIds": [], "cutinCardIds": ["p1_cutin"]}
+        }));
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": dec_id,
+            "revision": engine.revision,
+            "value": {"cutinCardId": "p1_cutin"}
+        }));
+        let pd = engine.pending_decision.as_ref().unwrap();
+        assert_eq!(pd["kind"], "targetSelect");
+        let ts_dec_id = pd["decisionId"].as_str().unwrap().to_string();
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": ts_dec_id,
+            "revision": engine.revision,
+            "value": {"targetId": "p2_atk", "actorId": "p1_cutin", "effectType": "SLEEP"}
+        }));
+        assert_eq!(engine.players.get("p2").unwrap().field[0].orientation, models::CardOrientation::SLEEP);
+        assert_eq!(engine.pending_decision.as_ref().unwrap()["kind"], "guard");
+
+        // 3. Disguise trigger check
+        engine.players.get_mut("p1").unwrap().field.push(models::CardInstance {
+            instance_id: "p1_kid".to_string(),
+            definition_id: "TEST_DISGUISE_KID".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::FIELD,
+            orientation: models::CardOrientation::ACTIVE,
+            entered_turn: 2,
+            face_up: true,
+            temp_ap_bonus: 0,
+            has_rush: false,
+            rush_target: None,
+            used_declare_this_turn: false,
+        });
+        let hand_before = engine.players.get("p1").unwrap().hand.len();
+        let need_ui = engine.trigger_on_disguise("p1", "p1_kid", "TEST_DISGUISE_KID");
+        assert!(!need_ui);
+        assert_eq!(engine.players.get("p1").unwrap().hand.len(), hand_before + 1);
+        assert_eq!(engine.players.get("p1").unwrap().field.last().unwrap().temp_ap_bonus, 1000);
+    }
 }
 

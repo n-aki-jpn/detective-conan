@@ -1,6 +1,6 @@
 use crate::catalog::CardCatalog;
 use crate::models::{
-    CardInstance, CardOrientation, CasePhase, DeckDefinition, MatchPhase, Zone,
+    CardInstance, CardOrientation, CardType, CasePhase, DeckDefinition, MatchPhase, Zone,
 };
 use rand::seq::SliceRandom;
 use rand::Rng;
@@ -234,7 +234,7 @@ impl MatchEngine {
         id
     }
 
-    fn generate_decision_id(&mut self) -> String {
+    pub fn generate_decision_id(&mut self) -> String {
         let id = format!("dec_{}", self.next_decision_id);
         self.next_decision_id += 1;
         id
@@ -801,6 +801,34 @@ impl MatchEngine {
             }));
         }
 
+        // 9. Disguise (変装)
+        if !ps.field.is_empty() {
+            let effective_file = ps.effective_file_count() as i32;
+            let case_colors = case_def.map(|d| normalize_color_set(&d.colors)).unwrap_or_default();
+            let mut disguise_card_ids = vec![];
+            for c in &ps.hand {
+                if let Some(c_def) = self.catalog.get(&c.definition_id) {
+                    if c_def.card_type == CardType::CHARACTER
+                        && (c_def.description.contains("【変装】") || c_def.description.contains("【変装時】"))
+                    {
+                        let card_colors = normalize_color_set(&c_def.colors);
+                        let color_ok = card_colors.is_empty() || case_colors.is_empty() || card_colors.is_subset(&case_colors);
+                        if c_def.level <= effective_file && color_ok {
+                            disguise_card_ids.push(c.instance_id.clone());
+                        }
+                    }
+                }
+            }
+            if !disguise_card_ids.is_empty() {
+                let target_field_ids: Vec<String> = ps.field.iter().map(|c| c.instance_id.clone()).collect();
+                actions.push(json!({
+                    "type": "DISGUISE",
+                    "cardIds": disguise_card_ids,
+                    "targetIds": target_field_ids
+                }));
+            }
+        }
+
         let dec_id = self.generate_decision_id();
         self.pending_decision = Some(json!({
             "decisionId": dec_id,
@@ -1011,6 +1039,47 @@ impl MatchEngine {
             "DECLARE" => {
                 let actor_id = val.get("actorId").and_then(|v| v.as_str()).unwrap_or("").to_string();
                 self.handle_declare_action(player_id, &actor_id);
+            }
+            "DISGUISE" => {
+                let card_id = val.get("cardId").and_then(|v| v.as_str()).unwrap_or("");
+                let target_id = val.get("targetId").and_then(|v| v.as_str()).unwrap_or("");
+                let turn = self.turn;
+                let mut disguised_def_id = None;
+                let mut disguised_inst_id = None;
+                let mut replaced_def_id = None;
+
+                if let Some(ps) = self.players.get_mut(player_id) {
+                    if let (Some(h_idx), Some(f_idx)) = (
+                        ps.hand.iter().position(|c| c.instance_id == card_id),
+                        ps.field.iter().position(|c| c.instance_id == target_id),
+                    ) {
+                        let mut hand_card = ps.hand.remove(h_idx);
+                        let mut old_card = ps.field.remove(f_idx);
+                        replaced_def_id = Some(old_card.definition_id.clone());
+                        disguised_def_id = Some(hand_card.definition_id.clone());
+                        disguised_inst_id = Some(hand_card.instance_id.clone());
+
+                        hand_card.zone = Zone::FIELD;
+                        hand_card.orientation = old_card.orientation;
+                        hand_card.entered_turn = turn;
+                        hand_card.face_up = true;
+                        ps.field.push(hand_card);
+
+                        old_card.zone = Zone::REMOVE;
+                        ps.remove.push(old_card);
+                    }
+                }
+
+                if let (Some(def_id), Some(inst_id), Some(old_def_id)) = (disguised_def_id, disguised_inst_id, replaced_def_id) {
+                    let new_name = self.card_name_by_def(&def_id);
+                    let old_name = self.card_name_by_def(&old_def_id);
+                    self.log(format!("🎭 {} が [{}] と入れ替えて [{}] を【変装】登場させました！", player_id, old_name, new_name));
+                    let need_ui = self.trigger_on_disguise(player_id, &inst_id, &def_id);
+                    if need_ui {
+                        return;
+                    }
+                }
+                self.prompt_main_action(player_id);
             }
             _ => {
                 self.prompt_main_action(player_id);
@@ -1397,6 +1466,14 @@ impl MatchEngine {
                         }
                     }
                 }
+                "AP_DEBUFF" => {
+                    if let Some(opp_ps) = self.players.get_mut(&opp_id) {
+                        if let Some(c) = opp_ps.field.iter_mut().find(|c| c.instance_id == tid) {
+                            c.temp_ap_bonus -= 2000;
+                            self.log(format!("🔻 [{}] の効果で相手の [{}] のAP -2000", actor_name, target_name));
+                        }
+                    }
+                }
                 _ => {
                     self.log(format!("✨ [{}] の効果が [{}] に適用されました", actor_name, target_name));
                 }
@@ -1405,7 +1482,11 @@ impl MatchEngine {
             self.log(format!("{} は [{}] の対象を選択しませんでした（スキップ）", player_id, actor_name));
         }
 
-        self.prompt_main_action(player_id);
+        if self.action_context.is_some() && self.turn_player_id != player_id {
+            self.prompt_guard_or_cutin(player_id);
+        } else {
+            self.prompt_main_action(player_id);
+        }
     }
 
     /// デッキサーチ・めくり選択の意思決定を処理する
@@ -1593,7 +1674,10 @@ impl MatchEngine {
             if let Some(def_id) = cutin_def_id {
                 let cutin_name = self.card_name_by_def(&def_id);
                 self.log(format!("⚡ {} が [{}] の【カットイン】を発動！", player_id, cutin_name));
-                self.resolve_cutin_effects(player_id, &def_id);
+                let needs_target = self.resolve_cutin_effects(player_id, &cutin_instance_id, &def_id);
+                if needs_target {
+                    return;
+                }
                 // カットイン後も再度ガードできる
                 let defender_pid = player_id.to_string();
                 self.prompt_guard_or_cutin(&defender_pid);
@@ -1675,17 +1759,16 @@ impl MatchEngine {
             let def_def_id = self.players.get(&defender_pid)
                 .and_then(|p| p.field.iter().find(|c| c.instance_id == def_cid).map(|c| c.definition_id.clone()));
 
-            let actor_bonus = self.players.get(&attacker_pid)
-                .and_then(|p| p.field.iter().find(|c| c.instance_id == actor_id).map(|c| c.temp_ap_bonus))
+            let actor_ap = self.players.get(&attacker_pid)
+                .and_then(|p| p.field.iter().find(|c| c.instance_id == actor_id))
+                .map(|c| self.get_effective_ap(&attacker_pid, c))
                 .unwrap_or(0);
-            let def_bonus = self.players.get(&defender_pid)
-                .and_then(|p| p.field.iter().find(|c| c.instance_id == def_cid).map(|c| c.temp_ap_bonus))
+            let def_ap = self.players.get(&defender_pid)
+                .and_then(|p| p.field.iter().find(|c| c.instance_id == def_cid))
+                .map(|c| self.get_effective_ap(&defender_pid, c))
                 .unwrap_or(0);
 
             if let (Some(a_def_id), Some(d_def_id)) = (actor_def_id, def_def_id) {
-                let actor_ap = self.catalog.get(&a_def_id).map(|d| d.ap).unwrap_or(0) + actor_bonus;
-                let def_ap = self.catalog.get(&d_def_id).map(|d| d.ap).unwrap_or(0) + def_bonus;
-
                 let actor_name = self.card_name_by_def(&a_def_id);
                 let def_name = self.card_name_by_def(&d_def_id);
 
@@ -1953,15 +2036,15 @@ impl MatchEngine {
         false
     }
 
-    /// カットイン効果を解決する
-    fn resolve_cutin_effects(&mut self, player_id: &str, definition_id: &str) {
+    /// カットイン効果を解決する（対象選択が必要な場合は true を返す）
+    fn resolve_cutin_effects(&mut self, player_id: &str, cutin_instance_id: &str, definition_id: &str) -> bool {
         let desc = match self.catalog.get(definition_id) {
             Some(d) => d.description.clone(),
-            None => return,
+            None => return false,
         };
 
         if desc.is_empty() || !desc.contains("【カットイン】") {
-            return;
+            return false;
         }
 
         let card_name = self.card_name_by_def(definition_id);
@@ -1980,9 +2063,117 @@ impl MatchEngine {
             self.log(format!("⚡ [{}] のカットイン効果: 証拠を {} つ獲得しました", card_name, ev_count));
         }
 
-        // カットイン: 相手の現場キャラをスリープ
-        if desc.contains("スリープさせる") {
+        // カットイン: リムーブ効果（相手の証拠をリムーブ）
+        if desc.contains("証拠をリムーブ") || desc.contains("証拠を1つリムーブ") {
             let opp_id = self.player_order.iter().find(|p| *p != player_id).cloned().unwrap_or_default();
+            if let Some(opp_ps) = self.players.get_mut(&opp_id) {
+                if let Some(mut ev) = opp_ps.evidence.pop() {
+                    ev.zone = Zone::REMOVE;
+                    opp_ps.remove.push(ev);
+                    self.log(format!("⚡ [{}] のカットイン効果: 相手の証拠を1枚リムーブしました！", card_name));
+                }
+            }
+        }
+
+        // 対象選択UIが必要な場合（「選び」を含む）
+        let opp_id = self.player_order.iter().find(|p| *p != player_id).cloned().unwrap_or_default();
+        if desc.contains("選び") {
+            let mut effect_type = "";
+            let mut title = "";
+            let mut candidates: Vec<Value> = vec![];
+
+            if desc.contains("スリープさせ") {
+                effect_type = "SLEEP";
+                title = "【カットイン】スリープさせる相手キャラを1体選択してください";
+                if let Some(opp_ps) = self.players.get(&opp_id) {
+                    for c in &opp_ps.field {
+                        if c.orientation == CardOrientation::ACTIVE {
+                            let ap = self.get_effective_ap(&opp_id, c);
+                            let lvl = self.catalog.get(&c.definition_id).map(|d| d.level).unwrap_or(0);
+                            candidates.push(json!({
+                                "instanceId": c.instance_id,
+                                "name": self.card_name_by_def(&c.definition_id),
+                                "ap": ap,
+                                "level": lvl,
+                                "owner": "opponent"
+                            }));
+                        }
+                    }
+                }
+            } else if desc.contains("スタンさせ") {
+                effect_type = "STUN";
+                title = "【カットイン】スタンさせる相手キャラを1体選択してください";
+                if let Some(opp_ps) = self.players.get(&opp_id) {
+                    for c in &opp_ps.field {
+                        if c.orientation == CardOrientation::ACTIVE || c.orientation == CardOrientation::SLEEP {
+                            let ap = self.get_effective_ap(&opp_id, c);
+                            let lvl = self.catalog.get(&c.definition_id).map(|d| d.level).unwrap_or(0);
+                            candidates.push(json!({
+                                "instanceId": c.instance_id,
+                                "name": self.card_name_by_def(&c.definition_id),
+                                "ap": ap,
+                                "level": lvl,
+                                "owner": "opponent"
+                            }));
+                        }
+                    }
+                }
+            } else if desc.contains("リムーブ") && !desc.contains("証拠") && !desc.contains("手札") {
+                effect_type = "REMOVE";
+                title = "【カットイン】リムーブする相手キャラを1体選択してください";
+                if let Some(opp_ps) = self.players.get(&opp_id) {
+                    for c in &opp_ps.field {
+                        let ap = self.get_effective_ap(&opp_id, c);
+                        let lvl = self.catalog.get(&c.definition_id).map(|d| d.level).unwrap_or(0);
+                        candidates.push(json!({
+                            "instanceId": c.instance_id,
+                            "name": self.card_name_by_def(&c.definition_id),
+                            "ap": ap,
+                            "level": lvl,
+                            "owner": "opponent"
+                        }));
+                    }
+                }
+            } else if parse_ap_bonus(&desc) > 0 {
+                effect_type = "AP_BUFF";
+                title = "【カットイン】APを強化する味方キャラを1体選択してください";
+                if let Some(ps) = self.players.get(player_id) {
+                    for c in &ps.field {
+                        let ap = self.get_effective_ap(player_id, c);
+                        let lvl = self.catalog.get(&c.definition_id).map(|d| d.level).unwrap_or(0);
+                        candidates.push(json!({
+                            "instanceId": c.instance_id,
+                            "name": self.card_name_by_def(&c.definition_id),
+                            "ap": ap,
+                            "level": lvl,
+                            "owner": "self"
+                        }));
+                    }
+                }
+            }
+
+            if !candidates.is_empty() && !effect_type.is_empty() {
+                let dec_id = self.generate_decision_id();
+                self.pending_decision = Some(json!({
+                    "decisionId": dec_id,
+                    "revision": self.revision,
+                    "playerId": player_id,
+                    "kind": "targetSelect",
+                    "options": {
+                        "actorId": cutin_instance_id,
+                        "actorName": card_name,
+                        "effectType": effect_type,
+                        "title": title,
+                        "candidates": candidates,
+                        "optional": true
+                    }
+                }));
+                return true;
+            }
+        }
+
+        // カットイン（非選択／フォールバック）: 相手の現場キャラをスリープ
+        if desc.contains("スリープさせる") {
             let mut target_name = None;
             if let Some(ctx) = &self.action_context {
                 let actor_id = ctx.get("actorId").and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -2011,9 +2202,8 @@ impl MatchEngine {
             }
         }
 
-        // カットイン: 相手の現場キャラをスタン
+        // カットイン（非選択／フォールバック）: 相手の現場キャラをスタン
         if desc.contains("スタンさせる") {
-            let opp_id = self.player_order.iter().find(|p| *p != player_id).cloned().unwrap_or_default();
             let mut target_name = None;
             if let Some(opp_ps) = self.players.get_mut(&opp_id) {
                 for c in opp_ps.field.iter_mut() {
@@ -2030,7 +2220,7 @@ impl MatchEngine {
             }
         }
 
-        // カットイン: APバフ（自分のキャラに）
+        // カットイン（非選択／フォールバック）: APバフ（自分のキャラに）
         let ap_bonus = parse_ap_bonus(&desc);
         if ap_bonus > 0 {
             let mut buffed_def_id = None;
@@ -2049,17 +2239,38 @@ impl MatchEngine {
             }
         }
 
-        // カットイン: リムーブ効果（相手の証拠をリムーブ）
-        if desc.contains("証拠をリムーブ") || desc.contains("証拠を1つリムーブ") {
-            let opp_id = self.player_order.iter().find(|p| *p != player_id).cloned().unwrap_or_default();
-            if let Some(opp_ps) = self.players.get_mut(&opp_id) {
-                if let Some(mut ev) = opp_ps.evidence.pop() {
-                    ev.zone = Zone::REMOVE;
-                    opp_ps.remove.push(ev);
-                    self.log(format!("⚡ [{}] のカットイン効果: 相手の証拠を1枚リムーブしました！", card_name));
+        false
+    }
+
+    /// フィールド上のキャラの実効APを計算する（ベースAP + 一時バフ + 【相手ターン中】/【自分ターン中】常時パッシブ）
+    pub fn get_effective_ap(&self, owner_id: &str, card: &CardInstance) -> i32 {
+        let base_ap = self.catalog.get(&card.definition_id).map(|d| d.ap).unwrap_or(0);
+        let mut total = base_ap + card.temp_ap_bonus;
+
+        if card.zone != Zone::FIELD {
+            return total;
+        }
+
+        if let Some(def) = self.catalog.get(&card.definition_id) {
+            for line in def.description.lines() {
+                // 誘発・起動効果ではなく常時パッシブ行のみを対象にする
+                if line.contains("とき")
+                    || line.contains("【宣言】")
+                    || line.contains("【登場時】")
+                    || line.contains("【カットイン】")
+                    || line.contains("【変装時】")
+                    || line.contains("【現場リムーブ時】")
+                {
+                    continue;
+                }
+                let bonus = parse_ap_bonus(line);
+                if bonus > 0 && self.check_effect_conditions(owner_id, line) {
+                    total += bonus;
                 }
             }
         }
+
+        total
     }
 
     /// プレイヤーのパートナー色を取得する
@@ -2482,5 +2693,167 @@ impl MatchEngine {
             }
             self.log(format!("⚡ [{}] のコンタクト勝利時効果: ターン終了時まで〚突撃〛を獲得！", card_name));
         }
+    }
+
+    /// 変装時トリガー（【変装時】）を解決する（対象選択・サーチUIが必要な場合は true を返す）
+    pub fn trigger_on_disguise(&mut self, player_id: &str, actor_id: &str, definition_id: &str) -> bool {
+        let desc = match self.catalog.get(definition_id) {
+            Some(d) => d.description.clone(),
+            None => return false,
+        };
+        if !desc.contains("【変装時】") {
+            return false;
+        }
+        if !self.check_effect_conditions(player_id, &desc) {
+            return false;
+        }
+
+        let card_name = self.card_name_by_def(definition_id);
+
+        // 1. ドロー
+        let draw_n = parse_draw_count(&desc);
+        if draw_n > 0 {
+            self.draw_cards(player_id, draw_n);
+            self.log(format!("🎭 [{}] の変装時効果: カードを{}枚引きました", card_name, draw_n));
+        }
+
+        // 2. 自己APバフ
+        let ap_bonus = parse_ap_bonus(&desc);
+        if ap_bonus > 0 && !desc.contains("選び") {
+            if let Some(ps) = self.players.get_mut(player_id) {
+                if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == actor_id) {
+                    c.temp_ap_bonus += ap_bonus;
+                }
+            }
+            self.log(format!("🎭 [{}] の変装時効果: AP +{}", card_name, ap_bonus));
+        }
+
+        // 3. 対象選択（「選び」を含む効果）
+        if desc.contains("選び") {
+            let opp_id = self.player_order.iter().find(|p| *p != player_id).cloned().unwrap_or_default();
+            let mut effect_type = "";
+            let mut title = "";
+            let mut candidates: Vec<Value> = vec![];
+
+            if desc.contains("スリープさせ") {
+                effect_type = "SLEEP";
+                title = "【変装時】スリープさせる相手キャラを1体選択してください";
+                if let Some(opp_ps) = self.players.get(&opp_id) {
+                    for c in &opp_ps.field {
+                        if c.orientation == CardOrientation::ACTIVE {
+                            let ap = self.get_effective_ap(&opp_id, c);
+                            let lvl = self.catalog.get(&c.definition_id).map(|d| d.level).unwrap_or(0);
+                            candidates.push(json!({
+                                "instanceId": c.instance_id,
+                                "name": self.card_name_by_def(&c.definition_id),
+                                "ap": ap,
+                                "level": lvl,
+                                "owner": "opponent"
+                            }));
+                        }
+                    }
+                }
+            } else if desc.contains("AP－2000") || desc.contains("AP-2000") {
+                effect_type = "AP_DEBUFF";
+                title = "【変装時】AP－2000する相手キャラを1体選択してください";
+                if let Some(opp_ps) = self.players.get(&opp_id) {
+                    for c in &opp_ps.field {
+                        let ap = self.get_effective_ap(&opp_id, c);
+                        let lvl = self.catalog.get(&c.definition_id).map(|d| d.level).unwrap_or(0);
+                        candidates.push(json!({
+                            "instanceId": c.instance_id,
+                            "name": self.card_name_by_def(&c.definition_id),
+                            "ap": ap,
+                            "level": lvl,
+                            "owner": "opponent"
+                        }));
+                    }
+                }
+            } else if desc.contains("スタンさせ") {
+                effect_type = "STUN";
+                title = "【変装時】スタンさせる相手キャラを1体選択してください";
+                if let Some(opp_ps) = self.players.get(&opp_id) {
+                    for c in &opp_ps.field {
+                        if c.orientation == CardOrientation::ACTIVE || c.orientation == CardOrientation::SLEEP {
+                            let ap = self.get_effective_ap(&opp_id, c);
+                            let lvl = self.catalog.get(&c.definition_id).map(|d| d.level).unwrap_or(0);
+                            candidates.push(json!({
+                                "instanceId": c.instance_id,
+                                "name": self.card_name_by_def(&c.definition_id),
+                                "ap": ap,
+                                "level": lvl,
+                                "owner": "opponent"
+                            }));
+                        }
+                    }
+                }
+            }
+
+            if !candidates.is_empty() && !effect_type.is_empty() {
+                let dec_id = self.generate_decision_id();
+                self.pending_decision = Some(json!({
+                    "decisionId": dec_id,
+                    "revision": self.revision,
+                    "playerId": player_id,
+                    "kind": "targetSelect",
+                    "options": {
+                        "actorId": actor_id,
+                        "actorName": card_name,
+                        "effectType": effect_type,
+                        "title": title,
+                        "candidates": candidates,
+                        "optional": true
+                    }
+                }));
+                return true;
+            }
+        }
+
+        // 4. デッキサーチ（「山札の上からX枚見る」）
+        let search_count = parse_deck_search_count(&desc);
+        if search_count > 0 {
+            let mut revealed = vec![];
+            if let Some(ps) = self.players.get_mut(player_id) {
+                let deck_len = ps.deck.len();
+                let actual_count = search_count.min(deck_len);
+                for i in 0..actual_count {
+                    let idx = deck_len - 1 - i;
+                    let card = &mut ps.deck[idx];
+                    card.face_up = true;
+                    revealed.push(card.clone());
+                }
+            }
+            if !revealed.is_empty() {
+                let mut candidates: Vec<Value> = vec![];
+                for c in &revealed {
+                    candidates.push(json!({
+                        "instanceId": c.instance_id,
+                        "definitionId": c.definition_id,
+                        "name": self.card_name_by_def(&c.definition_id),
+                        "level": self.catalog.get(&c.definition_id).map(|d| d.level).unwrap_or(0),
+                        "ap": self.catalog.get(&c.definition_id).map(|d| d.ap).unwrap_or(0),
+                        "colors": self.catalog.get(&c.definition_id).map(|d| d.colors.clone()).unwrap_or_default(),
+                    }));
+                }
+                let dec_id = self.generate_decision_id();
+                self.pending_decision = Some(json!({
+                    "decisionId": dec_id,
+                    "revision": self.revision,
+                    "playerId": player_id,
+                    "kind": "deckSearch",
+                    "options": {
+                        "actorId": actor_id,
+                        "actorName": card_name,
+                        "searchCount": search_count,
+                        "title": format!("【変装時】山札の上から{}枚めくりました。手札に加えるカードを1枚選んでください", search_count),
+                        "revealedCards": candidates,
+                        "optional": true
+                    }
+                }));
+                return true;
+            }
+        }
+
+        false
     }
 }

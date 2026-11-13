@@ -91,6 +91,17 @@ impl RandomAgent {
                         }
                     }
                 }
+                if types.contains(&"DISGUISE") && rng.gen_bool(0.5) {
+                    if let Some(act) = actions.iter().find(|a| a.get("type").and_then(|t| t.as_str()) == Some("DISGUISE")) {
+                        let card_ids = act.get("cardIds").and_then(|v| v.as_array());
+                        let target_ids = act.get("targetIds").and_then(|v| v.as_array());
+                        if let (Some(cids), Some(tids)) = (card_ids, target_ids) {
+                            if let (Some(cid), Some(tid)) = (cids.choose(&mut rng), tids.choose(&mut rng)) {
+                                return json!({"value": {"type": "DISGUISE", "cardId": cid, "targetId": tid}});
+                            }
+                        }
+                    }
+                }
                 if types.contains(&"ASSIST") && rng.gen_bool(0.5) {
                     return json!({"value": {"type": "ASSIST"}});
                 }

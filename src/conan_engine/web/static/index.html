@@ -1382,6 +1382,19 @@
                 b.onclick = () => submitDecision({ type: 'DECLARE', actorId: actor.actorId });
                 decActs.appendChild(b);
               });
+            } else if (act.type === 'DISGUISE') {
+              (act.cardIds || []).forEach(cid => {
+                (act.targetIds || []).forEach(tid => {
+                  const b = document.createElement('button');
+                  b.className = 'btn';
+                  b.style.cssText = 'background:#ec4899; border-color:#f472b6; font-size:0.8rem; padding:6px 12px; font-weight:bold;';
+                  const handLabel = getCardLabel(cid, me.hand);
+                  const fieldLabel = getCardLabel(tid, me.field);
+                  b.innerText = `🎭 変装: ${handLabel} ➔ ${fieldLabel}`;
+                  b.onclick = () => submitDecision({ type: 'DISGUISE', cardId: cid, targetId: tid });
+                  decActs.appendChild(b);
+                });
+              });
             }
           });
         } else if (pd.kind === 'guard') {
