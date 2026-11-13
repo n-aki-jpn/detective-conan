@@ -897,5 +897,70 @@ mod tests {
         assert_eq!(resolve_color_code(&["黒".to_string()]), "K");
         assert_eq!(resolve_color_code(&["青".to_string(), "緑".to_string()]), "BG");
     }
+
+    #[test]
+    fn test_effect_condition_and_cost_checking() {
+        let path = if std::path::Path::new("data/dummy/cards.json").exists() {
+            "data/dummy/cards.json"
+        } else {
+            "../data/dummy/cards.json"
+        };
+        let catalog = CardCatalog::load_from_json(path).expect("catalog load failed");
+        let mut engine = MatchEngine::new(catalog);
+
+        // Setup mock player with Blue partner and 4 files
+        let mut p1 = models::CardInstance {
+            instance_id: "c1".to_string(),
+            definition_id: "B01001".to_string(), // Partner Conan (Blue)
+            owner_id: "p1".to_string(),
+            zone: models::Zone::PARTNER,
+            orientation: models::CardOrientation::ACTIVE,
+            entered_turn: 0,
+            face_up: true,
+            temp_ap_bonus: 0,
+            has_rush: false,
+            used_declare_this_turn: false,
+        };
+        let mut ps = engine::PlayerState::new("p1".to_string());
+        ps.partner = Some(p1);
+        for i in 0..4 {
+            ps.file.push(models::CardInstance {
+                instance_id: format!("f{}", i),
+                definition_id: "B01005".to_string(),
+                owner_id: "p1".to_string(),
+                zone: models::Zone::FILE,
+                orientation: models::CardOrientation::ACTIVE,
+                entered_turn: 0,
+                face_up: false,
+                temp_ap_bonus: 0,
+                has_rush: false,
+                used_declare_this_turn: false,
+            });
+        }
+        engine.players.insert("p1".to_string(), ps);
+
+        // Partner color condition check
+        assert!(engine.check_effect_conditions("p1", "【パートナー青】効果テキスト"));
+        assert!(!engine.check_effect_conditions("p1", "【パートナー赤】効果テキスト"));
+
+        // FILE condition check (currently 4 files)
+        assert!(engine.check_effect_conditions("p1", "【FILE4】効果テキスト"));
+        assert!(!engine.check_effect_conditions("p1", "【FILE5】効果テキスト"));
+
+        // Add 1 more file -> now 5 files
+        engine.players.get_mut("p1").unwrap().file.push(models::CardInstance {
+            instance_id: "f4".to_string(),
+            definition_id: "B01005".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::FILE,
+            orientation: models::CardOrientation::ACTIVE,
+            entered_turn: 0,
+            face_up: false,
+            temp_ap_bonus: 0,
+            has_rush: false,
+            used_declare_this_turn: false,
+        });
+        assert!(engine.check_effect_conditions("p1", "【FILE5】効果テキスト"));
+    }
 }
 

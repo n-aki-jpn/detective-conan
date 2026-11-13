@@ -107,6 +107,20 @@ fn parse_ap_bonus(desc: &str) -> i32 {
     0
 }
 
+fn parse_hand_remove_cost(desc: &str) -> usize {
+    if desc.contains("手札を2枚リムーブ") || desc.contains("手札から特徴［少年探偵団］のキャラを2枚リムーブ") {
+        return 2;
+    }
+    if desc.contains("手札を1枚リムーブ") || desc.contains("手札からキャラを1枚リムーブ")
+        || desc.contains("手札から特徴［") && desc.contains("リムーブする")
+        || desc.contains("手札からカード名［") && desc.contains("リムーブする")
+        || desc.contains("手札から【カットイン】") && desc.contains("リムーブする")
+    {
+        return 1;
+    }
+    0
+}
+
 impl MatchEngine {
     pub fn new(catalog: CardCatalog) -> Self {
         Self {
@@ -669,6 +683,15 @@ impl MatchEngine {
         for c in &ps.field {
             if let Some(c_def) = self.catalog.get(&c.definition_id) {
                 if c_def.description.contains("【宣言】") {
+                    // 条件チェック: パートナー色・FILE数
+                    if !self.check_effect_conditions(player_id, &c_def.description) {
+                        continue;
+                    }
+                    // コストチェック: 手札リムーブコスト
+                    let hand_cost = parse_hand_remove_cost(&c_def.description);
+                    if hand_cost > 0 && ps.hand.len() < hand_cost {
+                        continue;
+                    }
                     let is_turn_1 = c_def.description.contains("【ターン1】");
                     if is_turn_1 && c.used_declare_this_turn {
                         continue;
@@ -689,9 +712,12 @@ impl MatchEngine {
             if p.zone == Zone::PARTNER {
                 if let Some(p_def) = self.catalog.get(&p.definition_id) {
                     if p_def.description.contains("【宣言】") {
+                        let cond_ok = self.check_effect_conditions(player_id, &p_def.description);
+                        let hand_cost = parse_hand_remove_cost(&p_def.description);
+                        let hand_ok = hand_cost == 0 || ps.hand.len() >= hand_cost;
                         let is_turn_1 = p_def.description.contains("【ターン1】");
                         let needs_sleep = p_def.description.contains("【スリープ】");
-                        let ok = (!is_turn_1 || !p.used_declare_this_turn) && (!needs_sleep || p.orientation == CardOrientation::ACTIVE);
+                        let ok = cond_ok && hand_ok && (!is_turn_1 || !p.used_declare_this_turn) && (!needs_sleep || p.orientation == CardOrientation::ACTIVE);
                         if ok {
                             declare_actors.push(json!({
                                 "actorId": p.instance_id.clone(),
@@ -919,6 +945,8 @@ impl MatchEngine {
         let card_name = self.card_name_by_def(&def_id);
 
         // 1. コスト支払い
+        let hand_cost = parse_hand_remove_cost(&desc);
+        let mut removed_cost_names = vec![];
         if let Some(ps) = self.players.get_mut(player_id) {
             if desc.contains("【スリープ】") {
                 if let Some(ref mut p) = ps.partner {
@@ -938,6 +966,19 @@ impl MatchEngine {
             if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == actor_id) {
                 c.used_declare_this_turn = true;
             }
+            // 手札コストの支払い
+            for _ in 0..hand_cost {
+                if let Some(mut removed_c) = ps.hand.pop() {
+                    removed_c.zone = Zone::REMOVE;
+                    let did = removed_c.definition_id.clone();
+                    ps.remove.push(removed_c);
+                    removed_cost_names.push(did);
+                }
+            }
+        }
+        for did in removed_cost_names {
+            let cost_name = self.card_name_by_def(&did);
+            self.log(format!("💸 コスト支払い: {} の手札から [{}] をリムーブしました", player_id, cost_name));
         }
 
         self.log(format!("⚡ {} が [{}] の【宣言】を発動！", player_id, card_name));
@@ -1446,6 +1487,38 @@ impl MatchEngine {
             return false;
         }
 
+        // 条件チェック: パートナー色・FILE数
+        if !self.check_effect_conditions(player_id, &desc) {
+            self.log(format!("⚠️ [{}] の登場時効果: 発動条件（パートナー色/FILE数）を満たしていないため不発となりました", card_name));
+            return false;
+        }
+
+        // コストチェック: 手札リムーブコスト
+        let hand_cost = parse_hand_remove_cost(&desc);
+        if hand_cost > 0 {
+            let has_enough_hand = self.players.get(player_id).map(|ps| ps.hand.len() >= hand_cost).unwrap_or(false);
+            if !has_enough_hand {
+                self.log(format!("⚠️ [{}] の登場時効果: 手札コスト（{}枚）が不足しているため発動できませんでした", card_name, hand_cost));
+                return false;
+            }
+            // 手札コスト支払い
+            let mut removed_cost_names = vec![];
+            if let Some(ps) = self.players.get_mut(player_id) {
+                for _ in 0..hand_cost {
+                    if let Some(mut removed_c) = ps.hand.pop() {
+                        removed_c.zone = Zone::REMOVE;
+                        let did = removed_c.definition_id.clone();
+                        ps.remove.push(removed_c);
+                        removed_cost_names.push(did);
+                    }
+                }
+            }
+            for did in removed_cost_names {
+                let cost_name = self.card_name_by_def(&did);
+                self.log(format!("💸 コスト支払い: {} の手札から [{}] をリムーブしました", player_id, cost_name));
+            }
+        }
+
         // 1. 即時解決効果（ドロー、証拠獲得、自身のAPバフ）
         let draw_count = parse_draw_count(&desc);
         if draw_count > 0 {
@@ -1678,5 +1751,45 @@ impl MatchEngine {
                 }
             }
         }
+    }
+
+    /// プレイヤーのパートナー色を取得する
+    pub fn get_player_partner_colors(&self, player_id: &str) -> HashSet<String> {
+        let mut set = HashSet::new();
+        if let Some(ps) = self.players.get(player_id) {
+            if let Some(ref p) = ps.partner {
+                if let Some(p_def) = self.catalog.get(&p.definition_id) {
+                    for color in &p_def.colors {
+                        set.insert(color.clone());
+                    }
+                }
+            }
+        }
+        set
+    }
+
+    /// 効果テキストの発動条件（【パートナー色】および【FILE X】）を満たしているか判定する
+    pub fn check_effect_conditions(&self, player_id: &str, desc: &str) -> bool {
+        // 1. パートナー色条件チェック: 【パートナー青】, 【パートナー緑】, 【パートナー白】, 【パートナー赤】, 【パートナー黄】, 【パートナー黒】
+        let partner_colors = self.get_player_partner_colors(player_id);
+        for color in &["青", "緑", "白", "赤", "黄", "黒"] {
+            let tag = format!("【パートナー{}】", color);
+            if desc.contains(&tag) && !partner_colors.contains(*color) {
+                return false;
+            }
+        }
+
+        // 2. FILE条件チェック: 【FILE5】, 【FILE6】, 【FILE7】, 【FILE8】等
+        if let Some(ps) = self.players.get(player_id) {
+            let current_file = ps.effective_file_count();
+            for req in 1..=10 {
+                let tag = format!("【FILE{}】", req);
+                if desc.contains(&tag) && current_file < req {
+                    return false;
+                }
+            }
+        }
+
+        true
     }
 }
