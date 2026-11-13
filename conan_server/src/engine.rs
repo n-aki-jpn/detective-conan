@@ -131,6 +131,36 @@ fn parse_deck_search_count(desc: &str) -> usize {
     0
 }
 
+fn parse_evidence_flip_cost(desc: &str) -> usize {
+    if desc.contains("裏向きの証拠を3つ表向きにする") { return 3; }
+    if desc.contains("裏向きの証拠を2つ表向きにする") { return 2; }
+    if desc.contains("裏向きの証拠を1つ表向きにする") || desc.contains("裏向きの証拠を1つ以上表向きにする") { return 1; }
+    0
+}
+
+fn parse_file_remove_cost(desc: &str) -> usize {
+    if desc.contains("FILEエリアにあるカードを上から1枚リムーブする") { return 1; }
+    0
+}
+
+fn parse_ap_debuff(desc: &str) -> i32 {
+    if desc.contains("AP－5000") || desc.contains("AP-5000") { return 5000; }
+    if desc.contains("AP－4000") || desc.contains("AP-4000") { return 4000; }
+    if desc.contains("AP－3000") || desc.contains("AP-3000") { return 3000; }
+    if desc.contains("AP－2000") || desc.contains("AP-2000") { return 2000; }
+    if desc.contains("AP－1000") || desc.contains("AP-1000") { return 1000; }
+    0
+}
+
+fn extract_declare_section(desc: &str) -> &str {
+    if let Some(idx) = desc.find("【宣言】") {
+        let line_start = desc[..idx].rfind('\n').map(|i| i + 1).unwrap_or(0);
+        &desc[line_start..]
+    } else {
+        desc
+    }
+}
+
 fn parse_rush_target(desc: &str) -> Option<String> {
     if desc.contains("突撃［キャラ］") {
         Some("CHAR".to_string())
@@ -486,6 +516,9 @@ impl MatchEngine {
                     }
                 }
             }
+            if let Some(ref mut cs) = ps.r#case {
+                cs.used_declare_this_turn = false;
+            }
 
             is_first_player = ps.is_first_player;
         }
@@ -509,8 +542,61 @@ impl MatchEngine {
         }
         self.log(format!("📥 {} はカードを1枚引き、FILEに {} 枚置きました", turn_player_id, file_count));
 
+        self.check_resolution_transition(turn_player_id);
+        if self.phase == MatchPhase::FINISHED {
+            return;
+        }
+
         self.phase = MatchPhase::MAIN;
         self.prompt_main_action(turn_player_id);
+    }
+
+    /// FILEが7枚以上になった際の【解決編】移行と、事件カードの移行時効果を処理する
+    pub fn check_resolution_transition(&mut self, player_id: &str) {
+        let mut became_resolution = false;
+        let mut case_def_id = None;
+        if let Some(ps) = self.players.get_mut(player_id) {
+            if ps.effective_file_count() >= 7 && ps.case_phase != CasePhase::RESOLUTION {
+                ps.case_phase = CasePhase::RESOLUTION;
+                became_resolution = true;
+                case_def_id = ps.r#case.as_ref().map(|c| c.definition_id.clone());
+            }
+        }
+
+        if !became_resolution {
+            return;
+        }
+
+        self.log(format!("✨ {} のFILEが7枚以上になり、事件が【解決編】に突入しました！", player_id));
+
+        if let Some(def_id) = case_def_id {
+            let desc = self.catalog.get(&def_id).map(|d| d.description.clone()).unwrap_or_default();
+            let case_name = self.card_name_by_def(&def_id);
+            if desc.contains("解決編になったとき") || desc.contains("解決編に移行したとき") {
+                // 相手はカードを1枚引く
+                if desc.contains("相手はカードを") && desc.contains("引く") {
+                    let opp_id = self.player_order.iter().find(|p| *p != player_id).cloned().unwrap_or_default();
+                    let draw_n = parse_draw_count(&desc).max(1);
+                    self.draw_cards(&opp_id, draw_n);
+                    self.log(format!("📜 事件 [{}] の解決編移行時効果: {} はカードを{}枚引きました", case_name, opp_id, draw_n));
+                }
+                // 自分は手札を1枚リムーブする
+                if desc.contains("自分は手札を") && desc.contains("リムーブ") {
+                    let mut removed_def = None;
+                    if let Some(ps) = self.players.get_mut(player_id) {
+                        if let Some(mut card) = ps.hand.pop() {
+                            removed_def = Some(card.definition_id.clone());
+                            card.zone = Zone::REMOVE;
+                            ps.remove.push(card);
+                        }
+                    }
+                    if let Some(rdid) = removed_def {
+                        let rname = self.card_name_by_def(&rdid);
+                        self.log(format!("📜 事件 [{}] の解決編移行時効果: {} は手札から [{}] をリムーブしました", case_name, player_id, rname));
+                    }
+                }
+            }
+        }
     }
 
     fn draw_cards(&mut self, player_id: &str, count: usize) {
@@ -794,6 +880,31 @@ impl MatchEngine {
                 }
             }
         }
+        if let Some(ref cs) = ps.r#case {
+            if let Some(c_def) = self.catalog.get(&cs.definition_id) {
+                if c_def.description.contains("【宣言】") {
+                    let dec_sec = extract_declare_section(&c_def.description);
+                    let res_ok = !dec_sec.contains("【解決編】") || ps.case_phase == CasePhase::RESOLUTION;
+                    let cond_ok = self.check_effect_conditions(player_id, dec_sec);
+                    let hand_cost = parse_hand_remove_cost(dec_sec);
+                    let hand_ok = hand_cost == 0 || ps.hand.len() >= hand_cost;
+                    let flip_cost = parse_evidence_flip_cost(dec_sec);
+                    let face_down_ev = ps.evidence.iter().filter(|e| !e.face_up).count();
+                    let flip_ok = flip_cost == 0 || face_down_ev >= flip_cost;
+                    let file_cost = parse_file_remove_cost(dec_sec);
+                    let file_ok = file_cost == 0 || ps.file.len() >= file_cost;
+                    let is_turn_1 = dec_sec.contains("【ターン1】");
+                    let ok = res_ok && cond_ok && hand_ok && flip_ok && file_ok && (!is_turn_1 || !cs.used_declare_this_turn);
+                    if ok {
+                        declare_actors.push(json!({
+                            "actorId": cs.instance_id.clone(),
+                            "name": format!("📜 事件: {}", self.card_name_by_def(&cs.definition_id)),
+                            "desc": c_def.description.clone(),
+                        }));
+                    }
+                }
+            }
+        }
         if !declare_actors.is_empty() {
             actions.push(json!({
                 "type": "DECLARE",
@@ -925,7 +1036,6 @@ impl MatchEngine {
                 }));
             }
             "ASSIST" => {
-                let mut became_resolution = false;
                 if let Some(ps) = self.players.get_mut(player_id) {
                     if let Some(ref mut p) = ps.partner {
                         if p.zone == Zone::PARTNER {
@@ -933,14 +1043,11 @@ impl MatchEngine {
                             p.zone = Zone::FILE;
                         }
                     }
-                    if ps.effective_file_count() >= 7 && ps.case_phase != CasePhase::RESOLUTION {
-                        ps.case_phase = CasePhase::RESOLUTION;
-                        became_resolution = true;
-                    }
                 }
                 self.log(format!("🤝 {} が パートナーのアシスト を宣言（パートナーをFILEへ移動）", player_id));
-                if became_resolution {
-                    self.log(format!("✨ {} のFILEが7枚以上になり、事件が【解決編】に突入しました！", player_id));
+                self.check_resolution_transition(player_id);
+                if self.phase == MatchPhase::FINISHED {
+                    return;
                 }
                 self.prompt_main_action(player_id);
             }
@@ -1094,6 +1201,11 @@ impl MatchEngine {
                     return Some(p.definition_id.clone());
                 }
             }
+            if let Some(ref cs) = ps.r#case {
+                if cs.instance_id == actor_id {
+                    return Some(cs.definition_id.clone());
+                }
+            }
             ps.field.iter().find(|c| c.instance_id == actor_id).map(|c| c.definition_id.clone())
         });
 
@@ -1105,19 +1217,24 @@ impl MatchEngine {
             }
         };
 
-        let desc = match self.catalog.get(&def_id) {
+        let full_desc = match self.catalog.get(&def_id) {
             Some(d) => d.description.clone(),
             None => {
                 self.prompt_main_action(player_id);
                 return;
             }
         };
+        let desc = extract_declare_section(&full_desc).to_string();
 
         let card_name = self.card_name_by_def(&def_id);
 
         // 1. コスト支払い
         let hand_cost = parse_hand_remove_cost(&desc);
+        let flip_cost = parse_evidence_flip_cost(&desc);
+        let file_cost = parse_file_remove_cost(&desc);
         let mut removed_cost_names = vec![];
+        let mut flipped_count = 0;
+        let mut removed_file_names = vec![];
         if let Some(ps) = self.players.get_mut(player_id) {
             if desc.contains("【スリープ】") {
                 if let Some(ref mut p) = ps.partner {
@@ -1134,6 +1251,11 @@ impl MatchEngine {
                     p.used_declare_this_turn = true;
                 }
             }
+            if let Some(ref mut cs) = ps.r#case {
+                if cs.instance_id == actor_id {
+                    cs.used_declare_this_turn = true;
+                }
+            }
             if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == actor_id) {
                 c.used_declare_this_turn = true;
             }
@@ -1146,10 +1268,36 @@ impl MatchEngine {
                     removed_cost_names.push(did);
                 }
             }
+            // 裏向き証拠を表向きにするコストの支払い
+            for ev in ps.evidence.iter_mut() {
+                if flipped_count >= flip_cost {
+                    break;
+                }
+                if !ev.face_up {
+                    ev.face_up = true;
+                    flipped_count += 1;
+                }
+            }
+            // FILEコストの支払い
+            for _ in 0..file_cost {
+                if let Some(mut f_card) = ps.file.pop() {
+                    f_card.zone = Zone::REMOVE;
+                    let did = f_card.definition_id.clone();
+                    ps.remove.push(f_card);
+                    removed_file_names.push(did);
+                }
+            }
         }
         for did in removed_cost_names {
             let cost_name = self.card_name_by_def(&did);
             self.log(format!("💸 コスト支払い: {} の手札から [{}] をリムーブしました", player_id, cost_name));
+        }
+        if flipped_count > 0 {
+            self.log(format!("🔓 コスト支払い: {} は裏向きの証拠を{}つ表向きにしました", player_id, flipped_count));
+        }
+        for did in removed_file_names {
+            let fname = self.card_name_by_def(&did);
+            self.log(format!("💸 コスト支払い: {} のFILEから [{}] をリムーブしました", player_id, fname));
         }
 
         self.log(format!("⚡ {} が [{}] の【宣言】を発動！", player_id, card_name));
@@ -1158,6 +1306,7 @@ impl MatchEngine {
         let opp_id = self.player_order.iter().find(|p| *p != player_id).cloned().unwrap_or_default();
 
         let is_ap_buff = desc.contains("AP＋") || desc.contains("AP+");
+        let is_ap_debuff = parse_ap_debuff(&desc) > 0;
         let is_give_rush = desc.contains("突撃") && (desc.contains("与え") || desc.contains("持つ"));
         let is_activate = desc.contains("アクティブにする");
         let is_sleep_opp = desc.contains("スリープさせる") && (desc.contains("相手") || desc.contains("キャラを1枚") || desc.contains("キャラ1枚"));
@@ -1230,6 +1379,21 @@ impl MatchEngine {
                             "isOpponent": false
                         }));
                     }
+                }
+            }
+        } else if is_ap_debuff && desc.contains("選び") {
+            effect_type = "AP_DEBUFF";
+            title = "APを減少させる相手キャラを1体選択してください";
+            if let Some(opp_ps) = self.players.get(&opp_id) {
+                for c in &opp_ps.field {
+                    candidates.push(json!({
+                        "instanceId": c.instance_id,
+                        "name": self.card_name_by_def(&c.definition_id),
+                        "level": self.catalog.get(&c.definition_id).map(|d| d.level).unwrap_or(0),
+                        "ap": self.get_effective_ap(&opp_id, c),
+                        "orientation": format!("{:?}", c.orientation),
+                        "isOpponent": true
+                    }));
                 }
             }
         } else if is_ap_buff && desc.contains("選び") {
@@ -1467,10 +1631,14 @@ impl MatchEngine {
                     }
                 }
                 "AP_DEBUFF" => {
+                    let def_id = self.find_card_def_id(actor_id).unwrap_or_default();
+                    let desc = self.catalog.get(&def_id).map(|d| d.description.clone()).unwrap_or_default();
+                    let debuff = parse_ap_debuff(&desc);
+                    let actual_debuff = if debuff > 0 { debuff } else { 2000 };
                     if let Some(opp_ps) = self.players.get_mut(&opp_id) {
                         if let Some(c) = opp_ps.field.iter_mut().find(|c| c.instance_id == tid) {
-                            c.temp_ap_bonus -= 2000;
-                            self.log(format!("🔻 [{}] の効果で相手の [{}] のAP -2000", actor_name, target_name));
+                            c.temp_ap_bonus -= actual_debuff;
+                            self.log(format!("🔻 [{}] の効果で相手の [{}] のAP -{}", actor_name, target_name, actual_debuff));
                         }
                     }
                 }

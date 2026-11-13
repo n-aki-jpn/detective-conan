@@ -1362,5 +1362,133 @@ mod tests {
         assert_eq!(engine.players.get("p1").unwrap().hand.len(), hand_before + 1);
         assert_eq!(engine.players.get("p1").unwrap().field.last().unwrap().temp_ap_bonus, 1000);
     }
+
+    #[test]
+    fn test_case_card_resolution_and_declare_effects() {
+        let path = if std::path::Path::new("data/dummy/cards.json").exists() {
+            "data/dummy/cards.json"
+        } else {
+            "../data/dummy/cards.json"
+        };
+        let catalog = CardCatalog::load_from_json(path).expect("catalog load failed");
+        let mut engine = MatchEngine::new(catalog);
+        engine.turn = 4;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+
+        // Case B11099: 解決編になったとき手札1枚リムーブ / 【解決編】【宣言】【ターン1】裏向き証拠2つ表向き -> AP-3000
+        ps1.r#case = Some(models::CardInstance {
+            instance_id: "p1_case".to_string(),
+            definition_id: "B11099".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::CASE,
+            orientation: models::CardOrientation::ACTIVE,
+            entered_turn: 0,
+            face_up: true,
+            temp_ap_bonus: 0,
+            has_rush: false,
+            rush_target: None,
+            used_declare_this_turn: false,
+        });
+        for i in 0..7 {
+            ps1.file.push(models::CardInstance {
+                instance_id: format!("p1_f{}", i),
+                definition_id: "B01005".to_string(),
+                owner_id: "p1".to_string(),
+                zone: models::Zone::FILE,
+                orientation: models::CardOrientation::ACTIVE,
+                entered_turn: 0,
+                face_up: false,
+                temp_ap_bonus: 0,
+                has_rush: false,
+                rush_target: None,
+                used_declare_this_turn: false,
+            });
+        }
+        ps1.hand.push(models::CardInstance {
+            instance_id: "p1_h1".to_string(),
+            definition_id: "B01005".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::HAND,
+            orientation: models::CardOrientation::ACTIVE,
+            entered_turn: 0,
+            face_up: true,
+            temp_ap_bonus: 0,
+            has_rush: false,
+            rush_target: None,
+            used_declare_this_turn: false,
+        });
+        for i in 0..2 {
+            ps1.evidence.push(models::CardInstance {
+                instance_id: format!("p1_ev{}", i),
+                definition_id: "B01005".to_string(),
+                owner_id: "p1".to_string(),
+                zone: models::Zone::EVIDENCE,
+                orientation: models::CardOrientation::ACTIVE,
+                entered_turn: 0,
+                face_up: false, // face down
+                temp_ap_bonus: 0,
+                has_rush: false,
+                rush_target: None,
+                used_declare_this_turn: false,
+            });
+        }
+
+        ps2.field.push(models::CardInstance {
+            instance_id: "p2_c1".to_string(),
+            definition_id: "B01005".to_string(),
+            owner_id: "p2".to_string(),
+            zone: models::Zone::FIELD,
+            orientation: models::CardOrientation::ACTIVE,
+            entered_turn: 1,
+            face_up: true,
+            temp_ap_bonus: 0,
+            has_rush: false,
+            rush_target: None,
+            used_declare_this_turn: false,
+        });
+
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        // 1. Trigger resolution transition -> hand size goes from 1 to 0
+        engine.check_resolution_transition("p1");
+        assert_eq!(engine.players.get("p1").unwrap().case_phase, models::CasePhase::RESOLUTION);
+        assert_eq!(engine.players.get("p1").unwrap().hand.len(), 0);
+
+        // 2. Declare option should include case card
+        engine.prompt_main_action("p1");
+        let pd = engine.pending_decision.as_ref().unwrap().clone();
+        let actions = pd["options"]["actions"].as_array().unwrap();
+        let declare_act = actions.iter().find(|a| a["type"] == "DECLARE").unwrap();
+        let actors = declare_act["actors"].as_array().unwrap();
+        assert!(actors.iter().any(|a| a["actorId"] == "p1_case"));
+
+        // 3. Execute DECLARE on case card
+        let dec_id = pd["decisionId"].as_str().unwrap().to_string();
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": dec_id,
+            "revision": engine.revision,
+            "value": {"type": "DECLARE", "actorId": "p1_case"}
+        }));
+
+        // Two evidence cards should now be face_up
+        assert!(engine.players.get("p1").unwrap().evidence.iter().all(|e| e.face_up));
+
+        // Target select for AP-3000 should be pending
+        let ts_pd = engine.pending_decision.as_ref().unwrap().clone();
+        assert_eq!(ts_pd["kind"], "targetSelect");
+        let ts_dec_id = ts_pd["decisionId"].as_str().unwrap().to_string();
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": ts_dec_id,
+            "revision": engine.revision,
+            "value": {"targetId": "p2_c1", "actorId": "p1_case", "effectType": "AP_DEBUFF"}
+        }));
+
+        assert_eq!(engine.players.get("p2").unwrap().field[0].temp_ap_bonus, -3000);
+    }
 }
 
