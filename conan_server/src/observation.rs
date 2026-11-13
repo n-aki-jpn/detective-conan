@@ -72,6 +72,7 @@ pub fn build_player_observation(engine: &MatchEngine, viewing_player_id: &str) -
             "field": ps.field.iter().map(|c| serialize_card(c, false)).collect::<Vec<_>>(),
             "partner": ps.partner.as_ref().map(|c| serialize_card(c, false)),
             "case": ps.r#case.as_ref().map(|c| serialize_card(c, false)),
+            "evidence": ps.evidence.iter().map(|c| serialize_card(c, !c.face_up)).collect::<Vec<_>>(),
             "remove": ps.remove.iter().map(|c| serialize_card(c, false)).collect::<Vec<_>>(),
             "normalHandPlayed": ps.normal_hand_played_this_turn,
             "hintPlayed": ps.hint_played_this_turn

@@ -708,19 +708,24 @@ impl MatchEngine {
         // 1. End turn
         actions.push(json!({"type": "END_TURN"}));
 
-        // 2. Hand Play
-        if !ps.normal_hand_played_this_turn && !ps.hint_played_this_turn {
+        // 2. Hand Play (キャラは1ターン1回・現場5枚未満、イベントはいつでも使用可能)
+        {
+            let can_play_char = !ps.normal_hand_played_this_turn && !ps.hint_played_this_turn && ps.field.len() < 5;
             let mut playable_cards = vec![];
             for c in &ps.hand {
                 if let Some(c_def) = self.catalog.get(&c.definition_id) {
                     let card_colors = normalize_color_set(&c_def.colors);
                     let color_ok = card_colors.is_empty() || case_colors.is_empty() || card_colors.is_subset(&case_colors);
                     if c_def.level <= effective_file && color_ok {
-                        playable_cards.push(c.instance_id.clone());
+                        if c_def.card_type == CardType::EVENT {
+                            playable_cards.push(c.instance_id.clone());
+                        } else if can_play_char {
+                            playable_cards.push(c.instance_id.clone());
+                        }
                     }
                 }
             }
-            if !playable_cards.is_empty() && ps.field.len() < 5 {
+            if !playable_cards.is_empty() {
                 actions.push(json!({
                     "type": "HAND_PLAY",
                     "cardIds": playable_cards
@@ -972,24 +977,36 @@ impl MatchEngine {
                 let turn = self.turn;
                 let mut played_def_id = None;
                 let mut played_inst_id = None;
+                let mut is_event = false;
                 if let Some(ps) = self.players.get_mut(player_id) {
                     if let Some(idx) = ps.hand.iter().position(|c| c.instance_id == card_id) {
                         let mut card = ps.hand.remove(idx);
+                        let card_type = self.catalog.get(&card.definition_id).map(|d| d.card_type).unwrap_or(CardType::CHARACTER);
                         played_def_id = Some(card.definition_id.clone());
                         played_inst_id = Some(card.instance_id.clone());
-                        card.zone = Zone::FIELD;
-                        card.orientation = CardOrientation::ACTIVE;
-                        card.entered_turn = turn;
                         card.face_up = true;
-                        ps.field.push(card);
-                        ps.normal_hand_played_this_turn = true;
+                        if card_type == CardType::EVENT {
+                            is_event = true;
+                            card.zone = Zone::REMOVE;
+                            ps.remove.push(card);
+                        } else {
+                            card.zone = Zone::FIELD;
+                            card.orientation = CardOrientation::ACTIVE;
+                            card.entered_turn = turn;
+                            ps.field.push(card);
+                            ps.normal_hand_played_this_turn = true;
+                        }
                     }
                 }
                 if let (Some(def_id), Some(inst_id)) = (played_def_id, played_inst_id) {
                     let card_name = self.card_name_by_def(&def_id);
                     let lvl = self.catalog.get(&def_id).map(|d| d.level).unwrap_or(0);
-                    self.log(format!("🃏 {} が [{}] (Lv.{}) を登場させました", player_id, card_name, lvl));
-                    let need_target = self.resolve_on_play_effects(player_id, &inst_id, &def_id);
+                    if is_event {
+                        self.log(format!("📜 {} がイベント [{}] (Lv.{}) を使用しました", player_id, card_name, lvl));
+                    } else {
+                        self.log(format!("🃏 {} が [{}] (Lv.{}) を登場させました", player_id, card_name, lvl));
+                    }
+                    let need_target = self.resolve_on_play_effects(player_id, &inst_id, &def_id, is_event);
                     if need_target {
                         return;
                     }
@@ -1010,14 +1027,13 @@ impl MatchEngine {
                     let case_def = ps.r#case.as_ref().and_then(|c| self.catalog.get(&c.definition_id));
                     let case_colors = case_def.map(|d| normalize_color_set(&d.colors)).unwrap_or_default();
 
-                    if ps.field.len() < 5 {
-                        for c in &ps.hand {
-                            if let Some(c_def) = self.catalog.get(&c.definition_id) {
-                                let card_colors = normalize_color_set(&c_def.colors);
-                                let color_ok = card_colors.is_empty() || case_colors.is_empty() || card_colors.is_subset(&case_colors);
-                                if c_def.level <= effective_file && color_ok {
-                                    playable_cards.push(c.instance_id.clone());
-                                }
+                    for c in &ps.hand {
+                        if let Some(c_def) = self.catalog.get(&c.definition_id) {
+                            let card_colors = normalize_color_set(&c_def.colors);
+                            let color_ok = card_colors.is_empty() || case_colors.is_empty() || card_colors.is_subset(&case_colors);
+                            let slot_ok = c_def.card_type == CardType::EVENT || ps.field.len() < 5;
+                            if c_def.level <= effective_file && color_ok && slot_ok {
+                                playable_cards.push(c.instance_id.clone());
                             }
                         }
                     }
@@ -1792,27 +1808,40 @@ impl MatchEngine {
     fn handle_hint_play_answer(&mut self, player_id: &str, val: &Value) {
         let mut played_def_id = None;
         let mut played_inst_id = None;
+        let mut is_event = false;
         if let Some(card_id) = val.get("cardId").and_then(|v| v.as_str()) {
             let turn = self.turn;
             if let Some(ps) = self.players.get_mut(player_id) {
-                if ps.field.len() < 5 {
-                    if let Some(idx) = ps.hand.iter().position(|c| c.instance_id == card_id) {
+                if let Some(idx) = ps.hand.iter().position(|c| c.instance_id == card_id) {
+                    let def_id_peek = ps.hand[idx].definition_id.clone();
+                    let card_type = self.catalog.get(&def_id_peek).map(|d| d.card_type).unwrap_or(CardType::CHARACTER);
+                    if card_type == CardType::EVENT || ps.field.len() < 5 {
                         let mut card = ps.hand.remove(idx);
                         played_def_id = Some(card.definition_id.clone());
                         played_inst_id = Some(card.instance_id.clone());
-                        card.zone = Zone::FIELD;
-                        card.orientation = CardOrientation::ACTIVE;
-                        card.entered_turn = turn;
                         card.face_up = true;
-                        ps.field.push(card);
+                        if card_type == CardType::EVENT {
+                            is_event = true;
+                            card.zone = Zone::REMOVE;
+                            ps.remove.push(card);
+                        } else {
+                            card.zone = Zone::FIELD;
+                            card.orientation = CardOrientation::ACTIVE;
+                            card.entered_turn = turn;
+                            ps.field.push(card);
+                        }
                     }
                 }
             }
         }
         if let (Some(def_id), Some(inst_id)) = (played_def_id, played_inst_id) {
             let card_name = self.card_name_by_def(&def_id);
-            self.log(format!("🃏 {} がヒントから [{}] を登場させました", player_id, card_name));
-            let need_target = self.resolve_on_play_effects(player_id, &inst_id, &def_id);
+            if is_event {
+                self.log(format!("📜 {} がヒントからイベント [{}] を使用しました", player_id, card_name));
+            } else {
+                self.log(format!("🃏 {} がヒントから [{}] を登場させました", player_id, card_name));
+            }
+            let need_target = self.resolve_on_play_effects(player_id, &inst_id, &def_id, is_event);
             if need_target {
                 return;
             }
@@ -1961,8 +1990,8 @@ impl MatchEngine {
         self.prompt_main_action(&attacker_pid);
     }
 
-    /// 登場時効果を解決する（対象選択が必要な場合は true を返し、pending_decision をセットする）
-    fn resolve_on_play_effects(&mut self, player_id: &str, actor_id: &str, definition_id: &str) -> bool {
+    /// 登場時効果またはイベントカード効果を解決する（対象選択が必要な場合は true を返し、pending_decision をセットする）
+    fn resolve_on_play_effects(&mut self, player_id: &str, actor_id: &str, definition_id: &str, is_event: bool) -> bool {
         let desc = match self.catalog.get(definition_id) {
             Some(d) => d.description.clone(),
             None => return false,
@@ -1975,7 +2004,7 @@ impl MatchEngine {
         let card_name = self.card_name_by_def(definition_id);
 
         // 突撃: 登場したターンからすぐにアクション可能
-        if desc.contains("突撃") && !desc.contains("与え") && !desc.contains("コンタクトによってリムーブされたとき") {
+        if !is_event && desc.contains("突撃") && !desc.contains("与え") && !desc.contains("コンタクトによってリムーブされたとき") {
             let r_target = parse_rush_target(&desc);
             if let Some(ps) = self.players.get_mut(player_id) {
                 if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == actor_id) {
@@ -1991,11 +2020,11 @@ impl MatchEngine {
             }
         }
 
-        // 【登場】【登場時】トリガーの効果
+        // 【登場】【登場時】トリガー、またはイベントカードの効果
         let is_on_play = desc.contains("【登場】") || desc.contains("【登場時】")
             || desc.contains("登場させたとき") || desc.contains("登場したとき");
 
-        if !is_on_play {
+        if !is_event && !is_on_play {
             return false;
         }
 
@@ -2060,6 +2089,9 @@ impl MatchEngine {
         let is_stun_opp = desc.contains("スタンさせる") && (desc.contains("相手") || desc.contains("キャラを1枚") || desc.contains("キャラ1枚"));
         let is_remove_opp = desc.contains("リムーブする") && (desc.contains("相手") || desc.contains("キャラを1枚") || desc.contains("キャラ1枚") || desc.contains("デッキの下に移す"));
         let is_ap_buff_target = (desc.contains("AP＋") || desc.contains("AP+")) && desc.contains("選び");
+        let is_ap_debuff_target = parse_ap_debuff(&desc) > 0 && desc.contains("選び");
+        let is_give_rush_target = desc.contains("突撃") && desc.contains("与え") && desc.contains("選び");
+        let is_activate_target = desc.contains("アクティブにする") && desc.contains("選び");
 
         let mut candidates: Vec<Value> = vec![];
         let mut effect_type = "";
@@ -2110,6 +2142,53 @@ impl MatchEngine {
                         "orientation": format!("{:?}", c.orientation),
                         "isOpponent": true
                     }));
+                }
+            }
+        } else if is_ap_debuff_target {
+            effect_type = "AP_DEBUFF";
+            title = "APを減少させる相手キャラを1体選択してください";
+            if let Some(opp_ps) = self.players.get(&opp_id) {
+                for c in &opp_ps.field {
+                    candidates.push(json!({
+                        "instanceId": c.instance_id,
+                        "name": self.card_name_by_def(&c.definition_id),
+                        "level": self.catalog.get(&c.definition_id).map(|d| d.level).unwrap_or(0),
+                        "ap": self.get_effective_ap(&opp_id, c),
+                        "orientation": format!("{:?}", c.orientation),
+                        "isOpponent": true
+                    }));
+                }
+            }
+        } else if is_give_rush_target {
+            effect_type = "GIVE_RUSH";
+            title = "突撃を与える味方キャラを1体選択してください";
+            if let Some(ps) = self.players.get(player_id) {
+                for c in &ps.field {
+                    candidates.push(json!({
+                        "instanceId": c.instance_id,
+                        "name": self.card_name_by_def(&c.definition_id),
+                        "level": self.catalog.get(&c.definition_id).map(|d| d.level).unwrap_or(0),
+                        "ap": self.get_effective_ap(player_id, c),
+                        "orientation": format!("{:?}", c.orientation),
+                        "isOpponent": false
+                    }));
+                }
+            }
+        } else if is_activate_target {
+            effect_type = "ACTIVATE";
+            title = "アクティブにする味方キャラを1体選択してください";
+            if let Some(ps) = self.players.get(player_id) {
+                for c in &ps.field {
+                    if c.orientation == CardOrientation::SLEEP {
+                        candidates.push(json!({
+                            "instanceId": c.instance_id,
+                            "name": self.card_name_by_def(&c.definition_id),
+                            "level": self.catalog.get(&c.definition_id).map(|d| d.level).unwrap_or(0),
+                            "ap": self.get_effective_ap(player_id, c),
+                            "orientation": format!("{:?}", c.orientation),
+                            "isOpponent": false
+                        }));
+                    }
                 }
             }
         } else if is_ap_buff_target {

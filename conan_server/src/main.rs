@@ -1490,5 +1490,128 @@ mod tests {
 
         assert_eq!(engine.players.get("p2").unwrap().field[0].temp_ap_bonus, -3000);
     }
+
+    #[test]
+    fn test_event_card_play_and_remove_zone() {
+        let path = if std::path::Path::new("data/dummy/cards.json").exists() {
+            "data/dummy/cards.json"
+        } else {
+            "../data/dummy/cards.json"
+        };
+        let mut catalog = CardCatalog::load_from_json(path).expect("catalog load failed");
+
+        catalog.definitions.insert(
+            "TEST_EVENT_DRAW".to_string(),
+            models::CardDefinition {
+                definition_id: "TEST_EVENT_DRAW".to_string(),
+                canonical_id: "TEST_EVENT_DRAW".to_string(),
+                card_type: models::CardType::EVENT,
+                colors: vec!["青".to_string()],
+                level: 2,
+                ap: 0,
+                lp: 0,
+                names: vec!["テストイベント".to_string()],
+                description: "カードを1枚引く。".to_string(),
+                traits: vec![],
+                case_levels: None,
+                main_thumb: None,
+                main_path: None,
+            },
+        );
+
+        let mut engine = MatchEngine::new(catalog);
+        engine.turn = 3;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        let ps2 = engine::PlayerState::new("p2".to_string());
+
+        // Fill p1 field to max 5 chars and mark normal_hand_played_this_turn = true
+        ps1.normal_hand_played_this_turn = true;
+        for i in 0..5 {
+            ps1.field.push(models::CardInstance {
+                instance_id: format!("p1_f{}", i),
+                definition_id: "B01005".to_string(),
+                owner_id: "p1".to_string(),
+                zone: models::Zone::FIELD,
+                orientation: models::CardOrientation::ACTIVE,
+                entered_turn: 1,
+                face_up: true,
+                temp_ap_bonus: 0,
+                has_rush: false,
+                rush_target: None,
+                used_declare_this_turn: false,
+            });
+        }
+        // Add 3 FILEs
+        for i in 0..3 {
+            ps1.file.push(models::CardInstance {
+                instance_id: format!("p1_fl{}", i),
+                definition_id: "B01005".to_string(),
+                owner_id: "p1".to_string(),
+                zone: models::Zone::FILE,
+                orientation: models::CardOrientation::ACTIVE,
+                entered_turn: 0,
+                face_up: false,
+                temp_ap_bonus: 0,
+                has_rush: false,
+                rush_target: None,
+                used_declare_this_turn: false,
+            });
+        }
+        // Add event card to hand and 1 card in deck
+        ps1.hand.push(models::CardInstance {
+            instance_id: "p1_ev_card".to_string(),
+            definition_id: "TEST_EVENT_DRAW".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::HAND,
+            orientation: models::CardOrientation::ACTIVE,
+            entered_turn: 0,
+            face_up: true,
+            temp_ap_bonus: 0,
+            has_rush: false,
+            rush_target: None,
+            used_declare_this_turn: false,
+        });
+        ps1.deck.push(models::CardInstance {
+            instance_id: "p1_dk1".to_string(),
+            definition_id: "B01005".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::DECK,
+            orientation: models::CardOrientation::ACTIVE,
+            entered_turn: 0,
+            face_up: false,
+            temp_ap_bonus: 0,
+            has_rush: false,
+            rush_target: None,
+            used_declare_this_turn: false,
+        });
+
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        // Even with 5 field cards & normal_hand_played = true, event card should be playable
+        engine.prompt_main_action("p1");
+        let pd = engine.pending_decision.as_ref().unwrap().clone();
+        let actions = pd["options"]["actions"].as_array().unwrap();
+        let hand_play = actions.iter().find(|a| a["type"] == "HAND_PLAY").unwrap();
+        assert!(hand_play["cardIds"].as_array().unwrap().contains(&serde_json::json!("p1_ev_card")));
+
+        // Play event card
+        let dec_id = pd["decisionId"].as_str().unwrap().to_string();
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": dec_id,
+            "revision": engine.revision,
+            "value": {"type": "HAND_PLAY", "cardId": "p1_ev_card"}
+        }));
+
+        let p1_after = engine.players.get("p1").unwrap();
+        // Field stays 5, event goes to remove, and 1 card drawn into hand
+        assert_eq!(p1_after.field.len(), 5);
+        assert_eq!(p1_after.remove.len(), 1);
+        assert_eq!(p1_after.remove[0].definition_id, "TEST_EVENT_DRAW");
+        assert_eq!(p1_after.hand.len(), 1);
+    }
 }
 

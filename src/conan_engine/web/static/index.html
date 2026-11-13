@@ -532,8 +532,8 @@
           <div class="counter-pill">山札<b id="opp-deck">-</b></div>
           <div class="counter-pill">手札<b id="opp-hand-count">-</b></div>
           <div class="counter-pill">FILE<b id="opp-file">-</b></div>
-          <div class="counter-pill">証拠<b id="opp-evidence">-</b></div>
-          <div class="counter-pill">除外<b id="opp-remove">-</b></div>
+          <div class="counter-pill" onclick="openZoneModal('opp', 'evidence')" style="cursor:pointer; border:1px solid rgba(56,189,248,0.5);" title="タップで相手の証拠を確認">🔍証拠<b id="opp-evidence">-</b></div>
+          <div class="counter-pill" onclick="openZoneModal('opp', 'remove')" style="cursor:pointer; border:1px solid rgba(148,163,184,0.5);" title="タップで相手の除外カード一覧を確認">🗑️除外<b id="opp-remove">-</b></div>
         </div>
         <div class="zone-content">
           <div class="fixed-cards-col">
@@ -554,8 +554,8 @@
           <div class="counter-pill">山札<b id="me-deck">-</b></div>
           <div class="counter-pill">手札<b id="me-hand-count">-</b></div>
           <div class="counter-pill">FILE<b id="me-file">-</b></div>
-          <div class="counter-pill">証拠<b id="me-evidence">-</b></div>
-          <div class="counter-pill">除外<b id="me-remove">-</b></div>
+          <div class="counter-pill" onclick="openZoneModal('me', 'evidence')" style="cursor:pointer; border:1px solid rgba(56,189,248,0.5);" title="タップで自分の証拠を確認">🔍証拠<b id="me-evidence">-</b></div>
+          <div class="counter-pill" onclick="openZoneModal('me', 'remove')" style="cursor:pointer; border:1px solid rgba(148,163,184,0.5);" title="タップで自分の除外カード一覧を確認">🗑️除外<b id="me-remove">-</b></div>
         </div>
         <div class="zone-content">
           <div class="fixed-cards-col">
@@ -735,6 +735,21 @@
       </div>
       <div class="modal-footer" style="justify-content:flex-end;">
         <button class="btn btn-secondary" onclick="closePublishModal()" style="padding:5px 16px; font-size:0.8rem; min-height:30px;">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Zone List Modal (Evidence / Remove) -->
+  <div id="zone-list-modal" class="card-modal-backdrop" onclick="closeZoneModal()">
+    <div class="card-modal-content" style="max-width:520px; width:92%;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <span id="zone-modal-title" class="modal-title" style="color:var(--accent);">エリア確認</span>
+        <button class="qty-btn" onclick="closeZoneModal()">✕</button>
+      </div>
+      <div id="zone-modal-subtitle" style="font-size:0.75rem; color:var(--text-muted); margin-bottom:8px;"></div>
+      <div id="zone-modal-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(110px, 1fr)); gap:8px; max-height:58vh; overflow-y:auto; padding:2px;"></div>
+      <div class="modal-footer" style="justify-content:flex-end; margin-top:10px;">
+        <button class="btn btn-secondary" onclick="closeZoneModal()" style="padding:5px 14px; font-size:0.8rem; min-height:30px;">閉じる</button>
       </div>
     </div>
   </div>
@@ -1085,6 +1100,79 @@
       document.getElementById('card-modal').style.display = 'none';
     }
 
+    function openZoneModal(who, zoneType) {
+      if (!lastObs) return;
+      const ps = who === 'me' ? lastObs.me : lastObs.opponent;
+      if (!ps) return;
+      const whoLabel = who === 'me' ? `自分 (${ps.playerId})` : `相手 (${ps.playerId})`;
+      const titleEl = document.getElementById('zone-modal-title');
+      const subEl = document.getElementById('zone-modal-subtitle');
+      const gridEl = document.getElementById('zone-modal-grid');
+      gridEl.innerHTML = '';
+
+      if (zoneType === 'evidence') {
+        const list = ps.evidence || [];
+        const faceUpCount = list.filter(c => c.faceUp).length;
+        const faceDownCount = list.length - faceUpCount;
+        titleEl.innerText = `🔍 ${whoLabel} の証拠エリア`;
+        subEl.innerText = `合計 ${list.length}枚（表向き: ${faceUpCount}枚 / 裏向き: ${faceDownCount}枚）※表向きのカードはタップで詳細を確認できます`;
+
+        if (list.length === 0) {
+          gridEl.innerHTML = '<div style="grid-column:1/-1; text-align:center; color:var(--text-muted); padding:20px;">証拠はありません</div>';
+        } else {
+          list.forEach((c, idx) => {
+            const item = document.createElement('div');
+            if (c.faceUp) {
+              item.style.cssText = 'background:#0f172a; border:1px solid #38bdf8; border-radius:6px; padding:6px; cursor:pointer; display:flex; flex-direction:column; gap:4px; align-items:center;';
+              const imgUrl = c.mainPath ? `/card-images/${c.mainPath}` : '';
+              item.innerHTML = `
+                <div style="font-size:0.65rem; color:#38bdf8; font-weight:bold;">🔓 表向き #${idx + 1}</div>
+                ${imgUrl ? `<img src="${imgUrl}" style="width:72px; height:100px; object-fit:cover; border-radius:4px;">` : '<div style="width:72px; height:100px; background:#1e293b; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:0.7rem;">NoImg</div>'}
+                <div style="font-size:0.72rem; font-weight:bold; text-align:center; line-height:1.2; word-break:break-word;">${c.name || c.definitionId}</div>
+                <div style="font-size:0.65rem; color:var(--text-muted);">Lv.${c.level ?? '-'} / AP ${c.ap ?? '-'}</div>
+              `;
+              item.onclick = () => showCardModal(c);
+            } else {
+              item.style.cssText = 'background:#0f172a; border:1px dashed #475569; border-radius:6px; padding:10px 6px; display:flex; flex-direction:column; gap:6px; align-items:center; justify-content:center; min-height:130px; opacity:0.85;';
+              item.innerHTML = `
+                <div style="font-size:1.5rem;">🔒</div>
+                <div style="font-size:0.72rem; color:var(--text-muted); font-weight:bold;">裏向きの証拠 #${idx + 1}</div>
+              `;
+            }
+            gridEl.appendChild(item);
+          });
+        }
+      } else {
+        const list = ps.remove || [];
+        titleEl.innerText = `🗑️ ${whoLabel} の除外（リムーブ）エリア`;
+        subEl.innerText = `合計 ${list.length}枚 ※カードをタップすると詳細を確認できます`;
+
+        if (list.length === 0) {
+          gridEl.innerHTML = '<div style="grid-column:1/-1; text-align:center; color:var(--text-muted); padding:20px;">除外されたカードはありません</div>';
+        } else {
+          // 新しく除外されたカードを上に表示
+          [...list].reverse().forEach((c) => {
+            const item = document.createElement('div');
+            item.style.cssText = 'background:#0f172a; border:1px solid #475569; border-radius:6px; padding:6px; cursor:pointer; display:flex; flex-direction:column; gap:4px; align-items:center;';
+            const imgUrl = c.mainPath ? `/card-images/${c.mainPath}` : '';
+            item.innerHTML = `
+              ${imgUrl ? `<img src="${imgUrl}" style="width:72px; height:100px; object-fit:cover; border-radius:4px;">` : '<div style="width:72px; height:100px; background:#1e293b; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:0.7rem;">NoImg</div>'}
+              <div style="font-size:0.72rem; font-weight:bold; text-align:center; line-height:1.2; word-break:break-word;">${c.name || c.definitionId}</div>
+              <div style="font-size:0.65rem; color:var(--text-muted);">Lv.${c.level ?? '-'} / ${c.cardType || ''}</div>
+            `;
+            item.onclick = () => showCardModal(c);
+            gridEl.appendChild(item);
+          });
+        }
+      }
+
+      document.getElementById('zone-list-modal').style.display = 'flex';
+    }
+
+    function closeZoneModal() {
+      document.getElementById('zone-list-modal').style.display = 'none';
+    }
+
     function createCardEl(card, isSecret = false, disableModal = false) {
       const el = document.createElement('div');
       const cType = card ? (card.cardType || '') : '';
@@ -1402,8 +1490,9 @@
               act.actorIds.forEach(aid => {
                 const b = document.createElement('button');
                 b.className = 'btn';
+                const isPartner = me.partner && aid === me.partner.instanceId;
                 const allMine = [...me.field, me.partner];
-                const label = getCardLabel(aid, allMine);
+                const label = isPartner ? 'パートナー' : getCardLabel(aid, allMine);
                 b.innerText = `🔎 推理: ${label}`;
                 b.onclick = () => submitDecision({ type: 'DEDUCE', actorId: aid });
                 decActs.appendChild(b);
