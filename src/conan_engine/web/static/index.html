@@ -1213,15 +1213,24 @@
             }
           });
         } else if (pd.kind === 'guard') {
-          document.getElementById('decision-title').innerText = `🛡️ ガード選択`;
-          document.getElementById('decision-desc').innerText = `ガードするキャラを選ぶかスルー`;
+          const hasCutins = (pd.options.cutinCardIds || []).length > 0;
+          const hasGuards = (pd.options.guardCardIds || []).length > 0;
 
+          document.getElementById('decision-title').innerText = hasCutins
+            ? `🛡️⚡ ガード / カットイン`
+            : `🛡️ ガード選択`;
+          document.getElementById('decision-desc').innerText = hasCutins
+            ? `ガードするキャラを選ぶか、カットインを使用するかスルーしてください`
+            : `ガードするキャラを選ぶかスルー`;
+
+          // スルーボタン
           const btnPass = document.createElement('button');
           btnPass.className = 'btn btn-secondary';
           btnPass.innerText = 'スルー';
           btnPass.onclick = () => submitDecision({ guardCardId: null });
           decActs.appendChild(btnPass);
 
+          // ガードカード
           (pd.options.guardCardIds || []).forEach(gid => {
             const btn = document.createElement('button');
             btn.className = 'btn btn-danger';
@@ -1230,6 +1239,28 @@
             btn.onclick = () => submitDecision({ guardCardId: gid });
             decActs.appendChild(btn);
           });
+
+          // カットインカード（手札から使用）
+          if (hasCutins) {
+            const sep = document.createElement('div');
+            sep.style.cssText = 'width:100%; text-align:center; font-size:0.72rem; color:var(--accent); margin:4px 0; border-top:1px solid var(--border-color); padding-top:4px;';
+            sep.innerText = '⚡ カットイン';
+            decActs.appendChild(sep);
+
+            (pd.options.cutinCardIds || []).forEach(ci => {
+              const btn = document.createElement('button');
+              btn.className = 'btn';
+              btn.style.cssText = 'background:#7c3aed; border-color:#8b5cf6; font-size:0.78rem;';
+              const cardObj = me.hand.find(c => c && c.instanceId === ci.instanceId);
+              const defId = ci.definitionId || '';
+              const catCard = catalogData.find(c => c.definitionId === defId);
+              const name = (catCard && catCard.title) || defId;
+              btn.innerText = `⚡ カットイン: ${name}`;
+              btn.title = catCard ? (catCard.description || '') : '';
+              btn.onclick = () => submitDecision({ cutinCardId: ci.instanceId });
+              decActs.appendChild(btn);
+            });
+          }
         } else if (pd.kind === 'hintPlay') {
           document.getElementById('decision-title').innerText = `💡 ヒント後の手札登場`;
           document.getElementById('decision-desc').innerText = `回収後、手札を登場させられます`;
