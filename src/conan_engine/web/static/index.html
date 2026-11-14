@@ -2784,20 +2784,26 @@
     function renderFixedPickerColorChips() {
       const container = document.getElementById('fixed-picker-colors');
       if (!container) return;
+      const borderColors = {
+        '青': '#0284c7',
+        '緑': '#16a34a',
+        '白': '#94a3b8',
+        '赤': '#dc2626',
+        '黄': '#ca8a04',
+        '黒': '#64748b',
+        'MULTI': '#a855f7',
+      };
       const cols = ['ALL', '青', '緑', '白', '赤', '黄', '黒'];
       if (fixedPickerKind === 'case') cols.push('MULTI');
       container.innerHTML = '';
       cols.forEach(col => {
         const btn = document.createElement('button');
-        btn.className = 'btn btn-secondary';
-        btn.style.padding = '2px 8px';
-        btn.style.fontSize = '0.68rem';
-        btn.style.minHeight = '22px';
-        btn.innerText = col === 'ALL' ? '全色' : (col === 'MULTI' ? '混色' : col);
-        if (fixedPickerColor === col) {
-          btn.style.borderColor = '#38bdf8';
-          btn.style.background = '#1e3a5f';
+        btn.className = 'color-pill' + (fixedPickerColor === col ? ' active' : '');
+        btn.setAttribute('data-color', col === 'ALL' ? '' : col);
+        if (borderColors[col]) {
+          btn.style.borderColor = borderColors[col];
         }
+        btn.innerText = col === 'ALL' ? 'すべて' : (col === 'MULTI' ? '混色' : col);
         btn.onclick = () => setFixedPickerColor(col);
         container.appendChild(btn);
       });
@@ -2976,7 +2982,7 @@
     function setColorFilter(color) {
       selectedColorFilter = color;
       builderPage = 0;
-      document.querySelectorAll('.color-pill').forEach(btn => {
+      document.querySelectorAll('#deck-sticky-toolbar .color-pill').forEach(btn => {
         btn.classList.toggle('active', btn.getAttribute('data-color') === color);
       });
       renderBuilderCatalog();
