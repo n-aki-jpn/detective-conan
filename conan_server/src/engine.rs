@@ -1799,19 +1799,20 @@ impl MatchEngine {
         // ガード可能カード（フィールドのACTIVE状態キャラ）
         let cutin_or_disguise_used = self.action_context.as_ref().and_then(|c| c.get("cutinOrDisguiseUsed")).and_then(|v| v.as_bool()).unwrap_or(false);
         let contact_target_id = self.action_context.as_ref().and_then(|c| c.get("targetId")).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let is_case_attack = opp_ps.r#case.as_ref().map(|c| c.instance_id == contact_target_id).unwrap_or(false);
 
         let guards: Vec<String> = opp_ps.field.iter()
             .filter(|c| c.orientation == CardOrientation::ACTIVE)
             .map(|c| c.instance_id.clone())
             .collect();
 
-        // カットイン・変装可能カード（コンタクト時にカットインと変装を含めて合計1枚まで）
+        // カットイン・変装可能カード（事件アタック時は使用不可、コンタクト時にカットインと変装を含めて合計1枚まで）
         let cond_ctx = self.build_cond_info(defender_pid, None, CardOrientation::ACTIVE, None);
         let mut cutins: Vec<Value> = vec![];
         let mut disguises: Vec<Value> = vec![];
         let mut disguise_target_id: Option<String> = None;
 
-        if !cutin_or_disguise_used {
+        if !cutin_or_disguise_used && !is_case_attack {
             cutins = opp_ps.hand.iter()
                 .filter_map(|c| {
                     let def = self.catalog.get(&c.definition_id)?;
@@ -1994,9 +1995,14 @@ impl MatchEngine {
             }
         }
 
-        // カットイン使用かチェック（コンタクト時にカットインと変装を含めて合計1枚まで）
+        // カットイン使用かチェック（事件アタック時は使用不可、コンタクト時にカットインと変装を含めて合計1枚まで）
         if let Some(cutin_instance_id) = val.get("cutinCardId").and_then(|v| v.as_str()) {
-            if !cutin_or_disguise_used {
+            let contact_target_id = self.action_context.as_ref().and_then(|c| c.get("targetId")).and_then(|v| v.as_str()).unwrap_or("");
+            let is_case_attack = self.players.get(player_id)
+                .and_then(|ps| ps.r#case.as_ref())
+                .map(|c| c.instance_id == contact_target_id)
+                .unwrap_or(false);
+            if !cutin_or_disguise_used && !is_case_attack {
                 let cutin_instance_id = cutin_instance_id.to_string();
                 let cutin_def_id = {
                     let ps = self.players.get_mut(player_id).unwrap();
