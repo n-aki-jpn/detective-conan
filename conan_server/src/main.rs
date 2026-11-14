@@ -495,6 +495,9 @@ async fn handle_delete_deck_by_id(
         .chars()
         .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
         .collect();
+    if safe_id.starts_with("preset_") {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "プリセットデッキは削除できません"}))).into_response();
+    }
     let target = mgr.decks_dir.join(format!("{}.json", safe_id));
     if target.exists() {
         let _ = std::fs::remove_file(target);
@@ -1040,6 +1043,7 @@ mod tests {
             has_rush: false,
             rush_target: None,
             used_declare_this_turn: false,
+            ..Default::default()
         };
         let mut ps = engine::PlayerState::new("p1".to_string());
         ps.partner = Some(p1);
@@ -1056,6 +1060,7 @@ mod tests {
                 has_rush: false,
                 rush_target: None,
                 used_declare_this_turn: false,
+                ..Default::default()
             });
         }
         engine.players.insert("p1".to_string(), ps);
@@ -1081,6 +1086,7 @@ mod tests {
             has_rush: false,
             rush_target: None,
             used_declare_this_turn: false,
+            ..Default::default()
         });
         assert!(engine.check_effect_conditions("p1", "【FILE5】効果テキスト"));
     }
@@ -1111,6 +1117,7 @@ mod tests {
             has_rush: false,
             rush_target: None,
             used_declare_this_turn: false,
+            ..Default::default()
         });
 
         // Field card with turn end trigger
@@ -1126,6 +1133,7 @@ mod tests {
             has_rush: false,
             rush_target: None,
             used_declare_this_turn: false,
+            ..Default::default()
         });
         // 1 evidence
         ps1.evidence.push(models::CardInstance {
@@ -1140,6 +1148,7 @@ mod tests {
             has_rush: false,
             rush_target: None,
             used_declare_this_turn: false,
+            ..Default::default()
         });
 
         engine.players.insert("p1".to_string(), ps1);
@@ -1208,6 +1217,7 @@ mod tests {
             has_rush: false,
             rush_target: None,
             used_declare_this_turn: false,
+            ..Default::default()
         });
 
         // p2 has 1 SLEEP character, 1 case, and 1 evidence
@@ -1223,6 +1233,7 @@ mod tests {
             has_rush: false,
             rush_target: None,
             used_declare_this_turn: false,
+            ..Default::default()
         });
         ps2.r#case = Some(models::CardInstance {
             instance_id: "opp_case".to_string(),
@@ -1236,6 +1247,7 @@ mod tests {
             has_rush: false,
             rush_target: None,
             used_declare_this_turn: false,
+            ..Default::default()
         });
         ps2.evidence.push(models::CardInstance {
             instance_id: "opp_ev1".to_string(),
@@ -1249,6 +1261,7 @@ mod tests {
             has_rush: false,
             rush_target: None,
             used_declare_this_turn: false,
+            ..Default::default()
         });
 
         engine.players.insert("p1".to_string(), ps1);
@@ -1271,6 +1284,7 @@ mod tests {
             has_rush: true,
             rush_target: Some("CHAR".to_string()),
             used_declare_this_turn: false,
+            ..Default::default()
         });
         assert!(engine.check_effect_conditions("p1", trait_cond));
 
@@ -1377,6 +1391,7 @@ mod tests {
             has_rush: false,
             rush_target: None,
             used_declare_this_turn: false,
+            ..Default::default()
         };
         ps1.field.push(passive_card.clone());
         ps1.hand.push(models::CardInstance {
@@ -1391,6 +1406,7 @@ mod tests {
             has_rush: false,
             rush_target: None,
             used_declare_this_turn: false,
+            ..Default::default()
         });
         ps1.deck.push(models::CardInstance {
             instance_id: "p1_dk1".to_string(),
@@ -1404,6 +1420,7 @@ mod tests {
             has_rush: false,
             rush_target: None,
             used_declare_this_turn: false,
+            ..Default::default()
         });
 
         ps2.field.push(models::CardInstance {
@@ -1418,6 +1435,7 @@ mod tests {
             has_rush: false,
             rush_target: None,
             used_declare_this_turn: false,
+            ..Default::default()
         });
 
         engine.players.insert("p1".to_string(), ps1);
@@ -1474,6 +1492,7 @@ mod tests {
             has_rush: false,
             rush_target: None,
             used_declare_this_turn: false,
+            ..Default::default()
         });
         let hand_before = engine.players.get("p1").unwrap().hand.len();
         let need_ui = engine.trigger_on_disguise("p1", "p1_kid", "TEST_DISGUISE_KID");
@@ -1511,6 +1530,7 @@ mod tests {
             has_rush: false,
             rush_target: None,
             used_declare_this_turn: false,
+            ..Default::default()
         });
         for i in 0..7 {
             ps1.file.push(models::CardInstance {
@@ -1525,6 +1545,7 @@ mod tests {
                 has_rush: false,
                 rush_target: None,
                 used_declare_this_turn: false,
+                ..Default::default()
             });
         }
         ps1.hand.push(models::CardInstance {
@@ -1539,6 +1560,7 @@ mod tests {
             has_rush: false,
             rush_target: None,
             used_declare_this_turn: false,
+            ..Default::default()
         });
         for i in 0..2 {
             ps1.evidence.push(models::CardInstance {
@@ -1553,6 +1575,7 @@ mod tests {
                 has_rush: false,
                 rush_target: None,
                 used_declare_this_turn: false,
+                ..Default::default()
             });
         }
 
@@ -1568,6 +1591,7 @@ mod tests {
             has_rush: false,
             rush_target: None,
             used_declare_this_turn: false,
+            ..Default::default()
         });
 
         engine.players.insert("p1".to_string(), ps1);
@@ -1661,6 +1685,7 @@ mod tests {
                 has_rush: false,
                 rush_target: None,
                 used_declare_this_turn: false,
+                ..Default::default()
             });
         }
         // Add 3 FILEs
@@ -1677,6 +1702,7 @@ mod tests {
                 has_rush: false,
                 rush_target: None,
                 used_declare_this_turn: false,
+                ..Default::default()
             });
         }
         // Add event card to hand and 1 card in deck
@@ -1692,6 +1718,7 @@ mod tests {
             has_rush: false,
             rush_target: None,
             used_declare_this_turn: false,
+            ..Default::default()
         });
         ps1.deck.push(models::CardInstance {
             instance_id: "p1_dk1".to_string(),
@@ -1705,6 +1732,7 @@ mod tests {
             has_rush: false,
             rush_target: None,
             used_declare_this_turn: false,
+            ..Default::default()
         });
 
         engine.players.insert("p1".to_string(), ps1);
@@ -1788,6 +1816,7 @@ mod tests {
             has_rush: false,
             rush_target: None,
             used_declare_this_turn: false,
+            ..Default::default()
         });
         ps1.field.push(models::CardInstance {
             instance_id: "p1_strong".to_string(),
@@ -1801,6 +1830,7 @@ mod tests {
             has_rush: false,
             rush_target: None,
             used_declare_this_turn: false,
+            ..Default::default()
         });
 
         // player2 (CPU) has AP3000 (ACTIVE)
@@ -1816,6 +1846,7 @@ mod tests {
             has_rush: false,
             rush_target: None,
             used_declare_this_turn: false,
+            ..Default::default()
         });
         // player2 hand has Lv2 and Lv5 for mulligan test
         ps2.hand.push(models::CardInstance {
@@ -1830,6 +1861,7 @@ mod tests {
             has_rush: false,
             rush_target: None,
             used_declare_this_turn: false,
+            ..Default::default()
         });
         ps2.hand.push(models::CardInstance {
             instance_id: "h_lv5".to_string(),
@@ -1843,6 +1875,7 @@ mod tests {
             has_rush: false,
             rush_target: None,
             used_declare_this_turn: false,
+            ..Default::default()
         });
 
         engine.players.insert("player1".to_string(), ps1);
@@ -1904,6 +1937,7 @@ mod tests {
             has_rush: false,
             rush_target: None,
             used_declare_this_turn: false,
+            ..Default::default()
         }
     }
 
@@ -2255,6 +2289,27 @@ mod tests {
 
         assert_eq!(engine.players.get("p1").unwrap().field[0].orientation, models::CardOrientation::SLEEP);
         assert_eq!(engine.players.get("p1").unwrap().evidence.len(), 1); // p1 gained 1 evidence from case hit
+    }
+
+    #[test]
+    fn test_hirameki_extended_ops_and_trigger_isolation() {
+        let non_hirameki = "【登場時】自分のリムーブエリアにある【カットイン】と【ヒラメキ】以外の元の能力を持たないキャラを1枚まで選び、登場させる。";
+        assert!(effects::extract_clauses(non_hirameki, effects::TriggerKind::Hirameki, models::CardType::CHARACTER).is_empty());
+
+        let p_hand = effects::parse_effect_steps("【ヒラメキ】このカードを手札に加える。", None, models::CardType::CHARACTER);
+        assert!(p_hand.immediate_before.iter().any(|op| matches!(op, effects::ImmediateOp::MoveSelfFromEvidenceToHand)));
+
+        let p_partner = effects::parse_effect_steps("【ヒラメキ】このカードをパートナーエリアに移す。", None, models::CardType::CHARACTER);
+        assert!(p_partner.immediate_before.iter().any(|op| matches!(op, effects::ImmediateOp::MoveSelfFromEvidenceToPartner)));
+
+        let p_opp_disc = effects::parse_effect_steps("【ヒラメキ】相手は手札を1枚リムーブする。", None, models::CardType::CHARACTER);
+        assert!(p_opp_disc.immediate_before.iter().any(|op| matches!(op, effects::ImmediateOp::OppDiscardHand(1))));
+
+        let p_opp_mill = effects::parse_effect_steps("【ヒラメキ】相手のデッキのカードを上から4枚リムーブする。", None, models::CardType::CHARACTER);
+        assert!(p_opp_mill.immediate_before.iter().any(|op| matches!(op, effects::ImmediateOp::OppMillDeck(4))));
+
+        let p_opp_flip = effects::parse_effect_steps("【ヒラメキ】相手の裏向きの証拠を1つまで選び、表向きにする。", None, models::CardType::CHARACTER);
+        assert!(p_opp_flip.immediate_before.iter().any(|op| matches!(op, effects::ImmediateOp::OppFlipEvidenceUp(1))));
     }
 
     #[test]
@@ -2683,6 +2738,7 @@ mod tests {
                 has_rush: false,
                 rush_target: None,
                 used_declare_this_turn: false,
+                ..Default::default()
             }
         };
 
@@ -3125,6 +3181,1494 @@ mod tests {
             "value": {"targetId": "opp_act", "actorId": "h_d02005", "effectType": "SLEEP"}
         }));
         assert_eq!(engine.players.get("p2").unwrap().field[0].orientation, models::CardOrientation::SLEEP);
+    }
+
+    #[test]
+    fn test_case_attack_guard_then_cutin_both_sides_and_case_resolve() {
+        let mut catalog = load_test_catalog();
+        catalog.definitions.insert("T_AP4000_BLUE".to_string(), models::CardDefinition {
+            definition_id: "T_AP4000_BLUE".to_string(),
+            canonical_id: "T_AP4000_BLUE".to_string(),
+            card_type: models::CardType::CHARACTER,
+            colors: vec!["青".to_string()],
+            level: 4,
+            ap: 4000,
+            lp: 1,
+            names: vec!["アタッカー4000".to_string()],
+            description: String::new(),
+            traits: vec![],
+            case_levels: None,
+            main_thumb: None,
+            main_path: None,
+        });
+        catalog.definitions.insert("T_CUTIN_P1000_BLUE".to_string(), models::CardDefinition {
+            definition_id: "T_CUTIN_P1000_BLUE".to_string(),
+            canonical_id: "T_CUTIN_P1000_BLUE".to_string(),
+            card_type: models::CardType::CHARACTER,
+            colors: vec!["青".to_string()],
+            level: 1,
+            ap: 1000,
+            lp: 1,
+            names: vec!["カットイン青1000".to_string()],
+            description: "【カットイン】自分のキャラ1人のAP+1000。".to_string(),
+            traits: vec![],
+            case_levels: None,
+            main_thumb: None,
+            main_path: None,
+        });
+
+        let mut engine = MatchEngine::new(catalog);
+        engine.turn = 4;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+        engine.phase = models::MatchPhase::MAIN;
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        ps1.r#case = Some(test_inst("p1_case", "B01002", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        ps2.r#case = Some(test_inst("p2_case", "B01002", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        for i in 0..5 {
+            ps1.file.push(test_inst(&format!("f1_{}", i), "T_AP4000_BLUE", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+            ps2.file.push(test_inst(&format!("f2_{}", i), "T_AP4000_BLUE", "p2", models::Zone::FILE, models::CardOrientation::ACTIVE));
+        }
+        for i in 0..3 {
+            ps1.deck.push(test_inst(&format!("d1_{}", i), "T_AP4000_BLUE", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+            ps2.deck.push(test_inst(&format!("d2_{}", i), "T_AP4000_BLUE", "p2", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        }
+        ps2.evidence.push(test_inst("ev2_0", "T_AP4000_BLUE", "p2", models::Zone::EVIDENCE, models::CardOrientation::ACTIVE));
+        ps1.field.push(test_inst("p1_atk", "T_AP4000_BLUE", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        ps2.field.push(test_inst("p2_guard", "T_AP4000_BLUE", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        ps1.hand.push(test_inst("p1_cutin", "T_CUTIN_P1000_BLUE", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        ps2.hand.push(test_inst("p2_cutin", "T_CUTIN_P1000_BLUE", "p2", models::Zone::HAND, models::CardOrientation::ACTIVE));
+
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        // 1. p1がp2の事件にアタック
+        engine.prompt_main_action("p1");
+        let pd_main = engine.pending_decision.clone().unwrap();
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd_main["decisionId"],
+            "revision": engine.revision,
+            "value": {"type": "ACTION", "actorId": "p1_atk", "targetId": "p2_case"}
+        }));
+
+        // 2. p2がp2_guardでガードを宣言
+        let pd_guard = engine.pending_decision.clone().unwrap();
+        assert_eq!(pd_guard["kind"], "guard");
+        assert_eq!(pd_guard["playerId"], "p2");
+        let _ = engine.submit_decision("p2", &serde_json::json!({
+            "decisionId": pd_guard["decisionId"],
+            "revision": engine.revision,
+            "value": {"guardCardId": "p2_guard"}
+        }));
+
+        // 3. ガードによるコンタクト発生後、まずは防御側p2のコンタクトカットインフェーズへ移行する
+        let pd_cut_def = engine.pending_decision.clone().expect("defender contactCutin should be prompted after guard");
+        assert_eq!(pd_cut_def["kind"], "guard");
+        assert_eq!(pd_cut_def["playerId"], "p2");
+        assert!(pd_cut_def["options"]["guardCardIds"].as_array().unwrap().is_empty());
+        assert!(pd_cut_def["options"]["cutinCardIds"].as_array().unwrap().iter().any(|v| v["instanceId"] == "p2_cutin"));
+        let _ = engine.submit_decision("p2", &serde_json::json!({
+            "decisionId": pd_cut_def["decisionId"],
+            "revision": engine.revision,
+            "value": {}
+        }));
+
+        // 4. 相手(p2)がパスしたら、攻撃側p1のカットインフェーズに移る（即座にバトル解決しない）
+        assert_eq!(engine.players.get("p2").unwrap().remove.len(), 0);
+        let pd_cut_atk = engine.pending_decision.clone().expect("attacker contactCutin should be prompted after defender pass");
+        assert_eq!(pd_cut_atk["kind"], "guard");
+        assert_eq!(pd_cut_atk["playerId"], "p1");
+        assert!(pd_cut_atk["options"]["guardCardIds"].as_array().unwrap().is_empty());
+        assert!(pd_cut_atk["options"]["cutinCardIds"].as_array().unwrap().iter().any(|v| v["instanceId"] == "p1_cutin"));
+
+        // 5. 攻撃側p1がガードされた事件アタック中にカットインを使用できる
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd_cut_atk["decisionId"],
+            "revision": engine.revision,
+            "value": {"cutinCardId": "p1_cutin"}
+        }));
+        if let Some(pd_after) = engine.pending_decision.clone() {
+            if pd_after["kind"] == "targetSelect" {
+                let _ = engine.submit_decision("p1", &serde_json::json!({
+                    "decisionId": pd_after["decisionId"],
+                    "revision": engine.revision,
+                    "value": {"targetId": "p1_atk", "actorId": "p1_cutin", "effectType": "AP_BUFF"}
+                }));
+            }
+        }
+
+        // 6. p1がカットイン使用後、まだ未使用のp2に1度チャンスが回り、p2がパスして解決する
+        if let Some(pd_cut_def2) = engine.pending_decision.clone() {
+            if pd_cut_def2["kind"] == "guard" {
+                assert_eq!(pd_cut_def2["playerId"], "p2");
+                let _ = engine.submit_decision("p2", &serde_json::json!({
+                    "decisionId": pd_cut_def2["decisionId"],
+                    "revision": engine.revision,
+                    "value": {}
+                }));
+            }
+        }
+
+        // p1_atkがAP5000でp2_guard(AP4000)に勝利し、p2_guardがリムーブされ、p1_atkは場に残る
+        assert!(engine.players.get("p1").unwrap().field.iter().any(|c| c.instance_id == "p1_atk"));
+        assert!(engine.players.get("p2").unwrap().remove.iter().any(|c| c.instance_id == "p2_guard"));
+        assert!(!engine.players.get("p2").unwrap().field.iter().any(|c| c.instance_id == "p2_guard"));
+    }
+
+    #[test]
+    fn test_char_attack_equal_ap_defender_pass_prompts_attacker_cutin() {
+        let mut catalog = load_test_catalog();
+        catalog.definitions.insert("T_EQ_4000".to_string(), models::CardDefinition {
+            definition_id: "T_EQ_4000".to_string(),
+            canonical_id: "T_EQ_4000".to_string(),
+            card_type: models::CardType::CHARACTER,
+            colors: vec!["青".to_string()],
+            level: 4,
+            ap: 4000,
+            lp: 1,
+            names: vec!["同APキャラ".to_string()],
+            description: String::new(),
+            traits: vec![],
+            case_levels: None,
+            main_thumb: None,
+            main_path: None,
+        });
+        catalog.definitions.insert("T_EQ_CUTIN".to_string(), models::CardDefinition {
+            definition_id: "T_EQ_CUTIN".to_string(),
+            canonical_id: "T_EQ_CUTIN".to_string(),
+            card_type: models::CardType::CHARACTER,
+            colors: vec!["青".to_string()],
+            level: 1,
+            ap: 1000,
+            lp: 1,
+            names: vec!["同AP突破カットイン".to_string()],
+            description: "【カットイン】自分のキャラ1人のAP+1000。".to_string(),
+            traits: vec![],
+            case_levels: None,
+            main_thumb: None,
+            main_path: None,
+        });
+
+        let mut engine = MatchEngine::new(catalog);
+        engine.turn = 4;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+        engine.phase = models::MatchPhase::MAIN;
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        ps1.r#case = Some(test_inst("p1_case", "B01002", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        ps2.r#case = Some(test_inst("p2_case", "B01002", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        for i in 0..5 {
+            ps1.file.push(test_inst(&format!("f1_{}", i), "T_EQ_4000", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+            ps2.file.push(test_inst(&format!("f2_{}", i), "T_EQ_4000", "p2", models::Zone::FILE, models::CardOrientation::ACTIVE));
+        }
+        ps1.field.push(test_inst("p1_atk", "T_EQ_4000", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        ps2.field.push(test_inst("p2_def", "T_EQ_4000", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP));
+        ps1.hand.push(test_inst("p1_cutin", "T_EQ_CUTIN", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        ps2.hand.push(test_inst("p2_cutin", "T_EQ_CUTIN", "p2", models::Zone::HAND, models::CardOrientation::ACTIVE));
+
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        // 1. p1が同APのp2_defにアタック
+        engine.prompt_main_action("p1");
+        let pd_main = engine.pending_decision.clone().unwrap();
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd_main["decisionId"],
+            "revision": engine.revision,
+            "value": {"type": "ACTION", "actorId": "p1_atk", "targetId": "p2_def"}
+        }));
+
+        // 2. p2がカットイン/ガードを使わずにパス
+        let pd_guard = engine.pending_decision.clone().unwrap();
+        assert_eq!(pd_guard["kind"], "guard");
+        let _ = engine.submit_decision("p2", &serde_json::json!({
+            "decisionId": pd_guard["decisionId"],
+            "revision": engine.revision,
+            "value": {}
+        }));
+
+        // 3. p2_defはまだリムーブされず、p1のカットインフェーズへ移る
+        assert_eq!(engine.players.get("p2").unwrap().remove.len(), 0);
+        let pd_cut_atk = engine.pending_decision.clone().expect("attacker contactCutin must be prompted");
+        assert_eq!(pd_cut_atk["kind"], "guard");
+        assert_eq!(pd_cut_atk["playerId"], "p1");
+        assert!(pd_cut_atk["options"]["guardCardIds"].as_array().unwrap().is_empty());
+        assert!(pd_cut_atk["options"]["cutinCardIds"].as_array().unwrap().iter().any(|v| v["instanceId"] == "p1_cutin"));
+
+        // 4. p1がカットインを使用し、p2がパスして決着
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd_cut_atk["decisionId"],
+            "revision": engine.revision,
+            "value": {"cutinCardId": "p1_cutin"}
+        }));
+        if let Some(pd_after) = engine.pending_decision.clone() {
+            if pd_after["kind"] == "targetSelect" {
+                let _ = engine.submit_decision("p1", &serde_json::json!({
+                    "decisionId": pd_after["decisionId"],
+                    "revision": engine.revision,
+                    "value": {"targetId": "p1_atk", "actorId": "p1_cutin", "effectType": "AP_BUFF"}
+                }));
+            }
+        }
+        if let Some(pd_cut_def2) = engine.pending_decision.clone() {
+            if pd_cut_def2["kind"] == "guard" {
+                let _ = engine.submit_decision("p2", &serde_json::json!({
+                    "decisionId": pd_cut_def2["decisionId"],
+                    "revision": engine.revision,
+                    "value": {}
+                }));
+            }
+        }
+
+        assert!(engine.players.get("p1").unwrap().field.iter().any(|c| c.instance_id == "p1_atk"));
+        assert!(engine.players.get("p2").unwrap().remove.iter().any(|c| c.instance_id == "p2_def"));
+    }
+
+    #[test]
+    fn test_rush_character_cannot_deduce_on_entered_turn() {
+        let mut catalog = load_test_catalog();
+        catalog.definitions.insert("T_RUSH_CHAR".to_string(), models::CardDefinition {
+            definition_id: "T_RUSH_CHAR".to_string(),
+            canonical_id: "T_RUSH_CHAR".to_string(),
+            card_type: models::CardType::CHARACTER,
+            colors: vec!["黄".to_string()],
+            level: 4,
+            ap: 4000,
+            lp: 1,
+            names: vec!["突撃テストキャラ".to_string()],
+            description: "【登場時】ターン終了時までこのキャラは〚突撃［キャラ］〛を持つ。".to_string(),
+            traits: vec![],
+            case_levels: None,
+            main_thumb: None,
+            main_path: None,
+        });
+
+        let mut engine = MatchEngine::new(catalog);
+        engine.turn = 3;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+        engine.phase = models::MatchPhase::MAIN;
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        let mut rush_c = test_inst("p1_rush", "T_RUSH_CHAR", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+        rush_c.entered_turn = 3;
+        rush_c.has_rush = true;
+        rush_c.rush_target = Some("CHAR".to_string());
+        ps1.field.push(rush_c);
+        ps2.field.push(test_inst("p2_sleep", "T_RUSH_CHAR", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP));
+
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        engine.prompt_main_action("p1");
+        let pd = engine.pending_decision.as_ref().unwrap();
+        let actions = pd["options"]["actions"].as_array().unwrap();
+
+        // 登場ターンは突撃を持っていても DEDUCE は不可
+        let deduce_actors: Vec<&str> = actions
+            .iter()
+            .find(|a| a["type"] == "DEDUCE")
+            .and_then(|a| a["actorIds"].as_array())
+            .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
+            .unwrap_or_default();
+        assert!(!deduce_actors.contains(&"p1_rush"), "Rush character must not be able to DEDUCE on entered turn");
+
+        // 登場ターンでも ACTION（アタック）は可能
+        let action_actors: Vec<&str> = actions
+            .iter()
+            .find(|a| a["type"] == "ACTION")
+            .and_then(|a| a["actorIds"].as_array())
+            .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
+            .unwrap_or_default();
+        assert!(action_actors.contains(&"p1_rush"), "Rush character should be able to ACTION on entered turn");
+    }
+
+    #[test]
+    fn test_b11017_gonin_bayashi_effect() {
+        let catalog = load_test_catalog();
+        assert!(catalog.definitions.contains_key("B11017"), "B11017 must exist in catalog");
+
+        let mut engine = MatchEngine::new(catalog);
+        engine.turn = 4;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+        engine.phase = models::MatchPhase::MAIN;
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        let ps2 = engine::PlayerState::new("p2".to_string());
+        ps1.partner = Some(test_inst("p1_partner", "B01001", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+        ps1.r#case = Some(test_inst("p1_case", "B01002", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        for i in 0..8 {
+            ps1.file.push(test_inst(&format!("f{}", i), "B01021", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+        }
+
+        ps1.hand.push(test_inst("h_b11017", "B11017", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        ps1.remove.push(test_inst("r_conan1", "B01011", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE)); // Lv4 江戸川コナン (少年探偵団)
+        ps1.remove.push(test_inst("r_conan2", "B01011", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE)); // 同名 Lv4 江戸川コナン
+        ps1.remove.push(test_inst("r_genta", "B01014", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE));  // Lv4 小嶋元太 (少年探偵団)
+        ps1.remove.push(test_inst("r_ai", "B01016", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE));     // Lv4 灰原哀 (少年探偵団)
+        ps1.remove.push(test_inst("r_other", "B01005", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE));  // Lv5 非対象
+
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        engine.prompt_main_action("p1");
+        let pd1 = engine.pending_decision.as_ref().unwrap().clone();
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd1["decisionId"],
+            "revision": engine.revision,
+            "value": {"type": "HAND_PLAY", "cardId": "h_b11017"}
+        }));
+
+        let pd_ts = engine.pending_decision.as_ref().expect("B11017 must prompt targetSelect");
+        assert_eq!(pd_ts["kind"], "targetSelect");
+        assert_eq!(pd_ts["options"]["effectType"], "REVIVE_SPLIT_GONIN");
+        assert_eq!(pd_ts["options"]["maxSelect"], 3);
+        assert_eq!(pd_ts["options"]["distinctNames"], true);
+        let cand_ids: Vec<&str> = pd_ts["options"]["candidates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|c| c["instanceId"].as_str())
+            .collect();
+        assert!(!cand_ids.contains(&"r_other"));
+        assert!(cand_ids.contains(&"r_conan1"));
+        assert!(cand_ids.contains(&"r_genta"));
+        assert!(cand_ids.contains(&"r_ai"));
+
+        let ts_dec_id = pd_ts["decisionId"].as_str().unwrap().to_string();
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": ts_dec_id,
+            "revision": engine.revision,
+            "value": {
+                "targetIds": ["r_conan1", "r_genta", "r_ai"],
+                "actorId": "h_b11017",
+                "effectType": "REVIVE_SPLIT_GONIN"
+            }
+        }));
+
+        let ps1_after = engine.players.get("p1").unwrap();
+        let conan = ps1_after.field.iter().find(|c| c.instance_id == "r_conan1").expect("1st pick must deploy to field");
+        assert_eq!(conan.orientation, models::CardOrientation::ACTIVE);
+        let genta = ps1_after.field.iter().find(|c| c.instance_id == "r_genta").expect("2nd pick must deploy to field in SLEEP");
+        assert_eq!(genta.orientation, models::CardOrientation::SLEEP);
+        assert!(ps1_after.hand.iter().any(|c| c.instance_id == "r_ai"), "3rd pick must go to hand");
+        assert!(ps1_after.remove.iter().any(|c| c.instance_id == "h_b11017"));
+    }
+
+    #[test]
+    fn test_all_event_cards_have_valid_effects() {
+        let catalog = load_test_catalog();
+        let events: Vec<&models::CardDefinition> = catalog
+            .definitions
+            .values()
+            .filter(|d| d.card_type == models::CardType::EVENT)
+            .collect();
+        assert!(events.len() >= 200, "Expected >= 200 event cards, got {}", events.len());
+
+        let mut unparsed: Vec<String> = Vec::new();
+        for ev in &events {
+            if effects::parse_event_mode_choice(&ev.description).is_some() {
+                continue;
+            }
+            let on_play_clauses = effects::extract_clauses(&ev.description, effects::TriggerKind::OnPlay, models::CardType::EVENT);
+            let mut has_exec = false;
+            for cl in &on_play_clauses {
+                let p = effects::parse_effect_steps(cl, Some(ev.level), models::CardType::EVENT);
+                if !p.immediate_before.is_empty()
+                    || p.target_step.is_some()
+                    || p.deck_search.is_some()
+                    || p.follow_up_target.is_some()
+                    || !p.extra_clauses.is_empty()
+                {
+                    has_exec = true;
+                    break;
+                }
+            }
+            if !has_exec {
+                let decl = effects::extract_clauses(&ev.description, effects::TriggerKind::Declare, models::CardType::EVENT);
+                let cutin = effects::extract_clauses(&ev.description, effects::TriggerKind::Cutin, models::CardType::EVENT);
+                let hirameki = effects::extract_clauses(&ev.description, effects::TriggerKind::Hirameki, models::CardType::EVENT);
+                if decl.is_empty() && cutin.is_empty() && hirameki.is_empty() {
+                    unparsed.push(format!("{}: {}", ev.definition_id, ev.description));
+                }
+            }
+        }
+        assert!(
+            unparsed.is_empty(),
+            "Unparsed event cards ({}):\n{}",
+            unparsed.len(),
+            unparsed.join("\n")
+        );
+
+        // Runtime smoke 1: Mode choice event B04014 (最後の切り札)
+        let mut engine_mode = MatchEngine::new(catalog.clone());
+        engine_mode.turn = 4;
+        engine_mode.turn_player_id = "p1".to_string();
+        engine_mode.player_order = vec!["p1".to_string(), "p2".to_string()];
+        engine_mode.phase = models::MatchPhase::MAIN;
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        ps1.partner = Some(test_inst("p1_p", "B01001", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+        ps1.r#case = Some(test_inst("p1_c", "B01002", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        ps1.case_phase = models::CasePhase::RESOLUTION;
+        for i in 0..8 {
+            ps1.file.push(test_inst(&format!("mf{}", i), "B01021", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+        }
+        ps1.hand.push(test_inst("h_mode", "B04014", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        ps2.field.push(test_inst("opp_c", "B01005", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP));
+        engine_mode.players.insert("p1".to_string(), ps1);
+        engine_mode.players.insert("p2".to_string(), ps2);
+        engine_mode.prompt_main_action("p1");
+        let pd_m = engine_mode.pending_decision.as_ref().unwrap().clone();
+        let _ = engine_mode.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd_m["decisionId"],
+            "revision": engine_mode.revision,
+            "value": {"type": "HAND_PLAY", "cardId": "h_mode"}
+        }));
+        let pd_choice = engine_mode.pending_decision.as_ref().expect("B04014 should prompt modeSelect");
+        assert_eq!(pd_choice["kind"], "modeSelect");
+
+        // Runtime smoke 2: Set-card event B02013 (ターボエンジン付きスケートボード)
+        let mut engine_set = MatchEngine::new(catalog);
+        engine_set.turn = 4;
+        engine_set.turn_player_id = "p1".to_string();
+        engine_set.player_order = vec!["p1".to_string(), "p2".to_string()];
+        engine_set.phase = models::MatchPhase::MAIN;
+        let mut s_ps1 = engine::PlayerState::new("p1".to_string());
+        let s_ps2 = engine::PlayerState::new("p2".to_string());
+        s_ps1.partner = Some(test_inst("sp1_p", "B01001", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+        s_ps1.r#case = Some(test_inst("sp1_c", "B01002", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        for i in 0..8 {
+            s_ps1.file.push(test_inst(&format!("sf{}", i), "B01021", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+        }
+        s_ps1.hand.push(test_inst("h_skate", "B02013", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        s_ps1.field.push(test_inst("p1_conan", "B01011", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        engine_set.players.insert("p1".to_string(), s_ps1);
+        engine_set.players.insert("p2".to_string(), s_ps2);
+        engine_set.prompt_main_action("p1");
+        let spd = engine_set.pending_decision.as_ref().unwrap().clone();
+        let _ = engine_set.submit_decision("p1", &serde_json::json!({
+            "decisionId": spd["decisionId"],
+            "revision": engine_set.revision,
+            "value": {"type": "HAND_PLAY", "cardId": "h_skate"}
+        }));
+        let sts = engine_set.pending_decision.as_ref().expect("B02013 should prompt targetSelect to attach set card");
+        assert_eq!(sts["kind"], "targetSelect");
+        let _ = engine_set.submit_decision("p1", &serde_json::json!({
+            "decisionId": sts["decisionId"],
+            "revision": engine_set.revision,
+            "value": {"targetId": "p1_conan", "actorId": "h_skate", "effectType": sts["options"]["effectType"]}
+        }));
+        let conan_inst = engine_set.players.get("p1").unwrap().field.iter().find(|c| c.instance_id == "p1_conan").unwrap();
+        assert_eq!(conan_inst.set_cards.len(), 1);
+        assert!(engine_set.effective_rush(conan_inst).0, "Skateboard set card must grant Rush");
+    }
+
+    #[test]
+    fn test_bug1_and_bug4_rush_variants_swift_and_deduce_restrictions() {
+        let catalog = load_test_catalog();
+
+        // 1) Bug 1: B07094 (突撃[事件]) must NOT deduce on entered turn, only attack CASE
+        {
+            let mut engine = MatchEngine::new(catalog.clone());
+            engine.turn = 3;
+            engine.turn_player_id = "p1".to_string();
+            engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+            engine.phase = models::MatchPhase::MAIN;
+
+            let mut ps1 = engine::PlayerState::new("p1".to_string());
+            let mut ps2 = engine::PlayerState::new("p2".to_string());
+            ps1.partner = Some(test_inst("p1_p", "B03106", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE)); // 黒
+            ps1.r#case = Some(test_inst("p1_c", "B01024", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+            ps2.r#case = Some(test_inst("p2_c", "B01024", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+            let mut gin = test_inst("p1_gin", "B07094", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+            gin.entered_turn = 3;
+            ps1.field.push(gin.clone());
+            ps2.field.push(test_inst("p2_sleep", "B01011", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP));
+            ps2.evidence.push(test_inst("p2_ev1", "B01011", "p2", models::Zone::EVIDENCE, models::CardOrientation::ACTIVE));
+            engine.players.insert("p1".to_string(), ps1);
+            engine.players.insert("p2".to_string(), ps2);
+
+            assert_eq!(engine.effective_rush(&gin), (true, Some("CASE".to_string())));
+            assert!(!engine.effective_swift(&gin));
+
+            engine.prompt_main_action("p1");
+            let pd = engine.pending_decision.as_ref().unwrap().clone();
+            let actions = pd["options"]["actions"].as_array().unwrap();
+            let deduce_actors: Vec<&str> = actions
+                .iter()
+                .find(|a| a["type"] == "DEDUCE")
+                .and_then(|a| a["actorIds"].as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
+                .unwrap_or_default();
+            assert!(!deduce_actors.contains(&"p1_gin"), "突撃[事件] must not allow DEDUCE on entered turn");
+
+            let action_entry = actions.iter().find(|a| a["type"] == "ACTION").unwrap();
+            let action_actors: Vec<&str> = action_entry["actorIds"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|v| v.as_str())
+                .collect();
+            assert!(action_actors.contains(&"p1_gin"));
+            let gin_targets: Vec<&str> = action_entry["actorTargetMap"]["p1_gin"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|v| v.as_str())
+                .collect();
+            assert_eq!(gin_targets, vec!["p2_c"], "突撃[事件] can only target CASE on entered turn");
+
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd["decisionId"],
+                "revision": engine.revision,
+                "value": {"type": "DEDUCE", "actorId": "p1_gin"}
+            }));
+            assert_eq!(
+                engine.players.get("p1").unwrap().field[0].orientation,
+                models::CardOrientation::ACTIVE,
+                "Rejected DEDUCE for 突撃[事件] must keep character ACTIVE"
+            );
+            assert!(
+                engine.players.get("p1").unwrap().evidence.is_empty(),
+                "Rejected DEDUCE for 突撃[事件] must not add evidence"
+            );
+        }
+
+        // 2) Bug 4: Conditional passive Rush variants (D07012, B07096, B09008, B08007)
+        {
+            let mut engine = MatchEngine::new(catalog.clone());
+            engine.turn = 3;
+            engine.turn_player_id = "p1".to_string();
+            engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+            engine.phase = models::MatchPhase::MAIN;
+
+            let mut ps1 = engine::PlayerState::new("p1".to_string());
+            let mut ps2 = engine::PlayerState::new("p2".to_string());
+            ps1.partner = Some(test_inst("p1_p_blue", "B01001", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE)); // 青
+            ps1.r#case = Some(test_inst("p1_c", "B01024", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+            ps2.r#case = Some(test_inst("p2_c", "B01024", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+
+            let mut vodka_d07012 = test_inst("p1_vodka", "D07012", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+            vodka_d07012.entered_turn = 3;
+            let mut vodka_lv4 = test_inst("p1_vodka_lv4", "B07096", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+            vodka_lv4.entered_turn = 3;
+            let mut akagi = test_inst("p1_akagi", "B09008", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+            akagi.entered_turn = 3;
+            let mut mitsu = test_inst("p1_mitsu", "B08007", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+            mitsu.entered_turn = 3;
+
+            ps1.field.push(vodka_d07012);
+            ps1.field.push(vodka_lv4);
+            ps1.field.push(akagi);
+            ps1.field.push(mitsu);
+            ps2.field.push(test_inst("p2_lv4", "B01011", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP));
+            ps2.field.push(test_inst("p2_lv8", "B01005", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP));
+            ps2.evidence.push(test_inst("p2_ev1", "B01011", "p2", models::Zone::EVIDENCE, models::CardOrientation::ACTIVE));
+            engine.players.insert("p1".to_string(), ps1);
+            engine.players.insert("p2".to_string(), ps2);
+
+            // With Blue partner: D07012 has NO Rush; B08007 has 突撃[事件]
+            {
+                let ps1_ref = engine.players.get("p1").unwrap();
+                assert_eq!(engine.effective_rush(&ps1_ref.field[0]), (false, None));
+                assert_eq!(engine.effective_rush(&ps1_ref.field[2]), (false, None)); // B09008 AP5000 < 6000
+                assert_eq!(engine.effective_rush(&ps1_ref.field[3]), (true, Some("CASE".to_string())));
+            }
+
+            // Switch to Black partner: D07012 gets full Rush, B07096 gets CHAR_LV4 Rush
+            engine.players.get_mut("p1").unwrap().partner =
+                Some(test_inst("p1_p_black", "B03106", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+            // Give B09008 +1000 AP (total 6000) and B08007 1 under_card (+ 突撃[キャラ])
+            engine.players.get_mut("p1").unwrap().field[2].temp_ap_bonus = 1000;
+            engine.players.get_mut("p1").unwrap().field[3].set_cards.push(
+                test_inst("u1", "B01011", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE),
+            );
+            // Put back Blue partner? Check D07012 & B07096 with Black partner first
+            {
+                let ps1_ref = engine.players.get("p1").unwrap();
+                assert_eq!(engine.effective_rush(&ps1_ref.field[0]), (true, None), "D07012 must gain 突撃 with Black partner");
+                assert_eq!(engine.effective_rush(&ps1_ref.field[1]), (true, Some("CHAR_LV4".to_string())));
+                assert_eq!(engine.effective_rush(&ps1_ref.field[2]), (true, None), "B09008 at AP6000 must gain 突撃");
+            }
+            engine.prompt_main_action("p1");
+            let pd = engine.pending_decision.as_ref().unwrap();
+            let actions = pd["options"]["actions"].as_array().unwrap();
+            let action_entry = actions.iter().find(|a| a["type"] == "ACTION").unwrap();
+            let vodka_targets: Vec<&str> = action_entry["actorTargetMap"]["p1_vodka"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|v| v.as_str())
+                .collect();
+            assert!(vodka_targets.contains(&"p2_c") && vodka_targets.contains(&"p2_lv4") && vodka_targets.contains(&"p2_lv8"));
+
+            let lv4_targets: Vec<&str> = action_entry["actorTargetMap"]["p1_vodka_lv4"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|v| v.as_str())
+                .collect();
+            assert!(lv4_targets.contains(&"p2_lv4"));
+            assert!(!lv4_targets.contains(&"p2_lv8"));
+            assert!(!lv4_targets.contains(&"p2_c"));
+
+            // With Blue partner + 1 under_card, B08007 merges 突撃[事件] + 突撃[キャラ] => (true, None)
+            engine.players.get_mut("p1").unwrap().partner =
+                Some(test_inst("p1_p_blue", "B01001", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+            let ps1_ref = engine.players.get("p1").unwrap();
+            assert_eq!(engine.effective_rush(&ps1_ref.field[3]), (true, None));
+        }
+
+        // 3) Bug 1 / 4 cross-card: B10015 (迅速 with 4 distinct 毛利探偵事務所 incl. 妃英理) CAN deduce on entered turn
+        {
+            let mut engine = MatchEngine::new(catalog);
+            engine.turn = 4;
+            engine.turn_player_id = "p1".to_string();
+            engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+            engine.phase = models::MatchPhase::MAIN;
+
+            let mut ps1 = engine::PlayerState::new("p1".to_string());
+            let ps2 = engine::PlayerState::new("p2".to_string());
+            ps1.partner = Some(test_inst("p1_p", "B01001", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+            ps1.r#case = Some(test_inst("p1_c", "B01024", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+            let mut b10015 = test_inst("p1_mori", "B10015", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+            b10015.entered_turn = 4;
+            ps1.field.push(b10015);
+            ps1.field.push(test_inst("p1_conan", "B01005", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+            ps1.field.push(test_inst("p1_ran", "B01007", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+            engine.players.insert("p1".to_string(), ps1);
+            engine.players.insert("p2".to_string(), ps2);
+
+            // Only 3 distinct 毛利探偵事務所 -> no Swift yet
+            {
+                let m = &engine.players.get("p1").unwrap().field[0];
+                assert!(!engine.effective_swift(m));
+            }
+            // Adding 妃英理 (B01013) -> granted 毛利探偵事務所 by B10015 -> 4 distinct names -> Swift!
+            engine.players.get_mut("p1").unwrap().field.push(
+                test_inst("p1_eri", "B01013", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE),
+            );
+            {
+                let m = &engine.players.get("p1").unwrap().field[0];
+                assert!(engine.effective_swift(m), "B10015 must grant Swift once 4 distinct 毛利探偵事務所 are present");
+            }
+            engine.prompt_main_action("p1");
+            let pd = engine.pending_decision.as_ref().unwrap();
+            let deduce_actors: Vec<&str> = pd["options"]["actions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|a| a["type"] == "DEDUCE")
+                .and_then(|a| a["actorIds"].as_array())
+                .unwrap()
+                .iter()
+                .filter_map(|v| v.as_str())
+                .collect();
+            assert!(deduce_actors.contains(&"p1_mori"), "Character with 迅速 must be able to DEDUCE on entered turn");
+        }
+    }
+
+    #[test]
+    fn test_bug2_cutin_self_turn_ap_buff_and_cross_cards() {
+        let catalog = load_test_catalog();
+
+        // 1) Standard cut-in: 【カットイン】【自分ターン中】AP＋3000 (B02007) + B10085 aura (+2000)
+        {
+            let mut engine = MatchEngine::new(catalog.clone());
+            engine.turn = 4;
+            engine.turn_player_id = "p1".to_string();
+            engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+            engine.phase = models::MatchPhase::MAIN;
+
+            let mut ps1 = engine::PlayerState::new("p1".to_string());
+            let mut ps2 = engine::PlayerState::new("p2".to_string());
+            ps1.partner = Some(test_inst("p1_p", "B01001", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+            ps1.r#case = Some(test_inst("p1_c", "B01024", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+            ps2.r#case = Some(test_inst("p2_c", "B01024", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+            // Attacker AP6000 vs Defender AP7000
+            ps1.field.push(test_inst("p1_atk", "B01008", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+            ps1.hand.push(test_inst("h_cut3000", "B02007", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+            ps2.field.push(test_inst("p2_def", "B01005", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP));
+            engine.players.insert("p1".to_string(), ps1);
+            engine.players.insert("p2".to_string(), ps2);
+
+            engine.prompt_main_action("p1");
+            let pd1 = engine.pending_decision.clone().unwrap();
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd1["decisionId"],
+                "revision": engine.revision,
+                "value": {"type": "ACTION", "actorId": "p1_atk", "targetId": "p2_def"}
+            }));
+
+            let pd_cut = engine.pending_decision.clone().expect("p1 contactCutin should open");
+            assert_eq!(pd_cut["kind"], "guard");
+            assert_eq!(pd_cut["playerId"], "p1");
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd_cut["decisionId"],
+                "revision": engine.revision,
+                "value": {"cutinCardId": "h_cut3000"}
+            }));
+
+            let p1_atk = engine.players.get("p1").unwrap().field.iter().find(|c| c.instance_id == "p1_atk").unwrap();
+            assert_eq!(p1_atk.temp_ap_bonus, 3000, "B02007 self-turn cutin must grant +3000 AP to contacting char");
+            assert!(engine.players.get("p2").unwrap().remove.iter().any(|c| c.instance_id == "p2_def"), "6000+3000 > 7000 must win combat");
+        }
+
+        // 2) B10085 (in field/partner) adds +2000 on own-turn cutin on top of B02007 (+3000) => +5000 total
+        {
+            let mut engine = MatchEngine::new(catalog.clone());
+            engine.turn = 4;
+            engine.turn_player_id = "p1".to_string();
+            engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+            engine.phase = models::MatchPhase::MAIN;
+
+            let mut ps1 = engine::PlayerState::new("p1".to_string());
+            let mut ps2 = engine::PlayerState::new("p2".to_string());
+            ps1.partner = Some(test_inst("p1_p", "B01001", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+            ps1.r#case = Some(test_inst("p1_c", "B01024", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+            ps1.field.push(test_inst("p1_atk", "B01008", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+            ps1.field.push(test_inst("p1_chianti", "B10085", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+            ps1.hand.push(test_inst("h_cut3000", "B02007", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+            ps2.field.push(test_inst("p2_def", "B01005", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP));
+            engine.players.insert("p1".to_string(), ps1);
+            engine.players.insert("p2".to_string(), ps2);
+
+            engine.prompt_main_action("p1");
+            let pd1 = engine.pending_decision.clone().unwrap();
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd1["decisionId"],
+                "revision": engine.revision,
+                "value": {"type": "ACTION", "actorId": "p1_atk", "targetId": "p2_def"}
+            }));
+            let pd_cut = engine.pending_decision.clone().unwrap();
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd_cut["decisionId"],
+                "revision": engine.revision,
+                "value": {"cutinCardId": "h_cut3000"}
+            }));
+            let p1_atk = engine.players.get("p1").unwrap().field.iter().find(|c| c.instance_id == "p1_atk").unwrap();
+            assert_eq!(p1_atk.temp_ap_bonus, 5000);
+        }
+
+        // 3) B11015: 工藤新一 => +3000, non-工藤新一 => +1000
+        for (is_shinichi, expected_ap) in [(false, 1000), (true, 3000)] {
+            let mut engine = MatchEngine::new(catalog.clone());
+            engine.turn = 4;
+            engine.turn_player_id = "p1".to_string();
+            engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+            engine.phase = models::MatchPhase::MAIN;
+
+            let mut ps1 = engine::PlayerState::new("p1".to_string());
+            let mut ps2 = engine::PlayerState::new("p2".to_string());
+            ps1.partner = Some(test_inst("p1_p", "B01001", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+            ps1.r#case = Some(test_inst("p1_c", "B01024", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+            let atk_def = if is_shinichi { "B01009" } else { "B01008" };
+            ps1.field.push(test_inst("p1_atk", atk_def, "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+            ps1.hand.push(test_inst("h_b11015", "B11015", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+            ps2.field.push(test_inst("p2_def", "B01005", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP));
+            engine.players.insert("p1".to_string(), ps1);
+            engine.players.insert("p2".to_string(), ps2);
+
+            engine.prompt_main_action("p1");
+            let pd1 = engine.pending_decision.clone().unwrap();
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd1["decisionId"],
+                "revision": engine.revision,
+                "value": {"type": "ACTION", "actorId": "p1_atk", "targetId": "p2_def"}
+            }));
+            let pd_cut = engine.pending_decision.clone().unwrap();
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd_cut["decisionId"],
+                "revision": engine.revision,
+                "value": {"cutinCardId": "h_b11015"}
+            }));
+            let p1_atk = engine.players.get("p1").unwrap().field.iter().find(|c| c.instance_id == "p1_atk").unwrap();
+            assert_eq!(p1_atk.temp_ap_bonus, expected_ap);
+        }
+
+        // 4) B05040: optional discard hand scales AP by removed level (lv8 => +8000, skip => 0)
+        for do_discard in [true, false] {
+            let mut engine = MatchEngine::new(catalog.clone());
+            engine.turn = 4;
+            engine.turn_player_id = "p1".to_string();
+            engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+            engine.phase = models::MatchPhase::MAIN;
+
+            let mut ps1 = engine::PlayerState::new("p1".to_string());
+            let mut ps2 = engine::PlayerState::new("p2".to_string());
+            ps1.partner = Some(test_inst("p1_p", "B01001", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+            ps1.r#case = Some(test_inst("p1_c", "B01024", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+            ps1.field.push(test_inst("p1_atk", "B01008", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+            ps1.hand.push(test_inst("h_b05040", "B05040", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+            ps1.hand.push(test_inst("h_lv8", "B01005", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+            ps2.field.push(test_inst("p2_def", "B01005", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP));
+            engine.players.insert("p1".to_string(), ps1);
+            engine.players.insert("p2".to_string(), ps2);
+
+            engine.prompt_main_action("p1");
+            let pd1 = engine.pending_decision.clone().unwrap();
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd1["decisionId"],
+                "revision": engine.revision,
+                "value": {"type": "ACTION", "actorId": "p1_atk", "targetId": "p2_def"}
+            }));
+            let pd_cut = engine.pending_decision.clone().unwrap();
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd_cut["decisionId"],
+                "revision": engine.revision,
+                "value": {"cutinCardId": "h_b05040"}
+            }));
+            let pd_disc = engine.pending_decision.clone().expect("B05040 must prompt optional DISCARD_HAND");
+            assert_eq!(pd_disc["kind"], "targetSelect");
+            assert_eq!(pd_disc["options"]["effectType"], "DISCARD_HAND");
+            let answer_val = if do_discard {
+                serde_json::json!({"targetId": "h_lv8", "actorId": "h_b05040", "effectType": "DISCARD_HAND"})
+            } else {
+                serde_json::json!({"skip": true})
+            };
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd_disc["decisionId"],
+                "revision": engine.revision,
+                "value": answer_val
+            }));
+            let p1_atk = engine.players.get("p1").unwrap().field.iter().find(|c| c.instance_id == "p1_atk").unwrap();
+            assert_eq!(p1_atk.temp_ap_bonus, if do_discard { 8000 } else { 0 });
+        }
+    }
+
+    #[test]
+    fn test_bug3_b07094_gin_and_optional_compound_costs() {
+        let catalog = load_test_catalog();
+
+        // Case A: B07094 alone (no lv<=7 char on own field) => TurnEnd must NOT fire opponent removal
+        {
+            let mut engine = MatchEngine::new(catalog.clone());
+            engine.turn = 4;
+            engine.turn_player_id = "p1".to_string();
+            engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+            engine.phase = models::MatchPhase::END_TRIGGERS;
+
+            let mut ps1 = engine::PlayerState::new("p1".to_string());
+            let mut ps2 = engine::PlayerState::new("p2".to_string());
+            ps1.partner = Some(test_inst("p1_p", "B03106", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE)); // 黒
+            ps1.field.push(test_inst("p1_gin", "B07094", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE)); // lv8
+            ps1.hand.push(test_inst("h1", "B01011", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+            ps2.field.push(test_inst("opp_c", "B01011", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+            engine.players.insert("p1".to_string(), ps1);
+            engine.players.insert("p2".to_string(), ps2);
+
+            engine.trigger_on_turn_end("p1");
+            assert!(engine.pending_decision.is_none(), "Without self lv<=7 field char, B07094 compound cost must not prompt");
+            assert_eq!(engine.players.get("p1").unwrap().hand.len(), 1);
+            assert_eq!(engine.players.get("p2").unwrap().field.len(), 1);
+        }
+
+        // Case B: B07094 + self_lv4 present -> pay hand discard -> SKIP self_lv4 remove -> opponent char NOT removed
+        {
+            let mut engine = MatchEngine::new(catalog.clone());
+            engine.turn = 4;
+            engine.turn_player_id = "p1".to_string();
+            engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+            engine.phase = models::MatchPhase::END_TRIGGERS;
+
+            let mut ps1 = engine::PlayerState::new("p1".to_string());
+            let mut ps2 = engine::PlayerState::new("p2".to_string());
+            ps1.partner = Some(test_inst("p1_p", "B03106", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+            ps1.r#case = Some(test_inst("p1_c", "B01024", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+            ps2.r#case = Some(test_inst("p2_c", "B01024", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+            ps1.field.push(test_inst("p1_gin", "B07094", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+            ps1.field.push(test_inst("self_lv4", "B01011", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+            ps1.hand.push(test_inst("h1", "B01011", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+            ps2.field.push(test_inst("opp_c", "B01014", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+            engine.players.insert("p1".to_string(), ps1);
+            engine.players.insert("p2".to_string(), ps2);
+
+            engine.trigger_on_turn_end("p1");
+            let pd1 = engine.pending_decision.clone().expect("Step 1 DISCARD_HAND must prompt");
+            assert_eq!(pd1["kind"], "targetSelect");
+            assert_eq!(pd1["options"]["effectType"], "DISCARD_HAND");
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd1["decisionId"],
+                "revision": engine.revision,
+                "value": {"targetId": "h1", "actorId": "p1_gin", "effectType": "DISCARD_HAND"}
+            }));
+
+            let pd2 = engine.pending_decision.clone().expect("Step 2 self lv<=7 REMOVE must prompt");
+            assert_eq!(pd2["kind"], "targetSelect");
+            assert_eq!(pd2["options"]["effectType"], "REMOVE");
+            let cands2: Vec<&str> = pd2["options"]["candidates"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|c| c["instanceId"].as_str())
+                .collect();
+            assert_eq!(cands2, vec!["self_lv4"]);
+
+            // Skip step 2 -> must abort follow-up opponent removal
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd2["decisionId"],
+                "revision": engine.revision,
+                "value": {"skip": true}
+            }));
+            assert!(engine.players.get("p1").unwrap().field.iter().any(|c| c.instance_id == "self_lv4"));
+            assert!(engine.players.get("p2").unwrap().field.iter().any(|c| c.instance_id == "opp_c"), "opp_c must NOT be removed when step 2 is skipped");
+        }
+
+        // Case C: Pay both hand discard AND self_lv4 remove -> prompts opponent removal & removes opp_c
+        {
+            let mut engine = MatchEngine::new(catalog.clone());
+            engine.turn = 4;
+            engine.turn_player_id = "p1".to_string();
+            engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+            engine.phase = models::MatchPhase::END_TRIGGERS;
+
+            let mut ps1 = engine::PlayerState::new("p1".to_string());
+            let mut ps2 = engine::PlayerState::new("p2".to_string());
+            ps1.partner = Some(test_inst("p1_p", "B03106", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+            ps1.r#case = Some(test_inst("p1_c", "B01024", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+            ps2.r#case = Some(test_inst("p2_c", "B01024", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+            ps1.field.push(test_inst("p1_gin", "B07094", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+            ps1.field.push(test_inst("self_lv4", "B01011", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+            ps1.hand.push(test_inst("h1", "B01011", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+            ps2.field.push(test_inst("opp_c", "B01014", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+            for i in 0..4 {
+                ps1.deck.push(test_inst(&format!("c_d1_{}", i), "B01011", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+                ps2.deck.push(test_inst(&format!("c_d2_{}", i), "B01011", "p2", models::Zone::DECK, models::CardOrientation::ACTIVE));
+            }
+            engine.players.insert("p1".to_string(), ps1);
+            engine.players.insert("p2".to_string(), ps2);
+
+            engine.trigger_on_turn_end("p1");
+            let pd1 = engine.pending_decision.clone().unwrap();
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd1["decisionId"],
+                "revision": engine.revision,
+                "value": {"targetId": "h1", "actorId": "p1_gin", "effectType": "DISCARD_HAND"}
+            }));
+            let pd2 = engine.pending_decision.clone().unwrap();
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd2["decisionId"],
+                "revision": engine.revision,
+                "value": {"targetId": "self_lv4", "actorId": "p1_gin", "effectType": "REMOVE"}
+            }));
+
+            assert!(engine.players.get("p1").unwrap().remove.iter().any(|c| c.instance_id == "self_lv4"));
+            let pd3 = engine.pending_decision.clone().expect("Step 3 character REMOVE must prompt after paying both costs");
+            assert_eq!(pd3["kind"], "targetSelect");
+            assert_eq!(pd3["options"]["effectType"], "REMOVE");
+            let cands3: Vec<&str> = pd3["options"]["candidates"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|c| c["instanceId"].as_str())
+                .collect();
+            assert!(cands3.contains(&"opp_c"));
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd3["decisionId"],
+                "revision": engine.revision,
+                "value": {"targetId": "opp_c", "actorId": "p1_gin", "effectType": "REMOVE"}
+            }));
+            assert!(engine.players.get("p1").unwrap().remove.iter().any(|c| c.instance_id == "self_lv4"));
+            assert!(engine.players.get("p2").unwrap().remove.iter().any(|c| c.instance_id == "opp_c"));
+        }
+
+        // Case D: Cross-card B04049 (このキャラをスリープさせ、手札からFBIを1枚リムーブしてもよい) skip leaves self ACTIVE and opp intact
+        {
+            let mut engine = MatchEngine::new(catalog);
+            engine.turn = 4;
+            engine.turn_player_id = "p1".to_string();
+            engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+            engine.phase = models::MatchPhase::MAIN;
+
+            let mut ps1 = engine::PlayerState::new("p1".to_string());
+            let mut ps2 = engine::PlayerState::new("p2".to_string());
+            ps1.partner = Some(test_inst("p1_p", "B01060", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE)); // 赤
+            ps1.r#case = Some(test_inst("p1_c", "B01024", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+            for i in 0..8 {
+                ps1.file.push(test_inst(&format!("f{}", i), "B01062", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+            }
+            ps1.hand.push(test_inst("h_subaru", "B04049", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+            ps1.hand.push(test_inst("h_fbi", "B01062", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+            ps2.field.push(test_inst("opp_c", "B01014", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+            engine.players.insert("p1".to_string(), ps1);
+            engine.players.insert("p2".to_string(), ps2);
+
+            engine.prompt_main_action("p1");
+            let pd1 = engine.pending_decision.clone().unwrap();
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd1["decisionId"],
+                "revision": engine.revision,
+                "value": {"type": "HAND_PLAY", "cardId": "h_subaru"}
+            }));
+            let pd_opt = engine.pending_decision.clone().expect("B04049 optional DISCARD_HAND must prompt");
+            assert_eq!(pd_opt["options"]["effectType"], "DISCARD_HAND");
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd_opt["decisionId"],
+                "revision": engine.revision,
+                "value": {"skip": true}
+            }));
+            let subaru = engine.players.get("p1").unwrap().field.iter().find(|c| c.instance_id == "h_subaru").unwrap();
+            assert_eq!(subaru.orientation, models::CardOrientation::ACTIVE, "Skipping B04049 optional cost must not sleep self");
+            assert!(engine.players.get("p2").unwrap().field.iter().any(|c| c.instance_id == "opp_c"));
+        }
+    }
+
+    #[test]
+    fn test_bug5_b11009_mitsuhiko_contact_only_target_and_contact_abort() {
+        let catalog = load_test_catalog();
+
+        // 1) Fewer than 2 distinct lv4 少年探偵団 => B11009 cutin is NOT available
+        {
+            let mut engine = MatchEngine::new(catalog.clone());
+            engine.turn = 4;
+            engine.turn_player_id = "p1".to_string();
+            engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+            engine.phase = models::MatchPhase::MAIN;
+
+            let mut ps1 = engine::PlayerState::new("p1".to_string());
+            let mut ps2 = engine::PlayerState::new("p2".to_string());
+            ps1.partner = Some(test_inst("p1_p", "B01001", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+            ps1.r#case = Some(test_inst("p1_c", "B01024", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+            ps1.field.push(test_inst("p1_conan", "B01011", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+            ps1.hand.push(test_inst("h_b11009", "B11009", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+            ps2.field.push(test_inst("p2_contact", "B01011", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP));
+            engine.players.insert("p1".to_string(), ps1);
+            engine.players.insert("p2".to_string(), ps2);
+
+            engine.prompt_main_action("p1");
+            let pd1 = engine.pending_decision.clone().unwrap();
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd1["decisionId"],
+                "revision": engine.revision,
+                "value": {"type": "ACTION", "actorId": "p1_conan", "targetId": "p2_contact"}
+            }));
+            // Without 2 distinct lv4 少年探偵団, cutin cannot be used so attack resolves directly
+            assert!(engine.players.get("p1").unwrap().hand.iter().any(|c| c.instance_id == "h_b11009"));
+        }
+
+        // 2) With 2 distinct lv4 少年探偵団: B11009 only offers contacting lv<=7 chars (NOT non-contacting idle or lv8) and aborts contact on remove
+        {
+            let mut engine = MatchEngine::new(catalog.clone());
+            engine.turn = 4;
+            engine.turn_player_id = "p1".to_string();
+            engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+            engine.phase = models::MatchPhase::MAIN;
+
+            let mut ps1 = engine::PlayerState::new("p1".to_string());
+            let mut ps2 = engine::PlayerState::new("p2".to_string());
+            ps1.partner = Some(test_inst("p1_p", "B01001", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+            ps1.r#case = Some(test_inst("p1_c", "B01024", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+            ps2.r#case = Some(test_inst("p2_c", "B01024", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+            ps1.field.push(test_inst("p1_conan", "B01011", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE)); // lv4 少年探偵団 (江戸川コナン)
+            ps1.field.push(test_inst("p1_genta", "B01014", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE)); // lv4 少年探偵団 (小嶋元太)
+            ps1.hand.push(test_inst("h_b11009", "B11009", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+            ps1.deck.push(test_inst("dk1", "B01011", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+            ps2.field.push(test_inst("p2_contact", "B01016", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP)); // lv4 AP4000
+            ps2.field.push(test_inst("p2_idle", "B01014", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP));    // lv4 AP5000 (not contacting)
+            engine.players.insert("p1".to_string(), ps1);
+            engine.players.insert("p2".to_string(), ps2);
+
+            engine.prompt_main_action("p1");
+            let pd1 = engine.pending_decision.clone().unwrap();
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd1["decisionId"],
+                "revision": engine.revision,
+                "value": {"type": "ACTION", "actorId": "p1_conan", "targetId": "p2_contact"}
+            }));
+
+            let pd_cut = engine.pending_decision.clone().expect("B11009 cutin must be offered");
+            assert_eq!(pd_cut["kind"], "guard");
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd_cut["decisionId"],
+                "revision": engine.revision,
+                "value": {"cutinCardId": "h_b11009"}
+            }));
+
+            let pd_ts = engine.pending_decision.clone().expect("B11009 must prompt targetSelect");
+            assert_eq!(pd_ts["kind"], "targetSelect");
+            assert_eq!(pd_ts["options"]["effectType"], "REMOVE");
+            let cands: Vec<&str> = pd_ts["options"]["candidates"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|c| c["instanceId"].as_str())
+                .collect();
+            assert!(cands.contains(&"p2_contact"), "Contacting lv<=7 opponent char must be selectable");
+            assert!(!cands.contains(&"p2_idle"), "Non-contacting field char must NOT be selectable");
+            assert!(!cands.contains(&"p1_genta"), "Non-contacting own field char must NOT be selectable");
+
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd_ts["decisionId"],
+                "revision": engine.revision,
+                "value": {"targetId": "p2_contact", "actorId": "h_b11009", "effectType": "REMOVE"}
+            }));
+
+            assert!(engine.players.get("p2").unwrap().remove.iter().any(|c| c.instance_id == "p2_contact"));
+            assert!(engine.players.get("p2").unwrap().field.iter().any(|c| c.instance_id == "p2_idle"));
+            assert!(engine.action_context.is_none(), "Contact must abort when contacting char leaves field");
+            assert_eq!(engine.pending_decision.as_ref().unwrap()["kind"], "mainAction");
+            assert!(engine.players.get("p1").unwrap().field.iter().any(|c| c.instance_id == "p1_conan"), "Attacker stays alive after contact abort");
+            assert!(engine.players.get("p1").unwrap().hand.iter().any(|c| c.instance_id == "dk1"), "B11009 must draw 1 card");
+        }
+
+        // 3) Cross-card B01098 (コンタクト中のすべてのキャラをリムーブする): only removes contacting chars, leaves non-contacting chars
+        {
+            let mut engine = MatchEngine::new(catalog);
+            engine.turn = 4;
+            engine.turn_player_id = "p1".to_string();
+            engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+            engine.phase = models::MatchPhase::MAIN;
+
+            let mut ps1 = engine::PlayerState::new("p1".to_string());
+            let mut ps2 = engine::PlayerState::new("p2".to_string());
+            ps1.partner = Some(test_inst("p1_p", "B03106", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+            ps1.r#case = Some(test_inst("p1_c", "B01024", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+            ps1.field.push(test_inst("p1_atk", "B01098", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+            ps1.hand.push(test_inst("h_b01098", "B01098", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+            ps2.field.push(test_inst("p2_contact", "B01005", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP));
+            ps2.field.push(test_inst("p2_idle", "B01014", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP));
+            engine.players.insert("p1".to_string(), ps1);
+            engine.players.insert("p2".to_string(), ps2);
+
+            engine.prompt_main_action("p1");
+            let pd1 = engine.pending_decision.clone().unwrap();
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd1["decisionId"],
+                "revision": engine.revision,
+                "value": {"type": "ACTION", "actorId": "p1_atk", "targetId": "p2_contact"}
+            }));
+            let pd_cut = engine.pending_decision.clone().unwrap();
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd_cut["decisionId"],
+                "revision": engine.revision,
+                "value": {"cutinCardId": "h_b01098"}
+            }));
+
+            assert!(engine.players.get("p1").unwrap().remove.iter().any(|c| c.instance_id == "p1_atk"));
+            assert!(engine.players.get("p2").unwrap().remove.iter().any(|c| c.instance_id == "p2_contact"));
+            assert!(engine.players.get("p2").unwrap().field.iter().any(|c| c.instance_id == "p2_idle"), "B01098 must NOT remove non-contacting chars");
+        }
+    }
+
+    #[test]
+    fn test_id0371_sherry_single_discard_and_cross_card_deck_search_conditionals() {
+        let catalog = load_test_catalog();
+
+        // 1) ID0371 シェリー (B03122 / D07019): 複数手札があっても手札に加えた後のリムーブは1回（1枚）のみ
+        for (tag, def_id) in [("B03122", "B03122"), ("D07019", "D07019")] {
+            let mut engine = MatchEngine::new(catalog.clone());
+            engine.turn = 4;
+            engine.turn_player_id = "p1".to_string();
+            engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+            engine.phase = models::MatchPhase::MAIN;
+
+            let mut ps1 = engine::PlayerState::new("p1".to_string());
+            let ps2 = engine::PlayerState::new("p2".to_string());
+            ps1.partner = Some(test_inst("p1_p", "B03106", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+            ps1.r#case = Some(test_inst("p1_c", "B01024", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+            for i in 0..8 {
+                ps1.file.push(test_inst(&format!("f{}", i), "B01021", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+            }
+            ps1.hand.push(test_inst("h_sherry", def_id, "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+            ps1.hand.push(test_inst("h_ex1", "B01021", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+            ps1.hand.push(test_inst("h_ex2", "B01020", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+            for i in 0..3 {
+                ps1.deck.push(test_inst(&format!("dk_other_{}", i), "B01021", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+            }
+            ps1.deck.push(test_inst("dk_black", "B03122", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+            engine.players.insert("p1".to_string(), ps1);
+            engine.players.insert("p2".to_string(), ps2);
+
+            engine.prompt_main_action("p1");
+            let pd_main = engine.pending_decision.clone().unwrap();
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd_main["decisionId"],
+                "revision": engine.revision,
+                "value": {"type": "HAND_PLAY", "cardId": "h_sherry"}
+            }));
+
+            let pd_ds = engine.pending_decision.clone().expect("deckSearch must open");
+            assert_eq!(pd_ds["kind"], "deckSearch");
+            assert_eq!(pd_ds["options"]["postAddDiscard"], 1);
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd_ds["decisionId"],
+                "revision": engine.revision,
+                "value": {"chosenCardId": "dk_black", "actorId": "h_sherry"}
+            }));
+
+            let pd_disc = engine.pending_decision.clone().expect("single DISCARD_HAND prompt expected");
+            assert_eq!(pd_disc["kind"], "targetSelect");
+            assert_eq!(pd_disc["options"]["effectType"], "DISCARD_HAND");
+            assert_eq!(pd_disc["options"]["maxSelect"], 1);
+            assert_eq!(pd_disc["options"]["optional"], false);
+
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd_disc["decisionId"],
+                "revision": engine.revision,
+                "value": {"targetId": "h_ex1", "actorId": "h_sherry", "effectType": "DISCARD_HAND"}
+            }));
+
+            assert_eq!(
+                engine.pending_decision.as_ref().unwrap()["kind"],
+                "mainAction",
+                "{} must NOT force a second hand discard",
+                tag
+            );
+            let p1_after = engine.players.get("p1").unwrap();
+            assert_eq!(p1_after.hand.len(), 2, "{} hand should be h_ex2 + dk_black", tag);
+            assert_eq!(p1_after.remove.len(), 1, "{} remove should have only h_ex1", tag);
+            assert!(p1_after.remove.iter().any(|c| c.instance_id == "h_ex1"));
+
+            // Skip picking in deckSearch -> 0 discards
+            {
+                let ps1m = engine.players.get_mut("p1").unwrap();
+                ps1m.normal_hand_played_this_turn = false;
+                ps1m.hand.push(test_inst("h_sherry2", def_id, "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+                for i in 0..4 {
+                    ps1m.deck.push(test_inst(&format!("dk_skip_{}", i), "B03122", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+                }
+            }
+            let pd_main2 = engine.pending_decision.clone().unwrap();
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd_main2["decisionId"],
+                "revision": engine.revision,
+                "value": {"type": "HAND_PLAY", "cardId": "h_sherry2"}
+            }));
+            let pd_ds2 = engine.pending_decision.clone().unwrap();
+            assert_eq!(pd_ds2["kind"], "deckSearch");
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd_ds2["decisionId"],
+                "revision": engine.revision,
+                "value": {"chosenCardIds": [], "actorId": "h_sherry2"}
+            }));
+            assert_eq!(engine.pending_decision.as_ref().unwrap()["kind"], "mainAction");
+            assert_eq!(engine.players.get("p1").unwrap().remove.len(), 1);
+        }
+
+        // 2) Cross-card B10054 (レベル6以下のカードを手札に加えた場合、手札を1枚リムーブする)
+        for (pick_lv6, expect_discard) in [(true, true), (false, false)] {
+            let mut engine = MatchEngine::new(catalog.clone());
+            engine.turn = 4;
+            engine.turn_player_id = "p1".to_string();
+            engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+            engine.phase = models::MatchPhase::MAIN;
+
+            let mut ps1 = engine::PlayerState::new("p1".to_string());
+            let ps2 = engine::PlayerState::new("p2".to_string());
+            ps1.partner = Some(test_inst("p1_p", "B01060", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+            ps1.r#case = Some(test_inst("p1_c", "B03138", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE)); // 赤女の悲劇 (赤/黄)
+            for i in 0..8 {
+                ps1.file.push(test_inst(&format!("f{}", i), "B01021", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+            }
+            ps1.hand.push(test_inst("h_niide", "B10054", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+            ps1.hand.push(test_inst("h_ex1", "B01021", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+            ps1.hand.push(test_inst("h_ex2", "B01020", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+            ps1.deck.push(test_inst("dk1", "B01021", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+            ps1.deck.push(test_inst("dk2", "B01021", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+            ps1.deck.push(test_inst("dk_lv6", "B04051", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE)); // Lv6 赤
+            ps1.deck.push(test_inst("dk_lv8", "B01062", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE)); // Lv8 赤
+            engine.players.insert("p1".to_string(), ps1);
+            engine.players.insert("p2".to_string(), ps2);
+
+            engine.prompt_main_action("p1");
+            let pd_main = engine.pending_decision.clone().unwrap();
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd_main["decisionId"],
+                "revision": engine.revision,
+                "value": {"type": "HAND_PLAY", "cardId": "h_niide"}
+            }));
+            let pd_ds = engine.pending_decision.clone().unwrap();
+            assert_eq!(pd_ds["kind"], "deckSearch");
+            let chosen_id = if pick_lv6 { "dk_lv6" } else { "dk_lv8" };
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd_ds["decisionId"],
+                "revision": engine.revision,
+                "value": {"chosenCardId": chosen_id, "actorId": "h_niide"}
+            }));
+            if expect_discard {
+                let pd_disc = engine.pending_decision.clone().unwrap();
+                assert_eq!(pd_disc["kind"], "targetSelect");
+                assert_eq!(pd_disc["options"]["effectType"], "DISCARD_HAND");
+                assert_eq!(pd_disc["options"]["maxSelect"], 1);
+                let _ = engine.submit_decision("p1", &serde_json::json!({
+                    "decisionId": pd_disc["decisionId"],
+                    "revision": engine.revision,
+                    "value": {"targetId": "h_ex1", "actorId": "h_niide", "effectType": "DISCARD_HAND"}
+                }));
+                assert_eq!(engine.pending_decision.as_ref().unwrap()["kind"], "mainAction");
+                assert_eq!(engine.players.get("p1").unwrap().remove.len(), 1);
+            } else {
+                assert_eq!(engine.pending_decision.as_ref().unwrap()["kind"], "mainAction", "Lv8 pick must NOT trigger discard");
+                assert_eq!(engine.players.get("p1").unwrap().remove.len(), 0);
+            }
+        }
+
+        // 3) Cross-card B08050 (諸星大/宮野志保/宮野エレーナ/宮野厚司 以外を手札に加えた場合、手札を1枚リムーブ)
+        for (pick_excluded, expect_discard) in [(true, false), (false, true)] {
+            let mut engine = MatchEngine::new(catalog.clone());
+            engine.turn = 4;
+            engine.turn_player_id = "p1".to_string();
+            engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+            engine.phase = models::MatchPhase::MAIN;
+
+            let mut ps1 = engine::PlayerState::new("p1".to_string());
+            let ps2 = engine::PlayerState::new("p2".to_string());
+            ps1.partner = Some(test_inst("p1_p", "B01060", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+            ps1.r#case = Some(test_inst("p1_c", "B01024", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+            for i in 0..8 {
+                ps1.file.push(test_inst(&format!("f{}", i), "B01021", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+            }
+            ps1.hand.push(test_inst("h_akemi", "B08050", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+            ps1.hand.push(test_inst("h_ex1", "B01021", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+            ps1.hand.push(test_inst("h_ex2", "B01020", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+            ps1.deck.push(test_inst("dk1", "B01021", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+            ps1.deck.push(test_inst("dk_shiho", "B01018", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+            ps1.deck.push(test_inst("dk_sherry", "B03122", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+            engine.players.insert("p1".to_string(), ps1);
+            engine.players.insert("p2".to_string(), ps2);
+
+            engine.prompt_main_action("p1");
+            let pd_main = engine.pending_decision.clone().unwrap();
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd_main["decisionId"],
+                "revision": engine.revision,
+                "value": {"type": "HAND_PLAY", "cardId": "h_akemi"}
+            }));
+            let pd_ds = engine.pending_decision.clone().unwrap();
+            assert_eq!(pd_ds["kind"], "deckSearch");
+            let chosen_id = if pick_excluded { "dk_shiho" } else { "dk_sherry" };
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd_ds["decisionId"],
+                "revision": engine.revision,
+                "value": {"chosenCardId": chosen_id, "actorId": "h_akemi"}
+            }));
+            if expect_discard {
+                let pd_disc = engine.pending_decision.clone().unwrap();
+                assert_eq!(pd_disc["kind"], "targetSelect");
+                assert_eq!(pd_disc["options"]["effectType"], "DISCARD_HAND");
+                let _ = engine.submit_decision("p1", &serde_json::json!({
+                    "decisionId": pd_disc["decisionId"],
+                    "revision": engine.revision,
+                    "value": {"targetId": "h_ex1", "actorId": "h_akemi", "effectType": "DISCARD_HAND"}
+                }));
+                assert_eq!(engine.pending_decision.as_ref().unwrap()["kind"], "mainAction");
+                assert!(engine.players.get("p1").unwrap().remove.iter().any(|c| c.instance_id == "h_ex1"));
+            } else {
+                assert_eq!(engine.pending_decision.as_ref().unwrap()["kind"], "mainAction", "宮野志保 must NOT trigger discard");
+                assert!(!engine.players.get("p1").unwrap().remove.iter().any(|c| c.zone == models::Zone::REMOVE && c.instance_id == "h_ex1"));
+            }
+        }
+
+        // 4) Cross-card B07004 (キャラを登場させた場合、手札を1枚リムーブする)
+        for (deploy_genta, expect_discard) in [(true, true), (false, false)] {
+            let mut engine = MatchEngine::new(catalog.clone());
+            engine.turn = 4;
+            engine.turn_player_id = "p1".to_string();
+            engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+            engine.phase = models::MatchPhase::MAIN;
+
+            let mut ps1 = engine::PlayerState::new("p1".to_string());
+            let ps2 = engine::PlayerState::new("p2".to_string());
+            ps1.partner = Some(test_inst("p1_p", "B01001", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+            ps1.r#case = Some(test_inst("p1_c", "B01024", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+            ps1.field.push(test_inst("f_ayumi", "B07004", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+            ps1.hand.push(test_inst("h_ex1", "B01021", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+            ps1.hand.push(test_inst("h_ex2", "B01020", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+            for i in 0..3 {
+                ps1.deck.push(test_inst(&format!("dk{}", i), "B01021", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+            }
+            ps1.deck.push(test_inst("dk_genta", "B01014", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+            engine.players.insert("p1".to_string(), ps1);
+            engine.players.insert("p2".to_string(), ps2);
+
+            engine.prompt_main_action("p1");
+            let pd_main = engine.pending_decision.clone().unwrap();
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd_main["decisionId"],
+                "revision": engine.revision,
+                "value": {"type": "DECLARE", "actorId": "f_ayumi"}
+            }));
+            let pd_ds = engine.pending_decision.clone().unwrap();
+            assert_eq!(pd_ds["kind"], "deckSearch");
+            let val = if deploy_genta {
+                serde_json::json!({"chosenCardId": "dk_genta", "actorId": "f_ayumi"})
+            } else {
+                serde_json::json!({"chosenCardIds": [], "actorId": "f_ayumi"})
+            };
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd_ds["decisionId"],
+                "revision": engine.revision,
+                "value": val
+            }));
+            if expect_discard {
+                let pd_disc = engine.pending_decision.clone().unwrap();
+                assert_eq!(pd_disc["kind"], "targetSelect");
+                assert_eq!(pd_disc["options"]["effectType"], "DISCARD_HAND");
+                let _ = engine.submit_decision("p1", &serde_json::json!({
+                    "decisionId": pd_disc["decisionId"],
+                    "revision": engine.revision,
+                    "value": {"targetId": "h_ex1", "actorId": "f_ayumi", "effectType": "DISCARD_HAND"}
+                }));
+                assert_eq!(engine.pending_decision.as_ref().unwrap()["kind"], "mainAction");
+                assert!(engine.players.get("p1").unwrap().field.iter().any(|c| c.instance_id == "dk_genta"));
+                assert_eq!(engine.players.get("p1").unwrap().remove.len(), 1);
+            } else {
+                assert_eq!(engine.pending_decision.as_ref().unwrap()["kind"], "mainAction");
+                assert_eq!(engine.players.get("p1").unwrap().remove.len(), 0);
+            }
+        }
+
+        // 5) Cross-card PR265 (カードを手札に加えた場合、自分のデッキのカードを上からそのカードのレベルと同じ枚数リムーブする)
+        {
+            let mut engine = MatchEngine::new(catalog);
+            engine.turn = 4;
+            engine.turn_player_id = "p1".to_string();
+            engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+            engine.phase = models::MatchPhase::MAIN;
+
+            let mut ps1 = engine::PlayerState::new("p1".to_string());
+            let ps2 = engine::PlayerState::new("p2".to_string());
+            ps1.partner = Some(test_inst("p1_p", "B01060", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+            ps1.r#case = Some(test_inst("p1_c", "B01024", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+            for i in 0..8 {
+                ps1.file.push(test_inst(&format!("f{}", i), "B01021", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+            }
+            ps1.hand.push(test_inst("h_kazami", "PR265", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+            for i in 0..6 {
+                ps1.deck.push(test_inst(&format!("dk_rem_{}", i), "B01021", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+            }
+            ps1.deck.push(test_inst("dk_sato", "B01089", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE)); // Lv5 警視庁
+            engine.players.insert("p1".to_string(), ps1);
+            engine.players.insert("p2".to_string(), ps2);
+
+            engine.prompt_main_action("p1");
+            let pd_main = engine.pending_decision.clone().unwrap();
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd_main["decisionId"],
+                "revision": engine.revision,
+                "value": {"type": "HAND_PLAY", "cardId": "h_kazami"}
+            }));
+            let pd_ds = engine.pending_decision.clone().unwrap();
+            assert_eq!(pd_ds["kind"], "deckSearch");
+            let _ = engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": pd_ds["decisionId"],
+                "revision": engine.revision,
+                "value": {"chosenCardId": "dk_sato", "actorId": "h_kazami"}
+            }));
+
+            assert_eq!(engine.pending_decision.as_ref().unwrap()["kind"], "mainAction");
+            let p1_after = engine.players.get("p1").unwrap();
+            assert!(p1_after.hand.iter().any(|c| c.instance_id == "dk_sato"));
+            assert_eq!(p1_after.remove.len(), 5, "PR265 must mill exact level (5) cards from deck");
+        }
     }
 }
 

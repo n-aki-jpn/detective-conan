@@ -107,6 +107,51 @@ pub struct CardInstance {
     pub rush_target: Option<String>,
     #[serde(default)]
     pub used_declare_this_turn: bool,
+    #[serde(default)]
+    pub set_cards: Vec<CardInstance>,
+    #[serde(default)]
+    pub can_attack_active: bool,
+    #[serde(default)]
+    pub has_bullet: bool,
+    #[serde(default)]
+    pub base_ap_override: Option<i32>,
+    #[serde(default)]
+    pub temp_level_delta: i32,
+    #[serde(default)]
+    pub draw_on_action_this_turn: bool,
+    #[serde(default)]
+    pub contact_draw_and_ap1000_this_turn: bool,
+    #[serde(default)]
+    pub bullet_on_case_attack_discard_this_turn: bool,
+    #[serde(default)]
+    pub temp_name_override: Option<String>,
+}
+
+impl Default for CardInstance {
+    fn default() -> Self {
+        Self {
+            instance_id: String::new(),
+            definition_id: String::new(),
+            owner_id: String::new(),
+            zone: Zone::DECK,
+            orientation: default_orientation(),
+            entered_turn: default_entered_turn(),
+            face_up: false,
+            temp_ap_bonus: 0,
+            has_rush: false,
+            rush_target: None,
+            used_declare_this_turn: false,
+            set_cards: Vec::new(),
+            can_attack_active: false,
+            has_bullet: false,
+            base_ap_override: None,
+            temp_level_delta: 0,
+            draw_on_action_this_turn: false,
+            contact_draw_and_ap1000_this_turn: false,
+            bullet_on_case_attack_discard_this_turn: false,
+            temp_name_override: None,
+        }
+    }
 }
 
 fn default_orientation() -> CardOrientation {

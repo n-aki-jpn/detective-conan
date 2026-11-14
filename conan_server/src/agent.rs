@@ -623,8 +623,9 @@ impl RandomAgent {
                 json!({"value": {"cardId": null}})
             }
             "guard" => {
+                let must_guard = opts.get("mustGuard").and_then(|v| v.as_bool()).unwrap_or(false);
                 if let Some(guards) = opts.get("guardCardIds").and_then(|v| v.as_array()) {
-                    if !guards.is_empty() && rng.gen_bool(0.5) {
+                    if !guards.is_empty() && (must_guard || rng.gen_bool(0.5)) {
                         let chosen = guards.choose(&mut rng).unwrap();
                         return json!({"value": {"guardCardId": chosen}});
                     }
@@ -635,11 +636,65 @@ impl RandomAgent {
                 let actor_id = opts.get("actorId").and_then(|v| v.as_str()).unwrap_or("");
                 let effect_type = opts.get("effectType").and_then(|v| v.as_str()).unwrap_or("");
                 let max_select = opts.get("maxSelect").and_then(|v| v.as_u64()).unwrap_or(1).max(1) as usize;
+                let distinct_names = opts.get("distinctNames").and_then(|v| v.as_bool()).unwrap_or(false);
+                let distinct_levels = opts.get("distinctLevels").and_then(|v| v.as_bool()).unwrap_or(false);
+                let distinct_colors = opts.get("distinctColors").and_then(|v| v.as_bool()).unwrap_or(false);
+                let max_total_level = opts.get("maxTotalLevel").and_then(|v| v.as_i64());
+
                 if let Some(candidates) = opts.get("candidates").and_then(|v| v.as_array()) {
-                    let chosen_ids: Vec<&str> = candidates
-                        .choose_multiple(&mut rng, max_select.min(candidates.len()))
-                        .filter_map(|c| c.get("instanceId").and_then(|v| v.as_str()))
-                        .collect();
+                    let mut shuffled: Vec<&Value> = candidates.iter().collect();
+                    shuffled.shuffle(&mut rng);
+
+                    let mut chosen_ids: Vec<&str> = Vec::new();
+                    let mut used_names = std::collections::HashSet::new();
+                    let mut used_levels = std::collections::HashSet::new();
+                    let mut used_colors = std::collections::HashSet::new();
+                    let mut sum_level: i64 = 0;
+
+                    for c in shuffled {
+                        if chosen_ids.len() >= max_select {
+                            break;
+                        }
+                        let Some(iid) = c.get("instanceId").and_then(|v| v.as_str()) else {
+                            continue;
+                        };
+                        let cname = c.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                        let clv = c.get("level").and_then(|v| v.as_i64()).unwrap_or(0);
+                        let ccols: Vec<&str> = c
+                            .get("colors")
+                            .and_then(|v| v.as_array())
+                            .map(|arr| arr.iter().filter_map(|x| x.as_str()).collect())
+                            .unwrap_or_default();
+
+                        if distinct_names && used_names.contains(cname) {
+                            continue;
+                        }
+                        if distinct_levels && used_levels.contains(&clv) {
+                            continue;
+                        }
+                        if distinct_colors && ccols.iter().any(|col| used_colors.contains(*col)) {
+                            continue;
+                        }
+                        if let Some(cap) = max_total_level {
+                            if sum_level + clv > cap {
+                                continue;
+                            }
+                        }
+
+                        if distinct_names {
+                            used_names.insert(cname.to_string());
+                        }
+                        if distinct_levels {
+                            used_levels.insert(clv);
+                        }
+                        if distinct_colors {
+                            for col in ccols {
+                                used_colors.insert(col.to_string());
+                            }
+                        }
+                        sum_level += clv;
+                        chosen_ids.push(iid);
+                    }
                     if let Some(&first_id) = chosen_ids.first() {
                         return json!({
                             "value": {
@@ -662,16 +717,43 @@ impl RandomAgent {
             }
             "deckSearch" => {
                 let actor_id = opts.get("actorId").and_then(|v| v.as_str()).unwrap_or("");
+                let max_select = opts.get("maxSelect").and_then(|v| v.as_u64()).unwrap_or(1).max(1) as usize;
+                let distinct_colors = opts.get("distinctColors").and_then(|v| v.as_bool()).unwrap_or(false);
                 if let Some(cards) = opts.get("revealedCards").and_then(|v| v.as_array()) {
-                    let selectable: Vec<&Value> = cards
+                    let mut selectable: Vec<&Value> = cards
                         .iter()
                         .filter(|c| c.get("selectable").and_then(|v| v.as_bool()).unwrap_or(true))
                         .collect();
-                    if let Some(chosen) = selectable.choose(&mut rng) {
-                        let cid = chosen.get("instanceId").and_then(|v| v.as_str());
+                    selectable.shuffle(&mut rng);
+                    let mut chosen_ids: Vec<&str> = Vec::new();
+                    let mut used_colors = std::collections::HashSet::new();
+                    for c in selectable {
+                        if chosen_ids.len() >= max_select {
+                            break;
+                        }
+                        let Some(cid) = c.get("instanceId").and_then(|v| v.as_str()) else {
+                            continue;
+                        };
+                        let ccols: Vec<&str> = c
+                            .get("colors")
+                            .and_then(|v| v.as_array())
+                            .map(|arr| arr.iter().filter_map(|x| x.as_str()).collect())
+                            .unwrap_or_default();
+                        if distinct_colors && ccols.iter().any(|col| used_colors.contains(*col)) {
+                            continue;
+                        }
+                        if distinct_colors {
+                            for col in ccols {
+                                used_colors.insert(col.to_string());
+                            }
+                        }
+                        chosen_ids.push(cid);
+                    }
+                    if let Some(&first_id) = chosen_ids.first() {
                         return json!({
                             "value": {
-                                "chosenCardId": cid,
+                                "chosenCardId": first_id,
+                                "chosenCardIds": chosen_ids,
                                 "actorId": actor_id
                             }
                         });
@@ -680,7 +762,25 @@ impl RandomAgent {
                 json!({
                     "value": {
                         "chosenCardId": null,
+                        "chosenCardIds": [],
                         "actorId": actor_id
+                    }
+                })
+            }
+            "modeSelect" => {
+                let modes_len = opts.get("modes").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
+                let min_pick = opts.get("minPick").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
+                let max_pick = opts.get("maxPick").and_then(|v| v.as_u64()).unwrap_or(1).max(1) as usize;
+                let pick_count = min_pick.max(1).min(max_pick).min(modes_len);
+                let mut indices: Vec<usize> = (0..modes_len).collect();
+                indices.shuffle(&mut rng);
+                let chosen: Vec<usize> = indices.into_iter().take(pick_count).collect();
+                let first_idx = chosen.first().copied().unwrap_or(0);
+                json!({
+                    "value": {
+                        "mode": first_idx,
+                        "modeIndex": first_idx,
+                        "modes": chosen
                     }
                 })
             }

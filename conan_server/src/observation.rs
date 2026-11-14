@@ -33,18 +33,55 @@ pub fn build_player_observation(engine: &MatchEngine, viewing_player_id: &str) -
         let card_type = c_def.map(|d| format!("{:?}", d.card_type)).unwrap_or_else(|| "CHARACTER".to_string());
         let main_thumb = c_def.and_then(|d| d.main_thumb.clone());
         let main_path = c_def.and_then(|d| d.main_path.clone());
+        let effective_level = if level > 0 { (level + c.temp_level_delta).max(1) } else { 0 };
+        let set_cards_json: Vec<Value> = c.set_cards.iter().map(|sc| {
+            if !sc.face_up && c.owner_id != viewing_player_id {
+                return json!({
+                    "instanceId": sc.instance_id,
+                    "faceUp": false
+                });
+            }
+            let s_def = catalog.get(&sc.definition_id);
+            let s_name = s_def.and_then(|d| d.names.first().cloned()).unwrap_or_else(|| sc.definition_id.clone());
+            let s_desc = s_def.map(|d| d.description.clone()).unwrap_or_default();
+            let s_colors = s_def.map(|d| d.colors.clone()).unwrap_or_default();
+            let s_lv = s_def.map(|d| d.level).unwrap_or(0);
+            let s_type = s_def.map(|d| format!("{:?}", d.card_type)).unwrap_or_else(|| "EVENT".to_string());
+            let s_thumb = s_def.and_then(|d| d.main_thumb.clone());
+            let s_path = s_def.and_then(|d| d.main_path.clone());
+            json!({
+                "instanceId": sc.instance_id,
+                "definitionId": sc.definition_id,
+                "name": s_name,
+                "description": s_desc,
+                "colors": s_colors,
+                "level": s_lv,
+                "cardType": s_type,
+                "faceUp": sc.face_up,
+                "mainThumb": s_thumb,
+                "mainPath": s_path
+            })
+        }).collect();
 
         json!({
             "instanceId": c.instance_id,
             "definitionId": c.definition_id,
             "name": name,
+            "tempNameOverride": c.temp_name_override,
             "description": desc,
             "colors": colors,
             "traits": traits,
-            "level": level,
+            "level": effective_level,
+            "baseLevel": level,
+            "tempLevelDelta": c.temp_level_delta,
             "ap": effective_ap,
             "baseAp": base_ap,
-            "hasRush": c.has_rush,
+            "baseApOverride": c.base_ap_override,
+            "hasRush": engine.effective_rush(c).0,
+            "rushTarget": engine.effective_rush(c).1,
+            "hasSwift": engine.effective_swift(c),
+            "canAttackActive": engine.effective_can_attack_active(c),
+            "hasBullet": engine.effective_bullet(&c.owner_id, &c.instance_id),
             "usedDeclareThisTurn": c.used_declare_this_turn,
             "lp": effective_lp,
             "baseLp": base_lp,
@@ -52,6 +89,7 @@ pub fn build_player_observation(engine: &MatchEngine, viewing_player_id: &str) -
             "orientation": orientation_str,
             "enteredTurn": c.entered_turn,
             "faceUp": true,
+            "setCards": set_cards_json,
             "mainThumb": main_thumb,
             "mainPath": main_path
         })
@@ -75,6 +113,7 @@ pub fn build_player_observation(engine: &MatchEngine, viewing_player_id: &str) -
             "hand": ps.hand.iter().map(|c| serialize_card(c, !is_me)).collect::<Vec<_>>(),
             "field": ps.field.iter().map(|c| serialize_card(c, false)).collect::<Vec<_>>(),
             "partner": ps.partner.as_ref().map(|c| serialize_card(c, false)),
+            "extraPartners": ps.extra_partners.iter().map(|c| serialize_card(c, false)).collect::<Vec<_>>(),
             "case": ps.r#case.as_ref().map(|c| serialize_card(c, false)),
             "evidence": ps.evidence.iter().map(|c| serialize_card(c, !c.face_up)).collect::<Vec<_>>(),
             "remove": ps.remove.iter().map(|c| serialize_card(c, false)).collect::<Vec<_>>(),
