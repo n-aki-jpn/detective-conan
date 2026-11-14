@@ -2133,8 +2133,7 @@
       const pSel = document.getElementById('player-select');
       if (pSel) {
         pSel.value = currentViewingPlayer;
-        const isOnlinePvp = currentRoomId !== 'default' && !(lastObs && lastObs.isCpu);
-        pSel.style.display = isOnlinePvp ? 'none' : '';
+        pSel.style.display = isOnlinePvpRoom() ? 'none' : '';
       }
     }
 
@@ -2160,7 +2159,7 @@
         lastObs = data;
         const pSel = document.getElementById('player-select');
         if (pSel) {
-          pSel.style.display = (currentRoomId !== 'default' && !data.isCpu) ? 'none' : '';
+          pSel.style.display = isOnlinePvpRoom(data) ? 'none' : '';
         }
         if (hasChanged) {
           lastRevision = data.revision;
@@ -2174,8 +2173,13 @@
       }
     }
 
+    function isOnlinePvpRoom(obs = lastObs) {
+      const soloId = localStorage.getItem('conan_solo_room_id');
+      return currentRoomId !== 'default' && currentRoomId !== soloId && !(obs && obs.isCpu);
+    }
+
     function switchView(pid) {
-      if (currentRoomId !== 'default' && !(lastObs && lastObs.isCpu)) {
+      if (isOnlinePvpRoom()) {
         const pSel = document.getElementById('player-select');
         if (pSel) pSel.value = currentViewingPlayer;
         return;
@@ -2204,10 +2208,9 @@
       const shouldOpen = (typeof forceOpen === 'boolean') ? forceOpen : (bar.style.display === 'none' || !bar.style.display);
       bar.style.display = shouldOpen ? 'flex' : 'none';
       if (shouldOpen) {
-        const isOnlinePvp = currentRoomId !== 'default' && !(lastObs && lastObs.isCpu);
         const p2Label = document.getElementById('battle-p2-deck-label');
         if (p2Label) {
-          p2Label.style.display = isOnlinePvp ? 'none' : 'flex';
+          p2Label.style.display = isOnlinePvpRoom() ? 'none' : 'flex';
         }
       }
       if (btn) {
@@ -2312,8 +2315,7 @@
     }
 
     async function resetMatch() {
-      const wasCpu = !!(lastObs && lastObs.isCpu);
-      const isOnlinePvp = currentRoomId !== 'default' && !wasCpu;
+      const isOnlinePvp = isOnlinePvpRoom();
       selectedMulliganIds.clear();
       lastRevision = -1;
       lastDecisionId = null;
