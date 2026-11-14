@@ -2912,7 +2912,7 @@ impl MatchEngine {
         }
         if cost.hand_remove > 0 {
             if let Some(ref hf) = cost.hand_filter {
-                let fc = ps.file.len() as i32;
+                let fc = ps.effective_file_count() as i32;
                 let matched = ps
                     .hand
                     .iter()
@@ -3290,7 +3290,7 @@ impl MatchEngine {
         actor_id: Option<&str>,
         filter: &TargetFilter,
     ) -> Vec<Value> {
-        let self_file_count = self.players.get(player_id).map(|p| p.file.len() as i32);
+        let self_file_count = self.players.get(player_id).map(|p| p.effective_file_count() as i32);
         let opp_id = self.opponent_id_of(player_id);
         let opp_cond = self.build_cond_info(&opp_id, None, CardOrientation::ACTIVE, None);
         let acting_card_id = self
@@ -3428,7 +3428,7 @@ impl MatchEngine {
         resume_context: &str,
         after_hint_level: Option<i32>,
     ) -> bool {
-        let self_file_count = self.players.get(player_id).map(|p| p.file.len() as i32);
+        let self_file_count = self.players.get(player_id).map(|p| p.effective_file_count() as i32);
         let mut revealed = vec![];
         if let Some(ps) = self.players.get_mut(player_id) {
             let deck_len = ps.deck.len();

@@ -2384,7 +2384,7 @@ mod tests {
 
         assert!(engine.players.get("p1").unwrap().field.iter().any(|c| c.instance_id == "h_b3"));
 
-        // 追加検証: FILE2・手札にキャラ0枚の状態でD01014を使い、デッキからLv2青キャラ(B01019)を加えてそのまま登場できること
+        // 追加検証: FILE1枚 + パートナーアシスト(実効FILE2)・手札にキャラ0枚の状態でD01014を使い、デッキからLv2青キャラ(B01019)を加えてそのまま登場できること
         let mut engine2 = engine::MatchEngine::new(load_test_catalog());
         engine2.phase = models::MatchPhase::MAIN;
         engine2.turn_player_id = "p1".to_string();
@@ -2392,9 +2392,8 @@ mod tests {
         let mut p1_s = engine::PlayerState::new("p1".to_string());
         let p2_s = engine::PlayerState::new("p2".to_string());
         p1_s.r#case = Some(test_inst("p1_case", "B01002", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
-        for i in 0..2 {
-            p1_s.file.push(test_inst(&format!("f2_{}", i), "B01021", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
-        }
+        p1_s.file.push(test_inst("f2_0", "B01021", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+        p1_s.partner = Some(test_inst("p1_prt", "B01001", "p1", models::Zone::FILE, models::CardOrientation::SLEEP)); // パートナーのアシスト中（実効FILE = 2）
         p1_s.deck.push(test_inst("d2_0", "B01020", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
         p1_s.deck.push(test_inst("d2_1", "B01020", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
         p1_s.deck.push(test_inst("d2_lv2", "B01019", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
