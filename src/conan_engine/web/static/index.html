@@ -1353,23 +1353,9 @@
         </div>
       </div>
 
-      <!-- Non-sticky View Selector & Summary (visible when scrolled to top) -->
-      <div style="background:var(--panel-bg); border:1px solid var(--border-color); border-radius:8px; padding:8px 10px; display:flex; flex-direction:column; gap:6px;">
-        <div
-          style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-            <span style="font-size:0.82rem; font-weight:bold;">🃏 選択中: <span id="sticky-total-count"
-                style="color:var(--accent); font-size:1rem;">0</span> / 40枚</span>
-            <span id="sticky-status-badge" class="deck-valid-badge deck-valid-ng"
-              style="font-size:0.68rem; padding:2px 6px;">不足 (0/40)</span>
-          </div>
-          <button class="btn btn-success" onclick="saveAndApplyDeck()"
-            style="padding:4px 10px; font-size:0.74rem; min-height:26px;">
-            💾 保存
-          </button>
-        </div>
-
-        <div style="display:flex; gap:6px;">
+      <!-- Non-sticky View Selector & Quick Save (visible when scrolled to top) -->
+      <div style="background:var(--panel-bg); border:1px solid var(--border-color); border-radius:8px; padding:6px 10px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+        <div style="display:flex; gap:6px; flex:1; min-width:220px;">
           <button id="btn-view-deck" class="view-toggle-btn active" onclick="switchBuilderView('deck')">
             📋 投入カード一覧 (<span id="summary-unique-types">0</span>種 <span id="summary-total-cards">0</span>枚)
           </button>
@@ -1377,15 +1363,27 @@
             🔍 全カードから探す (2,466枚)
           </button>
         </div>
+        <button class="btn btn-success" onclick="saveAndApplyDeck()"
+          style="padding:4px 12px; font-size:0.74rem; min-height:28px; white-space:nowrap;">
+          💾 保存
+        </button>
       </div>
 
-      <!-- Sticky Compact Filters ONLY -->
+      <!-- Sticky Compact Header: Count Badge + Search + Filters -->
       <div id="deck-sticky-toolbar" class="deck-sticky-toolbar">
-        <div class="catalog-search-bar" style="margin-bottom:0;">
-          <input type="text" id="catalog-search-input" placeholder="🔍 カード名・効果・番号で絞り込み..."
-            oninput="onSearchInput(this.value)">
-          <button class="btn btn-secondary" onclick="clearSearch()"
-            style="padding:4px 10px; font-size:0.75rem; flex-shrink:0;">クリア</button>
+        <div style="display:flex; flex-wrap:wrap; align-items:center; gap:6px;">
+          <div style="display:flex; align-items:center; gap:6px; white-space:nowrap;">
+            <span style="font-size:0.78rem; font-weight:bold;">🃏 選択中: <span id="sticky-total-count"
+                style="color:var(--accent); font-size:0.95rem;">0</span> / 40枚</span>
+            <span id="sticky-status-badge" class="deck-valid-badge deck-valid-ng"
+              style="font-size:0.66rem; padding:2px 6px;">不足 (0/40)</span>
+          </div>
+          <div class="catalog-search-bar" style="margin-bottom:0; flex:1; min-width:180px;">
+            <input type="text" id="catalog-search-input" placeholder="🔍 カード名・効果・番号で絞り込み..."
+              oninput="onSearchInput(this.value)">
+            <button class="btn btn-secondary" onclick="clearSearch()"
+              style="padding:4px 10px; font-size:0.75rem; flex-shrink:0;">クリア</button>
+          </div>
         </div>
 
         <!-- Color & Type Filter Pills -->
