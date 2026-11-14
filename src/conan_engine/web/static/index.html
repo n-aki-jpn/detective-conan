@@ -1462,6 +1462,8 @@
             <option value="player1">P1視点</option>
             <option value="player2">P2視点</option>
           </select>
+          <span id="online-player-badge" class="status-badge"
+            style="display:none; font-size:0.74rem; padding:3px 8px; border:1px solid #38bdf8; color:#38bdf8;">あなた: P1</span>
         </div>
 
         <div id="battle-deck-bar"
@@ -2133,7 +2135,27 @@
       const pSel = document.getElementById('player-select');
       if (pSel) {
         pSel.value = currentViewingPlayer;
-        pSel.style.display = isOnlinePvpRoom() ? 'none' : '';
+      }
+      updatePlayerViewBadge();
+    }
+
+    function updatePlayerViewBadge(obs = lastObs) {
+      const onlinePvp = isOnlinePvpRoom(obs);
+      const pSel = document.getElementById('player-select');
+      if (pSel) {
+        pSel.style.display = onlinePvp ? 'none' : '';
+      }
+      const badge = document.getElementById('online-player-badge');
+      if (badge) {
+        if (onlinePvp) {
+          const isP2 = currentViewingPlayer === 'player2';
+          badge.textContent = isP2 ? 'あなた: P2' : 'あなた: P1';
+          badge.style.color = isP2 ? '#f472b6' : '#38bdf8';
+          badge.style.borderColor = isP2 ? '#f472b6' : '#38bdf8';
+          badge.style.display = 'inline-flex';
+        } else {
+          badge.style.display = 'none';
+        }
       }
     }
 
@@ -2157,10 +2179,7 @@
         const hasChanged = (data.revision !== lastRevision) || (curDecId !== lastDecisionId) || (curWaitingP2 !== lastWaitingP2) || (curPhase !== lastPhase) || (curLogsLen !== lastLogCount);
 
         lastObs = data;
-        const pSel = document.getElementById('player-select');
-        if (pSel) {
-          pSel.style.display = isOnlinePvpRoom(data) ? 'none' : '';
-        }
+        updatePlayerViewBadge(data);
         if (hasChanged) {
           lastRevision = data.revision;
           lastDecisionId = curDecId;
