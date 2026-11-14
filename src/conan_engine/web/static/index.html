@@ -1265,20 +1265,14 @@
         </div>
         <div class="fixed-select-row">
           <div class="fixed-select-box">
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:4px;">
-              <label style="color:var(--text-muted); font-weight:bold;">パートナー (1枚)</label>
-              <button id="btn-toggle-partner-picker" class="btn btn-secondary" onclick="toggleFixedCardPicker('partner')"
-                style="padding:2px 8px; font-size:0.68rem; min-height:22px;">🃏 カード一覧</button>
-            </div>
-            <select id="builder-partner-select" onchange="updateDeckPartner(this.value)"></select>
+            <label style="color:var(--text-muted); font-weight:bold;">パートナー (1枚)</label>
+            <button id="btn-toggle-partner-picker" class="btn btn-secondary" onclick="toggleFixedCardPicker('partner')"
+              style="width:100%; padding:6px 10px; font-size:0.78rem; min-height:32px;">🃏 カード一覧から選ぶ</button>
           </div>
           <div class="fixed-select-box">
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:4px;">
-              <label style="color:var(--text-muted); font-weight:bold;">事件カード (1枚)</label>
-              <button id="btn-toggle-case-picker" class="btn btn-secondary" onclick="toggleFixedCardPicker('case')"
-                style="padding:2px 8px; font-size:0.68rem; min-height:22px;">🃏 カード一覧</button>
-            </div>
-            <select id="builder-case-select" onchange="updateDeckCase(this.value)"></select>
+            <label style="color:var(--text-muted); font-weight:bold;">事件カード (1枚)</label>
+            <button id="btn-toggle-case-picker" class="btn btn-secondary" onclick="toggleFixedCardPicker('case')"
+              style="width:100%; padding:6px 10px; font-size:0.78rem; min-height:32px;">🃏 カード一覧から選ぶ</button>
           </div>
         </div>
 
@@ -2624,42 +2618,12 @@
     }
 
     function populateFixedSelects() {
-      const partnerSel = document.getElementById('builder-partner-select');
-      const caseSel = document.getElementById('builder-case-select');
-
-      partnerSel.innerHTML = '';
-      caseSel.innerHTML = '';
-
-      catalogData.filter(c => c.cardType === 'PARTNER' || c.cardType === 'パートナー').forEach(c => {
-        const opt = document.createElement('option');
-        opt.value = c.definitionId;
-        const colStr = formatCardColors(c.colors);
-        opt.innerText = `[${colStr}] ${c.title || c.dummyName} (${c.definitionId})`;
-        if (c.definitionId === currentDeckDef.partnerId) opt.selected = true;
-        partnerSel.appendChild(opt);
-      });
-
-      catalogData.filter(c => c.cardType === 'CASE' || c.cardType === '事件').forEach(c => {
-        const opt = document.createElement('option');
-        opt.value = c.definitionId;
-        const colStr = formatCardColors(c.colors);
-        const rawDesc = (c.description || '').replace(/<br\s*\/?>/gi, ' ').replace(/\r?\n/g, ' ').trim();
-        const effectSummary = rawDesc
-          ? ` | ⚡${rawDesc.length > 42 ? rawDesc.slice(0, 42) + '…' : rawDesc}`
-          : ' | （効果なし）';
-        opt.innerText = `[${colStr}] ${c.title || c.dummyName} (${c.definitionId})${effectSummary}`;
-        if (rawDesc) opt.title = rawDesc;
-        if (c.definitionId === currentDeckDef.caseId) opt.selected = true;
-        caseSel.appendChild(opt);
-      });
-
       updateFixedPreviews();
+      if (fixedPickerKind) renderFixedCardPicker();
     }
 
     function updateDeckPartner(val) {
       currentDeckDef.partnerId = val;
-      const sel = document.getElementById('builder-partner-select');
-      if (sel && sel.value !== val) sel.value = val;
       updateFixedPreviews();
       updateBuilderSummary();
       if (fixedPickerKind === 'partner') renderFixedCardPicker();
@@ -2667,8 +2631,6 @@
 
     function updateDeckCase(val) {
       currentDeckDef.caseId = val;
-      const sel = document.getElementById('builder-case-select');
-      if (sel && sel.value !== val) sel.value = val;
       updateFixedPreviews();
       updateBuilderSummary();
       if (fixedPickerKind === 'case') renderFixedCardPicker();
@@ -2705,11 +2667,11 @@
       const pBtn = document.getElementById('btn-toggle-partner-picker');
       const cBtn = document.getElementById('btn-toggle-case-picker');
       if (pBtn) {
-        pBtn.innerText = fixedPickerKind === 'partner' ? '▲ 閉じる' : '🃏 カード一覧';
+        pBtn.innerText = fixedPickerKind === 'partner' ? '▲ 一覧を閉じる' : '🃏 カード一覧から選ぶ';
         pBtn.style.borderColor = fixedPickerKind === 'partner' ? '#f59e0b' : '';
       }
       if (cBtn) {
-        cBtn.innerText = fixedPickerKind === 'case' ? '▲ 閉じる' : '🃏 カード一覧';
+        cBtn.innerText = fixedPickerKind === 'case' ? '▲ 一覧を閉じる' : '🃏 カード一覧から選ぶ';
         cBtn.style.borderColor = fixedPickerKind === 'case' ? '#a855f7' : '';
       }
     }
