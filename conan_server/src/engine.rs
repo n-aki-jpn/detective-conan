@@ -1797,7 +1797,8 @@ impl MatchEngine {
         };
 
         // ガード可能カード（フィールドのACTIVE状態キャラ）
-        let cutin_or_disguise_used = self.action_context.as_ref().and_then(|c| c.get("cutinOrDisguiseUsed")).and_then(|v| v.as_bool()).unwrap_or(false);
+        let cutin_or_disguise_used = self.action_context.as_ref().and_then(|c| c.get("defenderUsedCutin")).and_then(|v| v.as_bool()).unwrap_or(false)
+            || self.action_context.as_ref().and_then(|c| c.get("cutinOrDisguiseUsed")).and_then(|v| v.as_bool()).unwrap_or(false);
         let contact_target_id = self.action_context.as_ref().and_then(|c| c.get("targetId")).and_then(|v| v.as_str()).unwrap_or("").to_string();
         let is_case_attack = opp_ps.r#case.as_ref().map(|c| c.instance_id == contact_target_id).unwrap_or(false);
 
@@ -1806,64 +1807,28 @@ impl MatchEngine {
             .map(|c| c.instance_id.clone())
             .collect();
 
-        // カットイン・変装可能カード（事件アタック時は使用不可、コンタクト時にカットインと変装を含めて合計1枚まで）
-        let cond_ctx = self.build_cond_info(defender_pid, None, CardOrientation::ACTIVE, None);
-        let mut cutins: Vec<Value> = vec![];
-        let mut disguises: Vec<Value> = vec![];
-        let mut disguise_target_id: Option<String> = None;
-
-        if !cutin_or_disguise_used && !is_case_attack {
-            cutins = opp_ps.hand.iter()
-                .filter_map(|c| {
-                    let def = self.catalog.get(&c.definition_id)?;
-                    let clauses = extract_clauses(&def.description, TriggerKind::Cutin, def.card_type);
-                    let any_ok = !clauses.is_empty()
-                        && clauses.iter().any(|cl| check_clause_conditions(cl, &cond_ctx).is_ok());
-                    if any_ok {
-                        Some(json!({
-                            "instanceId": c.instance_id,
-                            "definitionId": c.definition_id,
-                            "name": self.card_name_by_def(&c.definition_id),
-                            "desc": def.description.clone(),
-                        }))
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-
-            if opp_ps.field.iter().any(|c| c.instance_id == contact_target_id) {
-                disguise_target_id = Some(contact_target_id.clone());
-                let effective_file = opp_ps.effective_file_count() as i32;
-                let case_def = opp_ps.r#case.as_ref().and_then(|c| self.catalog.get(&c.definition_id));
-                let case_colors = case_def.map(|d| normalize_color_set(&d.colors)).unwrap_or_default();
-                for c in &opp_ps.hand {
-                    if let Some(c_def) = self.catalog.get(&c.definition_id) {
-                        if c_def.card_type == CardType::CHARACTER
-                            && (c_def.description.contains("【変装】") || c_def.description.contains("【変装時】"))
-                        {
-                            let disguise_clauses = extract_clauses(&c_def.description, TriggerKind::DisguiseCond, c_def.card_type);
-                            let cond_ok = disguise_clauses.is_empty()
-                                || disguise_clauses.iter().any(|cl| check_disguise_conditions(cl, &cond_ctx).is_ok());
-                            let card_colors = normalize_color_set(&c_def.colors);
-                            let color_ok = card_colors.is_empty() || case_colors.is_empty() || card_colors.is_subset(&case_colors);
-                            if cond_ok && c_def.level <= effective_file && color_ok {
-                                disguises.push(json!({
-                                    "instanceId": c.instance_id,
-                                    "definitionId": c.definition_id,
-                                    "name": self.card_name_by_def(&c.definition_id),
-                                    "desc": c_def.description.clone(),
-                                }));
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        let (cutins, disguises, disguise_target_id) = if !cutin_or_disguise_used && !is_case_attack {
+            self.collect_cutin_and_disguise_options(defender_pid, &contact_target_id)
+        } else {
+            (vec![], vec![], None)
+        };
 
         if guards.is_empty() && cutins.is_empty() && disguises.is_empty() {
-            // ガードもカットインも変装もない場合は即アクション解決
-            self.proceed_to_action_resolution(None);
+            if is_case_attack {
+                self.proceed_to_action_resolution(None);
+                return;
+            }
+            // 防衛側にガードもカットインも変装もない場合は、攻撃側のカットイン/変装確認へ
+            let attacker_pid = self.action_context.as_ref().and_then(|c| c.get("attackerPlayerId")).and_then(|v| v.as_str()).unwrap_or("").to_string();
+            if let Some(ctx) = self.action_context.as_mut() {
+                ctx["guardResolved"] = json!(true);
+                ctx["consecutivePasses"] = json!(1);
+            }
+            if !attacker_pid.is_empty() {
+                self.prompt_contact_cutin(&attacker_pid);
+            } else {
+                self.proceed_to_action_resolution(None);
+            }
             return;
         }
 
@@ -1875,6 +1840,126 @@ impl MatchEngine {
             "kind": "guard",
             "options": {
                 "guardCardIds": guards,
+                "cutinCardIds": cutins,
+                "disguiseOptions": disguises,
+                "disguiseTargetId": disguise_target_id
+            }
+        }));
+    }
+
+    fn collect_cutin_and_disguise_options(&self, pid: &str, contact_char_id: &str) -> (Vec<Value>, Vec<Value>, Option<String>) {
+        let ps = match self.players.get(pid) {
+            Some(p) => p,
+            None => return (vec![], vec![], None),
+        };
+        let cond_ctx = self.build_cond_info(pid, None, CardOrientation::ACTIVE, None);
+        let cutins: Vec<Value> = ps.hand.iter()
+            .filter_map(|c| {
+                let def = self.catalog.get(&c.definition_id)?;
+                let clauses = extract_clauses(&def.description, TriggerKind::Cutin, def.card_type);
+                let any_ok = !clauses.is_empty()
+                    && clauses.iter().any(|cl| check_clause_conditions(cl, &cond_ctx).is_ok());
+                if any_ok {
+                    Some(json!({
+                        "instanceId": c.instance_id,
+                        "definitionId": c.definition_id,
+                        "name": self.card_name_by_def(&c.definition_id),
+                        "desc": def.description.clone(),
+                    }))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let mut disguises: Vec<Value> = vec![];
+        let mut disguise_target_id: Option<String> = None;
+        if ps.field.iter().any(|c| c.instance_id == contact_char_id) {
+            disguise_target_id = Some(contact_char_id.to_string());
+            let effective_file = ps.effective_file_count() as i32;
+            let case_def = ps.r#case.as_ref().and_then(|c| self.catalog.get(&c.definition_id));
+            let case_colors = case_def.map(|d| normalize_color_set(&d.colors)).unwrap_or_default();
+            for c in &ps.hand {
+                if let Some(c_def) = self.catalog.get(&c.definition_id) {
+                    if c_def.card_type == CardType::CHARACTER
+                        && (c_def.description.contains("【変装】") || c_def.description.contains("【変装時】"))
+                    {
+                        let disguise_clauses = extract_clauses(&c_def.description, TriggerKind::DisguiseCond, c_def.card_type);
+                        let cond_ok = disguise_clauses.is_empty()
+                            || disguise_clauses.iter().any(|cl| check_disguise_conditions(cl, &cond_ctx).is_ok());
+                        let card_colors = normalize_color_set(&c_def.colors);
+                        let color_ok = card_colors.is_empty() || case_colors.is_empty() || card_colors.is_subset(&case_colors);
+                        if cond_ok && c_def.level <= effective_file && color_ok {
+                            disguises.push(json!({
+                                "instanceId": c.instance_id,
+                                "definitionId": c.definition_id,
+                                "name": self.card_name_by_def(&c.definition_id),
+                                "desc": c_def.description.clone(),
+                            }));
+                        }
+                    }
+                }
+            }
+        }
+        (cutins, disguises, disguise_target_id)
+    }
+
+    fn prompt_contact_cutin(&mut self, pid: &str) {
+        let (attacker_pid, defender_pid, actor_id, target_id, guard_id, attacker_used, defender_used, consecutive_passes) = {
+            let ctx = match self.action_context.as_ref() {
+                Some(c) => c,
+                None => return,
+            };
+            (
+                ctx.get("attackerPlayerId").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                ctx.get("defenderPlayerId").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                ctx.get("actorId").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                ctx.get("targetId").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                ctx.get("guardCardId").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                ctx.get("attackerUsedCutin").and_then(|v| v.as_bool()).unwrap_or(false),
+                ctx.get("defenderUsedCutin").and_then(|v| v.as_bool()).unwrap_or(false),
+                ctx.get("consecutivePasses").and_then(|v| v.as_u64()).unwrap_or(0),
+            )
+        };
+
+        let is_attacker = pid == attacker_pid;
+        let already_used = if is_attacker { attacker_used } else { defender_used };
+        let other_pid = if is_attacker { defender_pid.clone() } else { attacker_pid.clone() };
+        let other_used = if is_attacker { defender_used } else { attacker_used };
+
+        let contact_char_id = if is_attacker {
+            actor_id
+        } else {
+            guard_id.clone().unwrap_or(target_id)
+        };
+
+        let (cutins, disguises, disguise_target_id) = if !already_used {
+            self.collect_cutin_and_disguise_options(pid, &contact_char_id)
+        } else {
+            (vec![], vec![], None)
+        };
+
+        if cutins.is_empty() && disguises.is_empty() {
+            let next_passes = consecutive_passes + 1;
+            if next_passes >= 2 || other_used || other_pid.is_empty() {
+                self.proceed_to_action_resolution(guard_id.as_deref());
+            } else {
+                if let Some(ctx) = self.action_context.as_mut() {
+                    ctx["consecutivePasses"] = json!(next_passes);
+                }
+                self.prompt_contact_cutin(&other_pid);
+            }
+            return;
+        }
+
+        let dec_id = self.generate_decision_id();
+        self.pending_decision = Some(json!({
+            "decisionId": dec_id,
+            "revision": self.revision,
+            "playerId": pid,
+            "kind": "guard",
+            "options": {
+                "guardCardIds": [],
                 "cutinCardIds": cutins,
                 "disguiseOptions": disguises,
                 "disguiseTargetId": disguise_target_id
@@ -1939,15 +2024,36 @@ impl MatchEngine {
     }
 
     fn handle_guard_answer(&mut self, player_id: &str, val: &Value) {
-        let cutin_or_disguise_used = self.action_context.as_ref().and_then(|c| c.get("cutinOrDisguiseUsed")).and_then(|v| v.as_bool()).unwrap_or(false);
+        let (guard_resolved, attacker_pid, defender_pid, saved_guard_id, attacker_used, defender_used, consecutive_passes) = {
+            let ctx = self.action_context.as_ref();
+            (
+                ctx.and_then(|c| c.get("guardResolved")).and_then(|v| v.as_bool()).unwrap_or(false),
+                ctx.and_then(|c| c.get("attackerPlayerId")).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                ctx.and_then(|c| c.get("defenderPlayerId")).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                ctx.and_then(|c| c.get("guardCardId")).and_then(|v| v.as_str()).map(|s| s.to_string()),
+                ctx.and_then(|c| c.get("attackerUsedCutin")).and_then(|v| v.as_bool()).unwrap_or(false),
+                ctx.and_then(|c| c.get("defenderUsedCutin")).and_then(|v| v.as_bool()).unwrap_or(false),
+                ctx.and_then(|c| c.get("consecutivePasses")).and_then(|v| v.as_u64()).unwrap_or(0),
+            )
+        };
+        let is_attacker = player_id == attacker_pid;
+        let player_used = if is_attacker { attacker_used } else { defender_used };
+        let other_pid = if is_attacker { defender_pid.clone() } else { attacker_pid.clone() };
+        let other_used = if is_attacker { defender_used } else { attacker_used };
 
         // 変装使用かチェック（コンタクト時にカットインと変装を含めて合計1枚まで）
         if let Some(disguise_instance_id) = val.get("disguiseCardId").and_then(|v| v.as_str()) {
-            if !cutin_or_disguise_used {
+            if !player_used {
+                let default_target = if is_attacker {
+                    self.action_context.as_ref().and_then(|c| c.get("actorId")).and_then(|v| v.as_str()).unwrap_or("").to_string()
+                } else {
+                    saved_guard_id.clone().unwrap_or_else(|| {
+                        self.action_context.as_ref().and_then(|c| c.get("targetId")).and_then(|v| v.as_str()).unwrap_or("").to_string()
+                    })
+                };
                 let target_id = val.get("targetId").and_then(|v| v.as_str())
-                    .or_else(|| self.action_context.as_ref().and_then(|c| c.get("targetId")).and_then(|v| v.as_str()))
-                    .unwrap_or("")
-                    .to_string();
+                    .map(|s| s.to_string())
+                    .unwrap_or(default_target);
                 let turn = self.turn;
                 let mut disguised_def_id = None;
                 let mut disguised_inst_id = None;
@@ -1978,8 +2084,19 @@ impl MatchEngine {
 
                 if let (Some(def_id), Some(inst_id), Some(old_def_id)) = (disguised_def_id, disguised_inst_id, replaced_def_id) {
                     if let Some(ctx) = self.action_context.as_mut() {
-                        ctx["cutinOrDisguiseUsed"] = json!(true);
-                        ctx["targetId"] = json!(inst_id.clone());
+                        if is_attacker {
+                            ctx["attackerUsedCutin"] = json!(true);
+                            ctx["actorId"] = json!(inst_id.clone());
+                        } else {
+                            ctx["defenderUsedCutin"] = json!(true);
+                            ctx["cutinOrDisguiseUsed"] = json!(true);
+                            if saved_guard_id.is_some() {
+                                ctx["guardCardId"] = json!(inst_id.clone());
+                            } else {
+                                ctx["targetId"] = json!(inst_id.clone());
+                            }
+                        }
+                        ctx["consecutivePasses"] = json!(0);
                     }
                     let new_name = self.card_name_by_def(&def_id);
                     let old_name = self.card_name_by_def(&old_def_id);
@@ -1988,21 +2105,27 @@ impl MatchEngine {
                     if need_ui {
                         return;
                     }
-                    let defender_pid = player_id.to_string();
-                    self.prompt_guard_or_cutin(&defender_pid);
+                    if !guard_resolved {
+                        self.prompt_guard_or_cutin(&defender_pid);
+                    } else if !other_used && !other_pid.is_empty() {
+                        self.prompt_contact_cutin(&other_pid);
+                    } else {
+                        let gid = self.action_context.as_ref().and_then(|c| c.get("guardCardId")).and_then(|v| v.as_str()).map(|s| s.to_string());
+                        self.proceed_to_action_resolution(gid.as_deref());
+                    }
                     return;
                 }
             }
         }
 
-        // カットイン使用かチェック（事件アタック時は使用不可、コンタクト時にカットインと変装を含めて合計1枚まで）
+        // カットイン使用かチェック（事件アタック時は使用不可、コンタクト時に各プレイヤー1回まで）
         if let Some(cutin_instance_id) = val.get("cutinCardId").and_then(|v| v.as_str()) {
             let contact_target_id = self.action_context.as_ref().and_then(|c| c.get("targetId")).and_then(|v| v.as_str()).unwrap_or("");
-            let is_case_attack = self.players.get(player_id)
+            let is_case_attack = self.players.get(&defender_pid)
                 .and_then(|ps| ps.r#case.as_ref())
                 .map(|c| c.instance_id == contact_target_id)
                 .unwrap_or(false);
-            if !cutin_or_disguise_used && !is_case_attack {
+            if !player_used && !is_case_attack {
                 let cutin_instance_id = cutin_instance_id.to_string();
                 let cutin_def_id = {
                     let ps = self.players.get_mut(player_id).unwrap();
@@ -2019,7 +2142,13 @@ impl MatchEngine {
 
                 if let Some(def_id) = cutin_def_id {
                     if let Some(ctx) = self.action_context.as_mut() {
-                        ctx["cutinOrDisguiseUsed"] = json!(true);
+                        if is_attacker {
+                            ctx["attackerUsedCutin"] = json!(true);
+                        } else {
+                            ctx["defenderUsedCutin"] = json!(true);
+                            ctx["cutinOrDisguiseUsed"] = json!(true);
+                        }
+                        ctx["consecutivePasses"] = json!(0);
                     }
                     let cutin_name = self.card_name_by_def(&def_id);
                     self.log(format!("⚡ {} が [{}] の【カットイン】を発動！", player_id, cutin_name));
@@ -2027,23 +2156,64 @@ impl MatchEngine {
                     if needs_target {
                         return;
                     }
-                    // カットイン後も再度ガードできる
-                    let defender_pid = player_id.to_string();
-                    self.prompt_guard_or_cutin(&defender_pid);
+                    if !guard_resolved {
+                        self.prompt_guard_or_cutin(&defender_pid);
+                    } else if !other_used && !other_pid.is_empty() {
+                        self.prompt_contact_cutin(&other_pid);
+                    } else {
+                        let gid = self.action_context.as_ref().and_then(|c| c.get("guardCardId")).and_then(|v| v.as_str()).map(|s| s.to_string());
+                        self.proceed_to_action_resolution(gid.as_deref());
+                    }
                     return;
                 }
             }
         }
 
-        // 通常ガード処理
-        let guard_id = val.get("guardCardId").and_then(|v| v.as_str()).map(|s| s.to_string());
-        if let Some(ref gid) = guard_id {
-            let guard_name = self.card_name_by_inst(gid);
-            self.log(format!("🛡️ {} が [{}] でガードを宣言！", player_id, guard_name));
-        } else {
-            self.log(format!("{} はガードを行いませんでした（スルー）", player_id));
+        if !guard_resolved {
+            // ガード宣言またはスルー
+            let guard_id = val.get("guardCardId").and_then(|v| v.as_str()).map(|s| s.to_string());
+            if let Some(ref gid) = guard_id {
+                let guard_name = self.card_name_by_inst(gid);
+                self.log(format!("🛡️ {} が [{}] でガードを宣言！", player_id, guard_name));
+            } else {
+                self.log(format!("{} はガードを行いませんでした（スルー）", player_id));
+            }
+
+            let contact_target_id = self.action_context.as_ref().and_then(|c| c.get("targetId")).and_then(|v| v.as_str()).unwrap_or("");
+            let is_case_attack = self.players.get(&defender_pid)
+                .and_then(|ps| ps.r#case.as_ref())
+                .map(|c| c.instance_id == contact_target_id)
+                .unwrap_or(false);
+
+            if is_case_attack {
+                self.proceed_to_action_resolution(guard_id.as_deref());
+                return;
+            }
+
+            if let Some(ctx) = self.action_context.as_mut() {
+                ctx["guardResolved"] = json!(true);
+                ctx["guardCardId"] = json!(guard_id);
+                ctx["consecutivePasses"] = json!(if defender_used { 0 } else { 1 });
+            }
+            if !attacker_pid.is_empty() {
+                self.prompt_contact_cutin(&attacker_pid);
+            } else {
+                let gid = self.action_context.as_ref().and_then(|c| c.get("guardCardId")).and_then(|v| v.as_str()).map(|s| s.to_string());
+                self.proceed_to_action_resolution(gid.as_deref());
+            }
+            return;
         }
-        self.proceed_to_action_resolution(guard_id.as_deref());
+
+        // コンタクト中のカットイン/変装ウィンドウでのスルー
+        let next_passes = consecutive_passes + 1;
+        if next_passes >= 2 || other_used || other_pid.is_empty() {
+            self.proceed_to_action_resolution(saved_guard_id.as_deref());
+        } else {
+            if let Some(ctx) = self.action_context.as_mut() {
+                ctx["consecutivePasses"] = json!(next_passes);
+            }
+            self.prompt_contact_cutin(&other_pid);
+        }
     }
 
     fn handle_cutin_answer(&mut self, player_id: &str, val: &Value) {
