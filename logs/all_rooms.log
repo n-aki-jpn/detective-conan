@@ -1,0 +1,784 @@
+[1794634388][room:default] ⚔️ 対戦開始！ 先攻: player1, 後攻: player2
+[1794634431][room:default] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794634431][room:default] 🃏 player2 が手札 5 枚を引き直しました
+[1794634432][room:solo_ws872j16] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794634432][room:solo_ws872j16] 🃏 player2 が手札 5 枚を引き直しました
+[1794634441][room:solo_6qucfhaz] ⚔️ 対戦開始！ 先攻: player1, 後攻: player2
+[1794634592][room:default] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794634592][room:default] 🃏 player2 が手札 4 枚を引き直しました
+[1794634592][room:solo_ws872j16] ⚔️ 対戦開始！ 先攻: player1, 後攻: player2
+[1794634603][room:solo_6qucfhaz] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794634603][room:solo_6qucfhaz] 🃏 player2 が手札 5 枚を引き直しました
+[1794634992][room:solo_ws872j16] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794634992][room:solo_ws872j16] 🃏 player2 が手札 5 枚を引き直しました
+[1794635002][room:solo_ws872j16] 🃏 player1 が手札 4 枚を引き直しました
+[1794635002][room:solo_ws872j16] ━━━━━━━━━━━━━━━━━━━━
+[1794635002][room:solo_ws872j16] 【ターン 1】player2 のターン開始
+[1794635002][room:solo_ws872j16] 📥 player2 はカードを1枚引き、FILEに 1 枚置きました
+[1794635002][room:solo_ws872j16] 🔎 player2 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794635002][room:solo_ws872j16] ⏭ player2 がターンを終了しました
+[1794635002][room:solo_ws872j16] ━━━━━━━━━━━━━━━━━━━━
+[1794635002][room:solo_ws872j16] 【ターン 2】player1 のターン開始
+[1794635002][room:solo_ws872j16] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794635009][room:solo_ws872j16] 📜 player1 がイベント [小さくなった名探偵] (Lv.1) を使用しました
+[1794635009][room:solo_ws872j16] 🔍 [小さくなった名探偵] の効果で山札の上から 3 枚めくりました
+[1794635012][room:solo_ws872j16] ✨ [小さくなった名探偵] の効果でデッキから [灰原哀] を手札に加え、残りをデッキ下に移しました
+[1794635012][room:solo_ws872j16] ⚠️ [小さくなった名探偵] の効果: 条件を満たす有効な対象がいないためスキップされました
+[1794635016][room:solo_ws872j16] 🔎 player1 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794635017][room:solo_ws872j16] ⏭ player1 がターンを終了しました
+[1794635017][room:solo_ws872j16] ━━━━━━━━━━━━━━━━━━━━
+[1794635017][room:solo_ws872j16] 【ターン 3】player2 のターン開始
+[1794635017][room:solo_ws872j16] 📥 player2 はカードを1枚引き、FILEに 2 枚置きました
+[1794635017][room:solo_ws872j16] 🔎 player2 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794635017][room:solo_ws872j16] ⏭ player2 がターンを終了しました
+[1794635017][room:solo_ws872j16] ━━━━━━━━━━━━━━━━━━━━
+[1794635017][room:solo_ws872j16] 【ターン 4】player1 のターン開始
+[1794635017][room:solo_ws872j16] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794635026][room:solo_ws872j16] 🃏 player1 が [江戸川コナン] (Lv.4) を登場させました
+[1794635026][room:solo_ws872j16] ✨ [江戸川コナン] の効果でカードを 2 枚引きました
+[1794635049][room:solo_ws872j16] 💸 [江戸川コナン] の効果/コスト: player1 が手札から [江戸川コナン] をリムーブしました
+[1794635049][room:solo_ws872j16] 💸 [江戸川コナン] の効果/コスト: player1 が手札から [灰原哀] をリムーブしました
+[1794635057][room:solo_ws872j16] 🔎 player1 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794635058][room:solo_ws872j16] ⏭ player1 がターンを終了しました
+[1794635058][room:solo_ws872j16] ━━━━━━━━━━━━━━━━━━━━
+[1794635058][room:solo_ws872j16] 【ターン 5】player2 のターン開始
+[1794635058][room:solo_ws872j16] 📥 player2 はカードを1枚引き、FILEに 2 枚置きました
+[1794635058][room:solo_ws872j16] 🃏 player2 が [江戸川コナン] (Lv.5) を登場させました
+[1794635058][room:solo_ws872j16] 🔎 player2 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794635058][room:solo_ws872j16] ⏭ player2 がターンを終了しました
+[1794635058][room:solo_ws872j16] ━━━━━━━━━━━━━━━━━━━━
+[1794635058][room:solo_ws872j16] 【ターン 6】player1 のターン開始
+[1794635058][room:solo_ws872j16] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794635102][room:solo_ws872j16] 📜 player1 がイベント [小さくなった名探偵] (Lv.1) を使用しました
+[1794635102][room:solo_ws872j16] 🔍 [小さくなった名探偵] の効果で山札の上から 3 枚めくりました
+[1794635106][room:solo_ws872j16] ✨ [小さくなった名探偵] の効果でデッキから [小嶋元太] を手札に加え、残りをデッキ下に移しました
+[1794635124][room:solo_ws872j16] ✨ [小さくなった名探偵] の効果で手札から [灰原哀] を登場させました！
+[1794635124][room:solo_ws872j16] 🔍 [灰原哀] の効果で山札の上から 4 枚めくりました
+[1794635140][room:solo_ws872j16] ✨ [灰原哀] の効果でデッキから [灰原哀] を手札に加え、残りをデッキ下に移しました
+[1794635146][room:solo_ws872j16] 💸 [灰原哀] の効果/コスト: player1 が手札から [小嶋元太] をリムーブしました
+[1794635153][room:solo_ws872j16] 🔎 player1 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794635156][room:solo_ws872j16] ⏭ player1 がターンを終了しました
+[1794635156][room:solo_ws872j16] ━━━━━━━━━━━━━━━━━━━━
+[1794635156][room:solo_ws872j16] 【ターン 7】player2 のターン開始
+[1794635156][room:solo_ws872j16] 📥 player2 はカードを1枚引き、FILEに 2 枚置きました
+[1794635156][room:solo_ws872j16] ✨ player2 のFILEが7枚以上になり、事件が【解決編】に突入しました！
+[1794635156][room:solo_ws872j16] 🃏 player2 が [阿笠博士] (Lv.7) を登場させました
+[1794635156][room:solo_ws872j16] ⚔️ player2 の [江戸川コナン] が player1 の [青の古城探索事件] に攻撃を仕掛けました！
+[1794635169][room:solo_ws872j16] player1 はガードを行いませんでした（スルー）
+[1794635169][room:solo_ws872j16] 💥 事件への攻撃ヒット！ player1 の証拠を1枚削り、player2 が証拠を1つ獲得！
+[1794635169][room:solo_ws872j16] 🔎 player2 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794635169][room:solo_ws872j16] ⏭ player2 がターンを終了しました
+[1794635169][room:solo_ws872j16] ━━━━━━━━━━━━━━━━━━━━
+[1794635169][room:solo_ws872j16] 【ターン 8】player1 のターン開始
+[1794635169][room:solo_ws872j16] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794635169][room:solo_ws872j16] ✨ player1 のFILEが7枚以上になり、事件が【解決編】に突入しました！
+[1794635169][room:solo_ws872j16] 📜 事件 [青の古城探索事件] の解決編移行時効果: player1 は手札から [小さくなった名探偵] をリムーブしました
+[1794635274][room:solo_ws872j16] 🤝 player1 が パートナーのアシスト を宣言（パートナーをFILEへ移動）
+[1794635280][room:solo_ws872j16] 🃏 player1 が [江戸川コナン＆工藤新一] (Lv.9) を登場させました
+[1794635296][room:solo_ws872j16] 💡 player1 が ネクストヒント を使用（FILEから手札へ1枚回収）
+[1794635299][room:solo_ws872j16] 🃏 player1 が [灰原哀] を登場させました
+[1794635434][room:default] ⚔️ 対戦開始！ 先攻: player1, 後攻: player2
+[1794635435][room:solo_ws872j16] ⚔️ 対戦開始！ 先攻: player1, 後攻: player2
+[1794635436][room:solo_6qucfhaz] ⚔️ 対戦開始！ 先攻: player1, 後攻: player2
+[1794636052][room:solo_hgg89uwk] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794636052][room:solo_hgg89uwk] 🃏 player2 が手札 5 枚を引き直しました
+[1794636641][room:default] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794636641][room:default] 🃏 player2 が手札 5 枚を引き直しました
+[1794636642][room:solo_hgg89uwk] ⚔️ 対戦開始！ 先攻: player1, 後攻: player2
+[1794636659][room:solo_6qucfhaz] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794636659][room:solo_6qucfhaz] 🃏 player2 が手札 5 枚を引き直しました
+[1794644013][room:default] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794644013][room:default] 🃏 player2 が手札 4 枚を引き直しました
+[1794644013][room:solo_hgg89uwk] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794644013][room:solo_hgg89uwk] 🃏 player2 が手札 4 枚を引き直しました
+[1794644017][room:solo_6qucfhaz] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794644017][room:solo_6qucfhaz] 🃏 player2 が手札 5 枚を引き直しました
+[1794644460][room:solo_6qucfhaz] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794644460][room:solo_6qucfhaz] 🃏 player2 が手札 5 枚を引き直しました
+[1794644467][room:solo_6qucfhaz] 🃏 player1 が手札 3 枚を引き直しました
+[1794644467][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794644467][room:solo_6qucfhaz] 【ターン 1】player2 のターン開始
+[1794644467][room:solo_6qucfhaz] 📥 player2 はカードを1枚引き、FILEに 1 枚置きました
+[1794644467][room:solo_6qucfhaz] 🔎 player2 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794644467][room:solo_6qucfhaz] ⏭ player2 がターンを終了しました
+[1794644467][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794644467][room:solo_6qucfhaz] 【ターン 2】player1 のターン開始
+[1794644467][room:solo_6qucfhaz] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794644470][room:solo_6qucfhaz] 🔎 player1 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794644471][room:solo_6qucfhaz] 🃏 player1 が [灰原哀] (Lv.2) を登場させました
+[1794644472][room:solo_6qucfhaz] ⏭ player1 がターンを終了しました
+[1794644472][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794644472][room:solo_6qucfhaz] 【ターン 3】player2 のターン開始
+[1794644472][room:solo_6qucfhaz] 📥 player2 はカードを1枚引き、FILEに 2 枚置きました
+[1794644472][room:solo_6qucfhaz] 🔎 player2 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794644472][room:solo_6qucfhaz] ⏭ player2 がターンを終了しました
+[1794644472][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794644472][room:solo_6qucfhaz] 【ターン 4】player1 のターン開始
+[1794644472][room:solo_6qucfhaz] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794644478][room:solo_6qucfhaz] ⚔️ player1 の [灰原哀] が player2 の [水色の想い出] に攻撃を仕掛けました！
+[1794644478][room:solo_6qucfhaz] 💡 player2 の証拠 [灰原哀] の【ヒラメキ】が発動！
+[1794644478][room:solo_6qucfhaz] ✨ [灰原哀] の効果でカードを 1 枚引きました
+[1794644478][room:solo_6qucfhaz] 💥 事件への攻撃ヒット！ player2 の証拠を1枚削り、player1 が証拠を1つ獲得！
+[1794644494][room:solo_6qucfhaz] 🃏 player1 が [江戸川コナン] (Lv.4) を登場させました
+[1794644494][room:solo_6qucfhaz] ✨ [江戸川コナン] の効果でカードを 2 枚引きました
+[1794644512][room:solo_6qucfhaz] 💸 [江戸川コナン] の効果/コスト: player1 が手札から [吉田歩美] をリムーブしました
+[1794644512][room:solo_6qucfhaz] 💸 [江戸川コナン] の効果/コスト: player1 が手札から [小嶋元太] をリムーブしました
+[1794644516][room:solo_6qucfhaz] 🔎 player1 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794644516][room:solo_6qucfhaz] ⏭ player1 がターンを終了しました
+[1794644516][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794644516][room:solo_6qucfhaz] 【ターン 5】player2 のターン開始
+[1794644516][room:solo_6qucfhaz] 📥 player2 はカードを1枚引き、FILEに 2 枚置きました
+[1794644516][room:solo_6qucfhaz] 🃏 player2 が [宮野志保] (Lv.5) を登場させました
+[1794644516][room:solo_6qucfhaz] 🔎 player2 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794644516][room:solo_6qucfhaz] ⏭ player2 がターンを終了しました
+[1794644516][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794644516][room:solo_6qucfhaz] 【ターン 6】player1 のターン開始
+[1794644516][room:solo_6qucfhaz] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794644523][room:solo_6qucfhaz] ⚡ player1 が [江戸川コナン] の【宣言】を発動！
+[1794644523][room:solo_6qucfhaz] ⚠️ [江戸川コナン] の効果: 条件を満たす有効な対象がいないためスキップされました
+[1794644544][room:solo_6qucfhaz] 🃏 player1 が [小嶋元太] (Lv.5) を登場させました
+[1794644680][room:solo_6qucfhaz] 🔎 player1 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794644683][room:solo_6qucfhaz] ⏭ player1 がターンを終了しました
+[1794644683][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794644683][room:solo_6qucfhaz] 【ターン 7】player2 のターン開始
+[1794644683][room:solo_6qucfhaz] 📥 player2 はカードを1枚引き、FILEに 2 枚置きました
+[1794644683][room:solo_6qucfhaz] 🤝 player2 が パートナーのアシスト を宣言（パートナーをFILEへ移動）
+[1794644683][room:solo_6qucfhaz] ✨ player2 のFILEが7枚以上になり、事件が【解決編】に突入しました！
+[1794644683][room:solo_6qucfhaz] 🃏 player2 が [毛利蘭] (Lv.7) を登場させました
+[1794644683][room:solo_6qucfhaz] ⚡ player2 が [毛利蘭] の【宣言】を発動！
+[1794644683][room:solo_6qucfhaz] 💸 [毛利蘭] の効果/コスト: player2 が手札から [江戸川コナン] をリムーブしました
+[1794644683][room:solo_6qucfhaz] ✨ [毛利蘭] の効果で自身のAP +1000
+[1794644683][room:solo_6qucfhaz] ⚡ [毛利蘭] に〚突撃〛を付与しました
+[1794644683][room:solo_6qucfhaz] ⚔️ player2 の [毛利蘭] が player1 の [青の古城探索事件] に攻撃を仕掛けました！
+[1794644691][room:solo_6qucfhaz] player1 はガードを行いませんでした（スルー）
+[1794644691][room:solo_6qucfhaz] 💥 事件への攻撃ヒット！ player1 の証拠を1枚削り、player2 が証拠を1つ獲得！
+[1794644691][room:solo_6qucfhaz] ⚔️ player2 の [宮野志保] が player1 の [青の古城探索事件] に攻撃を仕掛けました！
+[1794644694][room:solo_6qucfhaz] player1 はガードを行いませんでした（スルー）
+[1794644694][room:solo_6qucfhaz] 💥 事件への攻撃ヒット！ player1 の証拠を1枚削り、player2 が証拠を1つ獲得！
+[1794644694][room:solo_6qucfhaz] ⏭ player2 がターンを終了しました
+[1794644694][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794644694][room:solo_6qucfhaz] 【ターン 8】player1 のターン開始
+[1794644694][room:solo_6qucfhaz] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794644734][room:solo_6qucfhaz] 🃏 player1 が [灰原哀] (Lv.8) を登場させました
+[1794644835][room:solo_6qucfhaz] ⚔️ player1 の [灰原哀] が player2 の [水色の想い出] に攻撃を仕掛けました！
+[1794644835][room:solo_6qucfhaz] 💡 player2 の証拠 [本堂瑛祐] の【ヒラメキ】が発動！
+[1794644835][room:solo_6qucfhaz] ✨ [本堂瑛祐] の効果でカードを 1 枚引きました
+[1794644835][room:solo_6qucfhaz] 💥 事件への攻撃ヒット！ player2 の証拠を1枚削り、player1 が証拠を1つ獲得！
+[1794644848][room:solo_6qucfhaz] 💡 player1 が ネクストヒント を使用（FILEから手札へ1枚回収）
+[1794644868][room:solo_6qucfhaz] 🃏 player1 が [灰原哀] を登場させました
+[1794644868][room:solo_6qucfhaz] 🔍 [灰原哀] の効果で山札の上から 4 枚めくりました
+[1794644872][room:solo_6qucfhaz] ✨ [灰原哀] の効果でデッキから [江戸川コナン＆工藤新一] を手札に加え、残りをデッキ下に移しました
+[1794644878][room:solo_6qucfhaz] 💸 [灰原哀] の効果/コスト: player1 が手札から [江戸川コナン] をリムーブしました
+[1794644878][room:solo_6qucfhaz] ✨ [灰原哀] の誘発効果（キャラ登場時）が発動！
+[1794644881][room:solo_6qucfhaz] 💥 [灰原哀] の効果で [毛利蘭] をリムーブしました！
+[1794644915][room:solo_6qucfhaz] 💸 コスト支払い: player1 はデッキの上から 3 枚をリムーブしました
+[1794644915][room:solo_6qucfhaz] ⚡ player1 が [灰原哀] の【宣言】を発動！
+[1794644916][room:solo_6qucfhaz] ⚡ player1 が [灰原哀] の【宣言】を発動！
+[1794644926][room:solo_6qucfhaz] ✨ [灰原哀] の効果で [江戸川コナン] のAP +2000
+[1794644943][room:solo_6qucfhaz] ⚔️ player1 の [江戸川コナン] が player2 の [宮野志保] に攻撃を仕掛けました！
+[1794644947][room:solo_6qucfhaz] ⚡ player1 が [円谷光彦] の【カットイン】を発動！
+[1794644948][room:solo_6qucfhaz] 💥 [円谷光彦] の効果で [宮野志保] をリムーブしました！
+[1794644948][room:solo_6qucfhaz] 💥 [宮野志保] の【現場リムーブ時】能力が誘発しました！
+[1794644948][room:solo_6qucfhaz] ✨ [円谷光彦] の効果でカードを 1 枚引きました
+[1794644977][room:solo_6qucfhaz] ⚔️ player1 の [小嶋元太] が player2 の [水色の想い出] に攻撃を仕掛けました！
+[1794644977][room:solo_6qucfhaz] 💥 事件への攻撃ヒット！ player2 の証拠を1枚削り、player1 が証拠を1つ獲得！
+[1794645004][room:solo_6qucfhaz] 🔎 player1 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794645005][room:solo_6qucfhaz] ⏭ player1 がターンを終了しました
+[1794645005][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794645005][room:solo_6qucfhaz] 【ターン 9】player2 のターン開始
+[1794645005][room:solo_6qucfhaz] 📥 player2 はカードを1枚引き、FILEに 2 枚置きました
+[1794645005][room:solo_6qucfhaz] 🃏 player2 が [毛利蘭] (Lv.7) を登場させました
+[1794645005][room:solo_6qucfhaz] ⚡ player2 が [毛利蘭] の【宣言】を発動！
+[1794645005][room:solo_6qucfhaz] 💸 [毛利蘭] の効果/コスト: player2 が手札から [妃英理] をリムーブしました
+[1794645005][room:solo_6qucfhaz] ✨ [毛利蘭] の効果で自身のAP +1000
+[1794645005][room:solo_6qucfhaz] ⚡ [毛利蘭] に〚突撃〛を付与しました
+[1794645005][room:solo_6qucfhaz] ⚔️ player2 の [毛利蘭] が player1 の [灰原哀] に攻撃を仕掛けました！
+[1794645013][room:solo_6qucfhaz] 🛡️ player1 が [灰原哀] でガードを宣言！
+[1794645013][room:solo_6qucfhaz] 💥 バトル決着: [毛利蘭] (AP7000) vs [灰原哀] (AP4000) ➔ player1 の [灰原哀] をリムーブ！
+[1794645013][room:solo_6qucfhaz] ✨ [毛利蘭] の効果でカードを 1 枚引きました
+[1794645013][room:solo_6qucfhaz] 🔎 player2 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794645013][room:solo_6qucfhaz] ⏭ player2 がターンを終了しました
+[1794645013][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794645013][room:solo_6qucfhaz] 【ターン 10】player1 のターン開始
+[1794645013][room:solo_6qucfhaz] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794645027][room:solo_6qucfhaz] ⚔️ player1 の [灰原哀] が player2 の [毛利蘭] に攻撃を仕掛けました！
+[1794645038][room:solo_6qucfhaz] ⚡ player1 が [円谷光彦] の【カットイン】を発動！
+[1794645038][room:solo_6qucfhaz] 💥 [円谷光彦] の効果で [毛利蘭] をリムーブしました！
+[1794645038][room:solo_6qucfhaz] ✨ [円谷光彦] の効果でカードを 1 枚引きました
+[1794645062][room:solo_6qucfhaz] ⚔️ player1 の [灰原哀] が player2 の [水色の想い出] に攻撃を仕掛けました！
+[1794645062][room:solo_6qucfhaz] 💡 player2 の証拠 [灰原哀] の【ヒラメキ】が発動！
+[1794645062][room:solo_6qucfhaz] ✨ [灰原哀] の効果でカードを 1 枚引きました
+[1794645062][room:solo_6qucfhaz] 💥 事件への攻撃ヒット！ player2 の証拠を1枚削り、player1 が証拠を1つ獲得！
+[1794645076][room:solo_6qucfhaz] ⚔️ player1 の [江戸川コナン] が player2 の [水色の想い出] に攻撃を仕掛けました！
+[1794645076][room:solo_6qucfhaz] 💥 事件への攻撃ヒット！ player2 の証拠を1枚削り、player1 が証拠を1つ獲得！
+[1794645076][room:solo_6qucfhaz] ⚔️ player1 の [小嶋元太] が player2 の [水色の想い出] に攻撃を仕掛けました！
+[1794645076][room:solo_6qucfhaz] 💥 事件への攻撃ヒット！ player2 の証拠を1枚削り、player1 が証拠を1つ獲得！
+[1794645079][room:solo_6qucfhaz] 🤝 player1 が パートナーのアシスト を宣言（パートナーをFILEへ移動）
+[1794645079][room:solo_6qucfhaz] ✨ player1 のFILEが7枚以上になり、事件が【解決編】に突入しました！
+[1794645079][room:solo_6qucfhaz] 📜 事件 [青の古城探索事件] の解決編移行時効果: player1 は手札から [小嶋元太] をリムーブしました
+[1794645093][room:solo_6qucfhaz] 🃏 player1 が [江戸川コナン＆工藤新一] (Lv.9) を登場させました
+[1794645095][room:solo_6qucfhaz] ⏭ player1 がターンを終了しました
+[1794645095][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794645095][room:solo_6qucfhaz] 【ターン 11】player2 のターン開始
+[1794645095][room:solo_6qucfhaz] 📥 player2 はカードを1枚引き、FILEに 2 枚置きました
+[1794645095][room:solo_6qucfhaz] 🃏 player2 が [阿笠博士] (Lv.7) を登場させました
+[1794645095][room:solo_6qucfhaz] 🔎 player2 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794645095][room:solo_6qucfhaz] ⏭ player2 がターンを終了しました
+[1794645095][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794645095][room:solo_6qucfhaz] 【ターン 12】player1 のターン開始
+[1794645095][room:solo_6qucfhaz] 🔄 player1 の山札が無くなりリフレッシュ発生！（相手の証拠+1）
+[1794645095][room:solo_6qucfhaz] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794645096][room:solo_6qucfhaz] 🎉 player1 が 事件解決 を宣言！
+[1794645096][room:solo_6qucfhaz] 🏆 【対戦終了】勝者: player1 (事件解決)
+[1794645131][room:solo_6qucfhaz] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794645131][room:solo_6qucfhaz] 🃏 player2 が手札 5 枚を引き直しました
+[1794645330][room:solo_6qucfhaz] 🃏 player1 が手札 3 枚を引き直しました
+[1794645330][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794645330][room:solo_6qucfhaz] 【ターン 1】player2 のターン開始
+[1794645330][room:solo_6qucfhaz] 📥 player2 はカードを1枚引き、FILEに 1 枚置きました
+[1794645330][room:solo_6qucfhaz] 🔎 player2 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794645330][room:solo_6qucfhaz] ⏭ player2 がターンを終了しました
+[1794645330][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794645330][room:solo_6qucfhaz] 【ターン 2】player1 のターン開始
+[1794645330][room:solo_6qucfhaz] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794645344][room:solo_hgg89uwk] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794645344][room:solo_hgg89uwk] 🃏 player2 が手札 3 枚を引き直しました
+[1794645354][room:solo_hgg89uwk] ⚔️ 対戦開始！ 先攻: player1, 後攻: player2
+[1794645424][room:solo_ch62rg2h] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794645424][room:solo_ch62rg2h] 🃏 player2 が手札 5 枚を引き直しました
+[1794646056][room:default] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794646056][room:default] 🃏 player2 が手札 5 枚を引き直しました
+[1794646086][room:default] ⚔️ 対戦開始！ 先攻: player1, 後攻: player2
+[1794646089][room:solo_hgg89uwk] ⚔️ 対戦開始！ 先攻: player1, 後攻: player2
+[1794646580][room:default] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794646580][room:default] 🃏 player2 が手札 5 枚を引き直しました
+[1794646793][room:default] ⚔️ 対戦開始！ 先攻: player1, 後攻: player2
+[1794646797][room:solo_hgg89uwk] ⚔️ 対戦開始！ 先攻: player1, 後攻: player2
+[1794646824][room:solo_hgg89uwk] 🃏 player1 が手札 2 枚を引き直しました
+[1794646824][room:solo_hgg89uwk] 🃏 player2 が手札 5 枚を引き直しました
+[1794646824][room:solo_hgg89uwk] ━━━━━━━━━━━━━━━━━━━━
+[1794646824][room:solo_hgg89uwk] 【ターン 1】player1 のターン開始
+[1794646824][room:solo_hgg89uwk] 📥 player1 はカードを1枚引き、FILEに 1 枚置きました
+[1794646830][room:solo_hgg89uwk] 🤝 player1 が パートナーのアシスト を宣言（パートナーをFILEへ移動）
+[1794646835][room:solo_hgg89uwk] 📜 player1 がイベント [烏丸蓮耶の影] (Lv.1) を使用しました
+[1794646835][room:solo_hgg89uwk] 🔍 [烏丸蓮耶の影] の効果で山札の上から 3 枚めくりました
+[1794646840][room:solo_hgg89uwk] ✨ [烏丸蓮耶の影] の効果でデッキから [ジン＆ベルモット] を手札に加え、残りをデッキ下に移しました
+[1794646845][room:solo_hgg89uwk] ✨ [烏丸蓮耶の影] の効果で手札から [キャンティ] を登場させました！
+[1794646846][room:solo_hgg89uwk] ⏭ player1 がターンを終了しました
+[1794646846][room:solo_hgg89uwk] ━━━━━━━━━━━━━━━━━━━━
+[1794646846][room:solo_hgg89uwk] 【ターン 2】player2 のターン開始
+[1794646846][room:solo_hgg89uwk] 📥 player2 はカードを1枚引き、FILEに 2 枚置きました
+[1794646846][room:solo_hgg89uwk] 🔎 player2 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794646846][room:solo_hgg89uwk] ⏭ player2 がターンを終了しました
+[1794646846][room:solo_hgg89uwk] ━━━━━━━━━━━━━━━━━━━━
+[1794646846][room:solo_hgg89uwk] 【ターン 3】player1 のターン開始
+[1794646846][room:solo_hgg89uwk] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794646849][room:solo_hgg89uwk] ⚔️ player1 の [キャンティ] が player2 の [水色の想い出] に攻撃を仕掛けました！
+[1794646849][room:solo_hgg89uwk] 💡 player2 の証拠 [宮野志保] の【ヒラメキ】が発動！
+[1794646849][room:solo_hgg89uwk] ✨ [宮野志保] の効果でカードを 1 枚引きました
+[1794646849][room:solo_hgg89uwk] 💥 事件への攻撃ヒット！ player2 の証拠を1枚削り、player1 が証拠を1つ獲得！
+[1794646853][room:solo_hgg89uwk] 🤝 player1 が パートナーのアシスト を宣言（パートナーをFILEへ移動）
+[1794646860][room:solo_hgg89uwk] 🃏 player1 が [シェリー] (Lv.4) を登場させました
+[1794646860][room:solo_hgg89uwk] 🔍 [シェリー] の効果で山札の上から 4 枚めくりました
+[1794646877][room:solo_hgg89uwk] ✨ [シェリー] の効果でデッキから [ジン＆ウォッカ] を手札に加え、残りをデッキ下に移しました
+[1794646881][room:solo_hgg89uwk] 💸 [シェリー] の効果/コスト: player1 が手札から [ベルモット] をリムーブしました
+[1794646882][room:solo_hgg89uwk] ⏭ player1 がターンを終了しました
+[1794646882][room:solo_hgg89uwk] ━━━━━━━━━━━━━━━━━━━━
+[1794646882][room:solo_hgg89uwk] 【ターン 4】player2 のターン開始
+[1794646882][room:solo_hgg89uwk] 📥 player2 はカードを1枚引き、FILEに 2 枚置きました
+[1794646882][room:solo_hgg89uwk] 🃏 player2 が [灰原哀] (Lv.4) を登場させました
+[1794646882][room:solo_hgg89uwk] 🔍 [灰原哀] の効果で山札の上から 4 枚めくりました
+[1794646882][room:solo_hgg89uwk] ✨ [灰原哀] の効果でデッキから [毛利小五郎] を手札に加え、残りをデッキ下に移しました
+[1794646882][room:solo_hgg89uwk] 💸 [灰原哀] の効果/コスト: player2 が手札から [江戸川コナン] をリムーブしました
+[1794646882][room:solo_hgg89uwk] 🔎 player2 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794646882][room:solo_hgg89uwk] ⏭ player2 がターンを終了しました
+[1794646882][room:solo_hgg89uwk] ━━━━━━━━━━━━━━━━━━━━
+[1794646882][room:solo_hgg89uwk] 【ターン 5】player1 のターン開始
+[1794646882][room:solo_hgg89uwk] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794646886][room:solo_hgg89uwk] ⚔️ player1 の [シェリー] が player2 の [水色の想い出] に攻撃を仕掛けました！
+[1794646886][room:solo_hgg89uwk] 🛡️ player2 が [灰原哀] でガードを宣言！
+[1794646886][room:solo_hgg89uwk] 💥 バトル決着: [シェリー] (AP4000) vs [灰原哀] (AP4000) ➔ player2 の [灰原哀] をリムーブ！
+[1794647115][room:default] ⚔️ 対戦開始！ 先攻: player1, 後攻: player2
+[1794647116][room:solo_hgg89uwk] ⚔️ 対戦開始！ 先攻: player1, 後攻: player2
+[1794647122][room:solo_hgg89uwk] ⚔️ 対戦開始！ 先攻: player1, 後攻: player2
+[1794647134][room:solo_hgg89uwk] 🃏 player1 が手札 5 枚を引き直しました
+[1794647134][room:solo_hgg89uwk] 🃏 player2 が手札 4 枚を引き直しました
+[1794647134][room:solo_hgg89uwk] ━━━━━━━━━━━━━━━━━━━━
+[1794647134][room:solo_hgg89uwk] 【ターン 1】player1 のターン開始
+[1794647134][room:solo_hgg89uwk] 📥 player1 はカードを1枚引き、FILEに 1 枚置きました
+[1794647183][room:solo_hgg89uwk] 🔎 player1 の [シェリー] が 推理 を行いました（証拠 +1）
+[1794647333][room:solo_6qucfhaz] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794647333][room:solo_6qucfhaz] 🃏 player2 が手札 3 枚を引き直しました
+[1794648037][room:default] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794648037][room:default] 🃏 player2 が手札 5 枚を引き直しました
+[1794648058][room:solo_hgg89uwk] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794648058][room:solo_hgg89uwk] 🃏 player2 が手札 4 枚を引き直しました
+[1794648089][room:solo_hgg89uwk] 🃏 player1 は初期手札をキープしました
+[1794648089][room:solo_hgg89uwk] ━━━━━━━━━━━━━━━━━━━━
+[1794648089][room:solo_hgg89uwk] 【ターン 1】player2 のターン開始
+[1794648089][room:solo_hgg89uwk] 📥 player2 はカードを1枚引き、FILEに 1 枚置きました
+[1794648089][room:solo_hgg89uwk] 🔎 player2 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794648089][room:solo_hgg89uwk] ⏭ player2 がターンを終了しました
+[1794648089][room:solo_hgg89uwk] ━━━━━━━━━━━━━━━━━━━━
+[1794648089][room:solo_hgg89uwk] 【ターン 2】player1 のターン開始
+[1794648089][room:solo_hgg89uwk] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794648256][room:solo_hgg89uwk] 🤝 player1 が パートナーのアシスト を宣言（パートナーをFILEへ移動）
+[1794648282][room:solo_hgg89uwk] 🃏 player1 が [円谷光彦] (Lv.3) を登場させました
+[1794648282][room:solo_hgg89uwk] ⚠️ [円谷光彦] の登場時効果不発: 能力や効果によって登場していないため発動しません
+[1794648399][room:solo_hgg89uwk] ⏭ player1 がターンを終了しました
+[1794648399][room:solo_hgg89uwk] ━━━━━━━━━━━━━━━━━━━━
+[1794648399][room:solo_hgg89uwk] 【ターン 3】player2 のターン開始
+[1794648399][room:solo_hgg89uwk] 📥 player2 はカードを1枚引き、FILEに 2 枚置きました
+[1794648399][room:solo_hgg89uwk] 🃏 player2 が [円谷光彦] (Lv.3) を登場させました
+[1794648399][room:solo_hgg89uwk] ⚠️ [円谷光彦] の登場時効果不発: 能力や効果によって登場していないため発動しません
+[1794648399][room:solo_hgg89uwk] 🔎 player2 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794648399][room:solo_hgg89uwk] ⏭ player2 がターンを終了しました
+[1794648399][room:solo_hgg89uwk] ━━━━━━━━━━━━━━━━━━━━
+[1794648399][room:solo_hgg89uwk] 【ターン 4】player1 のターン開始
+[1794648399][room:solo_hgg89uwk] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794648474][room:solo_hgg89uwk] 💡 player1 が ネクストヒント を使用（FILEから手札へ1枚回収）
+[1794648481][room:solo_hgg89uwk] player1 はヒントからの登場をスキップしました
+[1794648553][room:solo_6qucfhaz] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794648553][room:solo_6qucfhaz] 🃏 player2 が手札 4 枚を引き直しました
+[1794648634][room:solo_hgg89uwk] 🤝 player1 が パートナーのアシスト を宣言（パートナーをFILEへ移動）
+[1794648786][room:solo_hgg89uwk] ⏭ player1 がターンを終了しました
+[1794648786][room:solo_hgg89uwk] ━━━━━━━━━━━━━━━━━━━━
+[1794648786][room:solo_hgg89uwk] 【ターン 5】player2 のターン開始
+[1794648786][room:solo_hgg89uwk] 📥 player2 はカードを1枚引き、FILEに 2 枚置きました
+[1794648786][room:solo_hgg89uwk] 🃏 player2 が [江戸川コナン] (Lv.5) を登場させました
+[1794648786][room:solo_hgg89uwk] 🤝 player2 が パートナーのアシスト を宣言（パートナーをFILEへ移動）
+[1794648786][room:solo_hgg89uwk] 🔎 player2 の [円谷光彦] が 推理 を行いました（証拠 +1）
+[1794648786][room:solo_hgg89uwk] ⏭ player2 がターンを終了しました
+[1794648786][room:solo_hgg89uwk] ━━━━━━━━━━━━━━━━━━━━
+[1794648786][room:solo_hgg89uwk] 【ターン 6】player1 のターン開始
+[1794648786][room:solo_hgg89uwk] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794648890][room:solo_6qucfhaz] 🃏 player1 は初期手札をキープしました
+[1794648890][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794648890][room:solo_6qucfhaz] 【ターン 1】player2 のターン開始
+[1794648890][room:solo_6qucfhaz] 📥 player2 はカードを1枚引き、FILEに 1 枚置きました
+[1794648890][room:solo_6qucfhaz] 🔎 player2 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794648890][room:solo_6qucfhaz] ⏭ player2 がターンを終了しました
+[1794648890][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794648890][room:solo_6qucfhaz] 【ターン 2】player1 のターン開始
+[1794648890][room:solo_6qucfhaz] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794648895][room:solo_6qucfhaz] ⚔️ 対戦開始！ 先攻: player1, 後攻: player2
+[1794648909][room:solo_6qucfhaz] 🃏 player1 が手札 1 枚を引き直しました
+[1794648909][room:solo_6qucfhaz] 🃏 player2 が手札 5 枚を引き直しました
+[1794648909][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794648909][room:solo_6qucfhaz] 【ターン 1】player1 のターン開始
+[1794648909][room:solo_6qucfhaz] 📥 player1 はカードを1枚引き、FILEに 1 枚置きました
+[1794648929][room:solo_6qucfhaz] 🤝 player1 が パートナーのアシスト を宣言（パートナーをFILEへ移動）
+[1794648935][room:solo_6qucfhaz] 🃏 player1 が [吉田歩美] (Lv.2) を登場させました
+[1794648937][room:solo_6qucfhaz] ⏭ player1 がターンを終了しました
+[1794648937][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794648937][room:solo_6qucfhaz] 【ターン 2】player2 のターン開始
+[1794648937][room:solo_6qucfhaz] 📥 player2 はカードを1枚引き、FILEに 2 枚置きました
+[1794648937][room:solo_6qucfhaz] 🔎 player2 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794648937][room:solo_6qucfhaz] ⏭ player2 がターンを終了しました
+[1794648937][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794648937][room:solo_6qucfhaz] 【ターン 3】player1 のターン開始
+[1794648937][room:solo_6qucfhaz] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794648949][room:solo_6qucfhaz] 🤝 player1 が パートナーのアシスト を宣言（パートナーをFILEへ移動）
+[1794648954][room:solo_6qucfhaz] ⚔️ player1 の [吉田歩美] が player2 の [水色の想い出] に攻撃を仕掛けました！
+[1794648954][room:solo_6qucfhaz] 💥 事件への攻撃ヒット！ player2 の証拠を1枚削り、player1 が証拠を1つ獲得！
+[1794648963][room:solo_6qucfhaz] 🃏 player1 が [円谷光彦] (Lv.4) を登場させました
+[1794648963][room:solo_6qucfhaz] ⚠️ [円谷光彦] の登場時効果不発: FILEが5枚未満です（【FILE5】）
+[1794648967][room:solo_6qucfhaz] ⏭ player1 がターンを終了しました
+[1794648967][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794648967][room:solo_6qucfhaz] 【ターン 4】player2 のターン開始
+[1794648967][room:solo_6qucfhaz] 📥 player2 はカードを1枚引き、FILEに 2 枚置きました
+[1794648967][room:solo_6qucfhaz] 🃏 player2 が [灰原哀] (Lv.4) を登場させました
+[1794648967][room:solo_6qucfhaz] 🔍 [灰原哀] の効果で山札の上から 4 枚めくりました
+[1794648967][room:solo_6qucfhaz] ✨ [灰原哀] の効果でデッキから [灰原哀] を手札に加え、残りをデッキ下に移しました
+[1794648967][room:solo_6qucfhaz] 💸 [灰原哀] の効果/コスト: player2 が手札から [江戸川コナン] をリムーブしました
+[1794648967][room:solo_6qucfhaz] 🔎 player2 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794648967][room:solo_6qucfhaz] ⏭ player2 がターンを終了しました
+[1794648967][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794648967][room:solo_6qucfhaz] 【ターン 5】player1 のターン開始
+[1794648967][room:solo_6qucfhaz] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794649058][room:solo_6qucfhaz] 🤝 player1 が パートナーのアシスト を宣言（パートナーをFILEへ移動）
+[1794649059][room:solo_6qucfhaz] 📜 player1 がイベント [少年探偵団] (Lv.6) を使用しました
+[1794649066][room:solo_6qucfhaz] 💸 [少年探偵団] の効果/コスト: player1 が手札から [灰原哀] をリムーブしました
+[1794649066][room:solo_6qucfhaz] 🔍 [少年探偵団] の効果で山札の上から 6 枚めくりました
+[1794649082][room:solo_6qucfhaz] ✨ [少年探偵団] の効果でデッキから [小嶋元太] を登場させました
+[1794649082][room:solo_6qucfhaz] ✨ [少年探偵団] の効果でデッキから [灰原哀] を登場させました
+[1794649082][room:solo_6qucfhaz] ⚡ [小嶋元太] に〚突撃［キャラ］〛を付与しました
+[1794649082][room:solo_6qucfhaz] 🔍 [灰原哀] の効果で山札の上から 4 枚めくりました
+[1794649086][room:solo_6qucfhaz] ✨ [灰原哀] の効果でデッキから [江戸川コナン＆工藤新一] を手札に加え、残りをデッキ下に移しました
+[1794649094][room:solo_6qucfhaz] 💸 [灰原哀] の効果/コスト: player1 が手札から [小さくなった名探偵] をリムーブしました
+[1794649360][room:solo_6qucfhaz] 🔎 player1 の [小嶋元太] が 推理 を行いました
+[1794649372][room:solo_6qucfhaz] 🔎 player1 の [円谷光彦] が 推理 を行いました
+[1794649383][room:solo_6qucfhaz] 🔎 player1 の [吉田歩美] が 推理 を行いました（証拠 +1）
+[1794649390][room:solo_6qucfhaz] ⏭ player1 がターンを終了しました
+[1794649390][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794649390][room:solo_6qucfhaz] 【ターン 6】player2 のターン開始
+[1794649390][room:solo_6qucfhaz] 📥 player2 はカードを1枚引き、FILEに 2 枚置きました
+[1794649390][room:solo_6qucfhaz] 🤝 player2 が パートナーのアシスト を宣言（パートナーをFILEへ移動）
+[1794649390][room:solo_6qucfhaz] ✨ player2 のFILEが7枚以上になり、事件が【解決編】に突入しました！
+[1794649390][room:solo_6qucfhaz] 🃏 player2 が [阿笠博士] (Lv.7) を登場させました
+[1794649390][room:solo_6qucfhaz] ⚔️ player2 の [灰原哀] が player1 の [円谷光彦] に攻撃を仕掛けました！
+[1794649398][room:solo_6qucfhaz] player1 はガードを行いませんでした（スルー）
+[1794649398][room:solo_6qucfhaz] 💥 バトル決着: [灰原哀] (AP4000) vs [円谷光彦] (AP4000) ➔ player1 の [円谷光彦] をリムーブ！
+[1794649398][room:solo_6qucfhaz] ⏭ player2 がターンを終了しました
+[1794649398][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794649398][room:solo_6qucfhaz] 【ターン 7】player1 のターン開始
+[1794649398][room:solo_6qucfhaz] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794649416][room:solo_6qucfhaz] 🤝 player1 が パートナーのアシスト を宣言（パートナーをFILEへ移動）
+[1794649416][room:solo_6qucfhaz] ✨ player1 のFILEが7枚以上になり、事件が【解決編】に突入しました！
+[1794649416][room:solo_6qucfhaz] 📜 事件 [青の古城探索事件] の解決編移行時効果: player1 は手札から [江戸川コナン] をリムーブしました
+[1794649425][room:solo_6qucfhaz] 🃏 player1 が [灰原哀] (Lv.8) を登場させました
+[1794649439][room:solo_6qucfhaz] 🔎 player1 の [吉田歩美] が 推理 を行いました（証拠 +1）
+[1794649443][room:solo_6qucfhaz] 💡 player1 が ネクストヒント を使用（FILEから手札へ1枚回収）
+[1794649444][room:solo_6qucfhaz] 📜 player1 がイベント [五人囃子] を使用しました
+[1794649557][room:solo_6qucfhaz] 💡 player1 が ネクストヒント を使用（FILEから手札へ1枚回収）
+[1794649559][room:solo_6qucfhaz] 📜 player1 がイベント [小さくなった名探偵] を使用しました
+[1794649559][room:solo_6qucfhaz] 🔍 [小さくなった名探偵] の効果で山札の上から 3 枚めくりました
+[1794649562][room:solo_6qucfhaz] ✨ [小さくなった名探偵] の効果でデッキから [灰原哀] を手札に加え、残りをデッキ下に移しました
+[1794649563][room:solo_6qucfhaz] ✨ [小さくなった名探偵] の効果で手札から [小嶋元太] を登場させました！
+[1794649563][room:solo_6qucfhaz] ⚡ [小嶋元太] に〚突撃［キャラ］〛を付与しました
+[1794649563][room:solo_6qucfhaz] ✨ [灰原哀] の誘発効果（キャラ登場時）が発動！
+[1794649567][room:solo_6qucfhaz] 💥 [灰原哀] の効果で [阿笠博士] をリムーブしました！
+[1794649579][room:solo_6qucfhaz] ⚔️ player1 の [小嶋元太] が player2 の [灰原哀] に攻撃を仕掛けました！
+[1794649588][room:solo_6qucfhaz] 💥 バトル決着: [小嶋元太] (AP4000) vs [灰原哀] (AP4000) ➔ player2 の [灰原哀] をリムーブ！
+[1794649620][room:solo_6qucfhaz] ⚔️ player1 の [灰原哀] が player2 の [水色の想い出] に攻撃を仕掛けました！
+[1794649620][room:solo_6qucfhaz] 💥 事件への攻撃ヒット！ player2 の証拠を1枚削り、player1 が証拠を1つ獲得！
+[1794649622][room:solo_6qucfhaz] 🔎 player1 の [小嶋元太] が 推理 を行いました
+[1794649626][room:solo_6qucfhaz] ⏭ player1 がターンを終了しました
+[1794649626][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794649626][room:solo_6qucfhaz] 【ターン 8】player2 のターン開始
+[1794649626][room:solo_6qucfhaz] 📥 player2 はカードを1枚引き、FILEに 2 枚置きました
+[1794649626][room:solo_6qucfhaz] 🃏 player2 が [工藤新一] (Lv.6) を登場させました
+[1794649626][room:solo_6qucfhaz] ⚡ player2 が [工藤新一] の【宣言】を発動！
+[1794649626][room:solo_6qucfhaz] ⚠️ [工藤新一] の効果: 条件を満たす有効な対象がいないためスキップされました
+[1794649626][room:solo_6qucfhaz] 🔎 player2 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794649626][room:solo_6qucfhaz] ⏭ player2 がターンを終了しました
+[1794649626][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794649626][room:solo_6qucfhaz] 【ターン 9】player1 のターン開始
+[1794649626][room:solo_6qucfhaz] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794649633][room:solo_6qucfhaz] 🔎 player1 の [灰原哀] が 推理 を行いました（証拠 +2）
+[1794649636][room:solo_6qucfhaz] 🔎 player1 の [灰原哀] が 推理 を行いました（証拠 +1）
+[1794649638][room:solo_6qucfhaz] 🎉 player1 が 事件解決 を宣言！
+[1794649638][room:solo_6qucfhaz] 🏆 【対戦終了】勝者: player1 (事件解決)
+[1794649645][room:solo_6qucfhaz] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794649645][room:solo_6qucfhaz] 🃏 player2 が手札 4 枚を引き直しました
+[1794649705][room:default] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794649705][room:default] 🃏 player2 が手札 5 枚を引き直しました
+[1794649712][room:solo_6qucfhaz] ⚔️ 対戦開始！ 先攻: player1, 後攻: player2
+[1794649814][room:solo_6qucfhaz] 🃏 player1 が手札 4 枚を引き直しました
+[1794649814][room:solo_6qucfhaz] 🃏 player2 が手札 5 枚を引き直しました
+[1794649814][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794649814][room:solo_6qucfhaz] 【ターン 1】player1 のターン開始
+[1794649814][room:solo_6qucfhaz] 📥 player1 はカードを1枚引き、FILEに 1 枚置きました
+[1794649826][room:solo_6qucfhaz] 🤝 player1 が パートナーのアシスト を宣言（パートナーをFILEへ移動）
+[1794649827][room:solo_6qucfhaz] 🃏 player1 が [バーボン] (Lv.2) を登場させました
+[1794649831][room:solo_6qucfhaz] ⏭ player1 がターンを終了しました
+[1794649831][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794649831][room:solo_6qucfhaz] 【ターン 2】player2 のターン開始
+[1794649831][room:solo_6qucfhaz] 📥 player2 はカードを1枚引き、FILEに 2 枚置きました
+[1794649831][room:solo_6qucfhaz] 🔎 player2 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794649831][room:solo_6qucfhaz] ⏭ player2 がターンを終了しました
+[1794649831][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794649831][room:solo_6qucfhaz] 【ターン 3】player1 のターン開始
+[1794649831][room:solo_6qucfhaz] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794650270][room:solo_6qucfhaz] ⚔️ player1 の [バーボン] が player2 の [水色の想い出] に攻撃を仕掛けました！
+[1794650270][room:solo_6qucfhaz] 💥 事件への攻撃ヒット！ player2 の証拠を1枚削り、player1 が証拠を1つ獲得！
+[1794650278][room:solo_6qucfhaz] 🤝 player1 が パートナーのアシスト を宣言（パートナーをFILEへ移動）
+[1794650279][room:solo_6qucfhaz] 📜 player1 がイベント [烏丸蓮耶の影] (Lv.1) を使用しました
+[1794650279][room:solo_6qucfhaz] 🔍 [烏丸蓮耶の影] の効果で山札の上から 3 枚めくりました
+[1794650281][room:solo_6qucfhaz] ✨ [烏丸蓮耶の影] の効果でデッキから [キャンティ] を手札に加え、残りをデッキ下に移しました
+[1794650283][room:solo_6qucfhaz] ✨ [烏丸蓮耶の影] の効果で手札から [キャンティ] を登場させました！
+[1794650285][room:solo_6qucfhaz] ⏭ player1 がターンを終了しました
+[1794650285][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794650285][room:solo_6qucfhaz] 【ターン 4】player2 のターン開始
+[1794650285][room:solo_6qucfhaz] 📥 player2 はカードを1枚引き、FILEに 2 枚置きました
+[1794650285][room:solo_6qucfhaz] 🃏 player2 が [灰原哀] (Lv.4) を登場させました
+[1794650285][room:solo_6qucfhaz] 🔍 [灰原哀] の効果で山札の上から 4 枚めくりました
+[1794650285][room:solo_6qucfhaz] ✨ [灰原哀] の効果でデッキから [毛利小五郎] を手札に加え、残りをデッキ下に移しました
+[1794650285][room:solo_6qucfhaz] 💸 [灰原哀] の効果/コスト: player2 が手札から [江戸川コナン] をリムーブしました
+[1794650285][room:solo_6qucfhaz] 🔎 player2 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794650285][room:solo_6qucfhaz] ⏭ player2 がターンを終了しました
+[1794650285][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794650285][room:solo_6qucfhaz] 【ターン 5】player1 のターン開始
+[1794650285][room:solo_6qucfhaz] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794650293][room:solo_6qucfhaz] 🃏 player1 が [バーボン] (Lv.2) を登場させました
+[1794650295][room:solo_6qucfhaz] 🔎 player1 の [シェリー] が 推理 を行いました（証拠 +1）
+[1794650302][room:solo_6qucfhaz] ⚔️ player1 の [キャンティ] が player2 の [水色の想い出] に攻撃を仕掛けました！
+[1794650302][room:solo_6qucfhaz] 🛡️ player2 が [灰原哀] でガードを宣言！
+[1794650308][room:solo_6qucfhaz] 🛡️ バトル決着: [キャンティ] (AP1000) vs [灰原哀] (AP4000) ➔ AP不足のためリムーブできず（守備成功）
+[1794650311][room:solo_6qucfhaz] ⚔️ player1 の [バーボン] が player2 の [水色の想い出] に攻撃を仕掛けました！
+[1794650311][room:solo_6qucfhaz] 💥 事件への攻撃ヒット！ player2 の証拠を1枚削り、player1 が証拠を1つ獲得！
+[1794650313][room:solo_6qucfhaz] ⏭ player1 がターンを終了しました
+[1794650313][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794650313][room:solo_6qucfhaz] 【ターン 6】player2 のターン開始
+[1794650313][room:solo_6qucfhaz] 📥 player2 はカードを1枚引き、FILEに 2 枚置きました
+[1794650313][room:solo_6qucfhaz] 🤝 player2 が パートナーのアシスト を宣言（パートナーをFILEへ移動）
+[1794650313][room:solo_6qucfhaz] ✨ player2 のFILEが7枚以上になり、事件が【解決編】に突入しました！
+[1794650313][room:solo_6qucfhaz] 🃏 player2 が [毛利蘭] (Lv.7) を登場させました
+[1794650313][room:solo_6qucfhaz] ⚡ player2 が [毛利蘭] の【宣言】を発動！
+[1794650313][room:solo_6qucfhaz] 💸 [毛利蘭] の効果/コスト: player2 が手札から [本堂瑛祐] をリムーブしました
+[1794650313][room:solo_6qucfhaz] ✨ [毛利蘭] の効果で自身のAP +1000
+[1794650313][room:solo_6qucfhaz] ⚡ [毛利蘭] に〚突撃〛を付与しました
+[1794650313][room:solo_6qucfhaz] ⚔️ player2 の [灰原哀] が player1 の [バーボン] に攻撃を仕掛けました！
+[1794650318][room:solo_6qucfhaz] player1 はガードを行いませんでした（スルー）
+[1794650318][room:solo_6qucfhaz] 💥 バトル決着: [灰原哀] (AP4000) vs [バーボン] (AP1000) ➔ player1 の [バーボン] をリムーブ！
+[1794650318][room:solo_6qucfhaz] ⚔️ player2 の [毛利蘭] が player1 の [キャンティ] に攻撃を仕掛けました！
+[1794650320][room:solo_6qucfhaz] player1 はガードを行いませんでした（スルー）
+[1794650320][room:solo_6qucfhaz] 💥 バトル決着: [毛利蘭] (AP7000) vs [キャンティ] (AP1000) ➔ player1 の [キャンティ] をリムーブ！
+[1794650320][room:solo_6qucfhaz] ✨ [毛利蘭] の効果でカードを 1 枚引きました
+[1794650320][room:solo_6qucfhaz] ⏭ player2 がターンを終了しました
+[1794650320][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794650320][room:solo_6qucfhaz] 【ターン 7】player1 のターン開始
+[1794650320][room:solo_6qucfhaz] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794650341][room:solo_6qucfhaz] 🤝 player1 が パートナーのアシスト を宣言（パートナーをFILEへ移動）
+[1794650341][room:solo_6qucfhaz] ✨ player1 のFILEが7枚以上になり、事件が【解決編】に突入しました！
+[1794650341][room:solo_6qucfhaz] 📜 事件 [ブラックインパクト！] の解決編移行時効果: player1 は手札から [カッ] をリムーブしました
+[1794650348][room:solo_6qucfhaz] 🃏 player1 が [ジン] (Lv.8) を登場させました
+[1794650371][room:solo_6qucfhaz] 🔎 player1 の [バーボン] が 推理 を行いました（証拠 +1）
+[1794650386][room:solo_6qucfhaz] 🔓 コスト支払い: player1 は裏向きの証拠を3つ表向きにしました
+[1794650386][room:solo_6qucfhaz] ⚡ player1 が [ブラックインパクト！] の【宣言】を発動！
+[1794650386][room:solo_6qucfhaz] 💸 [ブラックインパクト！] の効果/コスト: player2 が手札から [灰原哀] をリムーブしました
+[1794650405][room:solo_6qucfhaz] 🔎 player1 の [ジン] が 推理 を行いました（証拠 +2）
+[1794650418][room:solo_6qucfhaz] 💡 player1 が ネクストヒント を使用（FILEから手札へ1枚回収）
+[1794650423][room:solo_6qucfhaz] 🃏 player1 が [ウォッカ] を登場させました
+[1794650435][room:solo_6qucfhaz] ⚔️ player1 の [ウォッカ] が player2 の [毛利蘭] に攻撃を仕掛けました！
+[1794650438][room:solo_6qucfhaz] ⚡ player1 が [ラム] の【カットイン】を発動！
+[1794650438][room:solo_6qucfhaz] 🛡️ バトル決着: [ウォッカ] (AP6000) vs [毛利蘭] (AP7000) ➔ AP不足のためリムーブできず（守備成功）
+[1794650588][room:solo_6qucfhaz] ⏭ player1 がターンを終了しました
+[1794650604][room:solo_6qucfhaz] 💸 [ジン] の効果/コスト: player1 が手札から [ウォッカ] をリムーブしました
+[1794650618][room:solo_6qucfhaz] 💥 [ジン] の効果で [毛利蘭] をリムーブしました！
+[1794650618][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794650618][room:solo_6qucfhaz] 【ターン 8】player2 のターン開始
+[1794650618][room:solo_6qucfhaz] 📥 player2 はカードを1枚引き、FILEに 2 枚置きました
+[1794650618][room:solo_6qucfhaz] 🃏 player2 が [江戸川コナン] (Lv.8) を登場させました
+[1794650618][room:solo_6qucfhaz] ⚔️ player2 の [灰原哀] が player1 の [バーボン] に攻撃を仕掛けました！
+[1794651436][room:solo_6qucfhaz] player1 はガードを行いませんでした（スルー）
+[1794651436][room:solo_6qucfhaz] 💥 バトル決着: [灰原哀] (AP4000) vs [バーボン] (AP1000) ➔ player1 の [バーボン] をリムーブ！
+[1794651436][room:solo_6qucfhaz] 🔎 player2 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794651436][room:solo_6qucfhaz] ⏭ player2 がターンを終了しました
+[1794651436][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794651436][room:solo_6qucfhaz] 【ターン 9】player1 のターン開始
+[1794651436][room:solo_6qucfhaz] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794651444][room:solo_6qucfhaz] 🔎 player1 の [ジン] が 推理 を行いました（証拠 +2）
+[1794651446][room:solo_6qucfhaz] 🎉 player1 が 事件解決 を宣言！
+[1794651446][room:solo_6qucfhaz] 🏆 【対戦終了】勝者: player1 (事件解決)
+[1794651454][room:solo_6qucfhaz] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794651454][room:solo_6qucfhaz] 🃏 player2 が手札 5 枚を引き直しました
+[1794651460][room:solo_6qucfhaz] ⚔️ 対戦開始！ 先攻: player1, 後攻: player2
+[1794651495][room:solo_6qucfhaz] 🃏 player1 が手札 2 枚を引き直しました
+[1794651495][room:solo_6qucfhaz] 🃏 player2 が手札 2 枚を引き直しました
+[1794651495][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794651495][room:solo_6qucfhaz] 【ターン 1】player1 のターン開始
+[1794651495][room:solo_6qucfhaz] 📥 player1 はカードを1枚引き、FILEに 1 枚置きました
+[1794651499][room:solo_6qucfhaz] 🤝 player1 が パートナーのアシスト を宣言（パートナーをFILEへ移動）
+[1794651611][room:solo_6qucfhaz] 📜 player1 がイベント [烏丸蓮耶の影] (Lv.1) を使用しました
+[1794651611][room:solo_6qucfhaz] 🔍 [烏丸蓮耶の影] の効果で山札の上から 3 枚めくりました
+[1794651612][room:solo_6qucfhaz] ✨ [烏丸蓮耶の影] の効果でデッキから [ウォッカ] を手札に加え、残りをデッキ下に移しました
+[1794651615][room:solo_6qucfhaz] ✨ [烏丸蓮耶の影] の効果で手札から [キャンティ] を登場させました！
+[1794651617][room:solo_6qucfhaz] ⏭ player1 がターンを終了しました
+[1794651617][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794651617][room:solo_6qucfhaz] 【ターン 2】player2 のターン開始
+[1794651617][room:solo_6qucfhaz] 📥 player2 はカードを1枚引き、FILEに 2 枚置きました
+[1794651617][room:solo_6qucfhaz] 🃏 player2 が [灰原哀] (Lv.2) を登場させました
+[1794651617][room:solo_6qucfhaz] 🔎 player2 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794651617][room:solo_6qucfhaz] ⏭ player2 がターンを終了しました
+[1794651617][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794651617][room:solo_6qucfhaz] 【ターン 3】player1 のターン開始
+[1794651617][room:solo_6qucfhaz] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794651627][room:solo_6qucfhaz] 🔎 player1 の [シェリー] が 推理 を行いました（証拠 +1）
+[1794651630][room:solo_6qucfhaz] 🃏 player1 が [キャンティ] (Lv.2) を登場させました
+[1794651634][room:solo_6qucfhaz] ⏭ player1 がターンを終了しました
+[1794651634][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794651634][room:solo_6qucfhaz] 【ターン 4】player2 のターン開始
+[1794651634][room:solo_6qucfhaz] 📥 player2 はカードを1枚引き、FILEに 2 枚置きました
+[1794651634][room:solo_6qucfhaz] 🃏 player2 が [灰原哀] (Lv.4) を登場させました
+[1794651634][room:solo_6qucfhaz] 🔍 [灰原哀] の効果で山札の上から 4 枚めくりました
+[1794651634][room:solo_6qucfhaz] ✨ [灰原哀] の効果でデッキから [円谷光彦] を手札に加え、残りをデッキ下に移しました
+[1794651634][room:solo_6qucfhaz] 💸 [灰原哀] の効果/コスト: player2 が手札から [小さくなった名探偵] をリムーブしました
+[1794651634][room:solo_6qucfhaz] 🤝 player2 が パートナーのアシスト を宣言（パートナーをFILEへ移動）
+[1794651634][room:solo_6qucfhaz] ⚔️ player2 の [灰原哀] が player1 の [ブラックインパクト！] に攻撃を仕掛けました！
+[1794651636][room:solo_6qucfhaz] player1 はガードを行いませんでした（スルー）
+[1794651636][room:solo_6qucfhaz] 💥 事件への攻撃ヒット！ player1 の証拠を1枚削り、player2 が証拠を1つ獲得！
+[1794651636][room:solo_6qucfhaz] ⏭ player2 がターンを終了しました
+[1794651636][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794651636][room:solo_6qucfhaz] 【ターン 5】player1 のターン開始
+[1794651636][room:solo_6qucfhaz] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794651757][room:solo_6qucfhaz] 🃏 player1 が [ウォッカ] (Lv.5) を登場させました
+[1794651901][room:solo_6qucfhaz] 🔎 player1 の [シェリー] が 推理 を行いました（証拠 +1）
+[1794651904][room:solo_6qucfhaz] ⏭ player1 がターンを終了しました
+[1794651904][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794651904][room:solo_6qucfhaz] 【ターン 6】player2 のターン開始
+[1794651904][room:solo_6qucfhaz] 📥 player2 はカードを1枚引き、FILEに 2 枚置きました
+[1794651904][room:solo_6qucfhaz] 🤝 player2 が パートナーのアシスト を宣言（パートナーをFILEへ移動）
+[1794651904][room:solo_6qucfhaz] ✨ player2 のFILEが7枚以上になり、事件が【解決編】に突入しました！
+[1794651904][room:solo_6qucfhaz] 📜 事件 [青の古城探索事件] の解決編移行時効果: player2 は手札から [少年探偵団] をリムーブしました
+[1794651904][room:solo_6qucfhaz] 🃏 player2 が [円谷光彦] (Lv.4) を登場させました
+[1794651904][room:solo_6qucfhaz] ⚡ [円谷光彦] に〚突撃［キャラ］〛を付与しました
+[1794651904][room:solo_6qucfhaz] ⚡ player2 が [青の古城探索事件] の【宣言】を発動！
+[1794651904][room:solo_6qucfhaz] ✨ [青の古城探索事件] の効果で [灰原哀] のAP +1000
+[1794651904][room:solo_6qucfhaz] 💡 player2 が ネクストヒント を使用（FILEから手札へ1枚回収）
+[1794651904][room:solo_6qucfhaz] 🃏 player2 が [江戸川コナン] を登場させました
+[1794651904][room:solo_6qucfhaz] ✨ [江戸川コナン] の効果でカードを 2 枚引きました
+[1794651904][room:solo_6qucfhaz] 💸 [江戸川コナン] の効果/コスト: player2 が手札から [灰原哀] をリムーブしました
+[1794651904][room:solo_6qucfhaz] 💸 [江戸川コナン] の効果/コスト: player2 が手札から [少年探偵団] をリムーブしました
+[1794651904][room:solo_6qucfhaz] ⚡ player2 が [江戸川コナン] の【宣言】を発動！
+[1794651904][room:solo_6qucfhaz] ⚠️ [江戸川コナン] の効果: 条件を満たす有効な対象がいないためスキップされました
+[1794651904][room:solo_6qucfhaz] 💡 player2 が ネクストヒント を使用（FILEから手札へ1枚回収）
+[1794651904][room:solo_6qucfhaz] 🃏 player2 が [小嶋元太] を登場させました
+[1794651904][room:solo_6qucfhaz] ⚡ [小嶋元太] に〚突撃［キャラ］〛を付与しました
+[1794651904][room:solo_6qucfhaz] ⚔️ player2 の [灰原哀] が player1 の [ブラックインパクト！] に攻撃を仕掛けました！
+[1794651907][room:solo_6qucfhaz] player1 はガードを行いませんでした（スルー）
+[1794651907][room:solo_6qucfhaz] 💥 事件への攻撃ヒット！ player1 の証拠を1枚削り、player2 が証拠を1つ獲得！
+[1794651907][room:solo_6qucfhaz] 🔎 player2 の [灰原哀] が 推理 を行いました（証拠 +1）
+[1794651907][room:solo_6qucfhaz] 🔎 player2 の [円谷光彦] が 推理 を行いました
+[1794651907][room:solo_6qucfhaz] 🔎 player2 の [小嶋元太] が 推理 を行いました
+[1794651907][room:solo_6qucfhaz] ⏭ player2 がターンを終了しました
+[1794651907][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794651907][room:solo_6qucfhaz] 【ターン 7】player1 のターン開始
+[1794651907][room:solo_6qucfhaz] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794651914][room:solo_6qucfhaz] 🤝 player1 が パートナーのアシスト を宣言（パートナーをFILEへ移動）
+[1794651914][room:solo_6qucfhaz] ✨ player1 のFILEが7枚以上になり、事件が【解決編】に突入しました！
+[1794651914][room:solo_6qucfhaz] 📜 事件 [ブラックインパクト！] の解決編移行時効果: player1 は手札から [ウォッカ] をリムーブしました
+[1794651931][room:solo_6qucfhaz] 🃏 player1 が [ベルモット] (Lv.8) を登場させました
+[1794651940][room:solo_6qucfhaz] 💥 [ベルモット] の効果で [江戸川コナン] をリムーブしました！
+[1794651947][room:solo_6qucfhaz] 💡 player1 が ネクストヒント を使用（FILEから手札へ1枚回収）
+[1794651950][room:solo_6qucfhaz] 🃏 player1 が [ウォッカ] を登場させました
+[1794651963][room:solo_6qucfhaz] ⚔️ player1 の [ウォッカ] が player2 の [小嶋元太] に攻撃を仕掛けました！
+[1794651963][room:solo_6qucfhaz] ⚡ player2 が [江戸川コナン＆工藤新一] の【カットイン】を発動！
+[1794651970][room:solo_6qucfhaz] 💥 バトル決着: [ウォッカ] (AP6000) vs [小嶋元太] (AP4000) ➔ player2 の [小嶋元太] をリムーブ！
+[1794651974][room:solo_6qucfhaz] ⚡ player1 が [ベルモット] の【宣言】を発動！
+[1794651980][room:solo_6qucfhaz] 💥 [ベルモット] の効果で [灰原哀] をリムーブしました！
+[1794651986][room:solo_6qucfhaz] ⚔️ player1 の [ウォッカ] が player2 の [円谷光彦] に攻撃を仕掛けました！
+[1794651995][room:solo_6qucfhaz] 💥 バトル決着: [ウォッカ] (AP5000) vs [円谷光彦] (AP4000) ➔ player2 の [円谷光彦] をリムーブ！
+[1794651998][room:solo_6qucfhaz] ⚔️ player1 の [キャンティ] が player2 の [灰原哀] に攻撃を仕掛けました！
+[1794652004][room:solo_6qucfhaz] 💥 バトル決着: [キャンティ] (AP1000) vs [灰原哀] (AP1000) ➔ player2 の [灰原哀] をリムーブ！
+[1794652006][room:solo_6qucfhaz] ⚔️ player1 の [キャンティ] が player2 の [青の古城探索事件] に攻撃を仕掛けました！
+[1794652006][room:solo_6qucfhaz] 💥 事件への攻撃ヒット！ player2 の証拠を1枚削り、player1 が証拠を1つ獲得！
+[1794652013][room:solo_6qucfhaz] ⏭ player1 がターンを終了しました
+[1794652013][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794652013][room:solo_6qucfhaz] 【ターン 8】player2 のターン開始
+[1794652013][room:solo_6qucfhaz] 📥 player2 はカードを1枚引き、FILEに 2 枚置きました
+[1794652013][room:solo_6qucfhaz] 📜 player2 がイベント [少年探偵団] (Lv.6) を使用しました
+[1794652013][room:solo_6qucfhaz] 💸 [少年探偵団] の効果/コスト: player2 が手札から [小さくなった名探偵] をリムーブしました
+[1794652013][room:solo_6qucfhaz] 🔍 [少年探偵団] の効果で山札の上から 6 枚めくりました
+[1794652013][room:solo_6qucfhaz] ✨ [少年探偵団] の効果でデッキから [灰原哀] を登場させました
+[1794652013][room:solo_6qucfhaz] 🔍 [灰原哀] の効果で山札の上から 4 枚めくりました
+[1794652013][room:solo_6qucfhaz] ✨ [灰原哀] の効果でデッキから [円谷光彦] を手札に加え、残りをデッキ下に移しました
+[1794652013][room:solo_6qucfhaz] 💸 [灰原哀] の効果/コスト: player2 が手札から [五人囃子] をリムーブしました
+[1794652013][room:solo_6qucfhaz] ⚡ player2 が [青の古城探索事件] の【宣言】を発動！
+[1794652013][room:solo_6qucfhaz] ✨ [青の古城探索事件] の効果で [灰原哀] のAP +1000
+[1794652013][room:solo_6qucfhaz] 💡 player2 が ネクストヒント を使用（FILEから手札へ1枚回収）
+[1794652013][room:solo_6qucfhaz] 🃏 player2 が [円谷光彦] を登場させました
+[1794652013][room:solo_6qucfhaz] ⚡ [円谷光彦] に〚突撃［キャラ］〛を付与しました
+[1794652013][room:solo_6qucfhaz] 💡 player2 が ネクストヒント を使用（FILEから手札へ1枚回収）
+[1794652013][room:solo_6qucfhaz] 🃏 player2 が [小嶋元太] を登場させました
+[1794652013][room:solo_6qucfhaz] ⚠️ [小嶋元太] の登場時効果不発: FILEが5枚未満です（【FILE5】）
+[1794652013][room:solo_6qucfhaz] 💡 player2 が ネクストヒント を使用（FILEから手札へ1枚回収）
+[1794652013][room:solo_6qucfhaz] player2 はヒントからの登場をスキップしました
+[1794652013][room:solo_6qucfhaz] ⚔️ player2 の [円谷光彦] が player1 の [キャンティ] に攻撃を仕掛けました！
+[1794652016][room:solo_6qucfhaz] player1 はガードを行いませんでした（スルー）
+[1794652016][room:solo_6qucfhaz] ⚡ player2 が [円谷光彦] の【カットイン】を発動！
+[1794652016][room:solo_6qucfhaz] 💥 [円谷光彦] の効果で [ウォッカ] をリムーブしました！
+[1794652016][room:solo_6qucfhaz] ✨ [円谷光彦] の効果でカードを 1 枚引きました
+[1794652022][room:solo_6qucfhaz] 💥 バトル決着: [円谷光彦] (AP4000) vs [キャンティ] (AP1000) ➔ player1 の [キャンティ] をリムーブ！
+[1794652022][room:solo_6qucfhaz] 🔎 player2 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794652022][room:solo_6qucfhaz] ⏭ player2 がターンを終了しました
+[1794652022][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794652022][room:solo_6qucfhaz] 【ターン 9】player1 のターン開始
+[1794652022][room:solo_6qucfhaz] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794652219][room:solo_6qucfhaz] 🃏 player1 が [ジン] (Lv.8) を登場させました
+[1794652227][room:solo_6qucfhaz] ⚔️ player1 の [ジン] が player2 の [青の古城探索事件] に攻撃を仕掛けました！
+[1794652227][room:solo_6qucfhaz] player2 はガードを行いませんでした（スルー）
+[1794652227][room:solo_6qucfhaz] 💡 player2 の証拠 [灰原哀] の【ヒラメキ】が発動！
+[1794652227][room:solo_6qucfhaz] ✨ [灰原哀] の効果でカードを 1 枚引きました
+[1794652227][room:solo_6qucfhaz] 💥 事件への攻撃ヒット！ player2 の証拠を1枚削り、player1 が証拠を1つ獲得！
+[1794652237][room:solo_6qucfhaz] ⚔️ player1 の [ウォッカ] が player2 の [円谷光彦] に攻撃を仕掛けました！
+[1794652237][room:solo_6qucfhaz] ⚡ player2 が [灰原哀] の【カットイン】を発動！
+[1794652237][room:solo_6qucfhaz] player2 はガードを行いませんでした（スルー）
+[1794652241][room:solo_6qucfhaz] 💥 バトル決着: [ウォッカ] (AP5000) vs [円谷光彦] (AP4000) ➔ player2 の [円谷光彦] をリムーブ！
+[1794652250][room:solo_6qucfhaz] ⚔️ player1 の [ベルモット] が player2 の [青の古城探索事件] に攻撃を仕掛けました！
+[1794652250][room:solo_6qucfhaz] player2 はガードを行いませんでした（スルー）
+[1794652250][room:solo_6qucfhaz] 💥 事件への攻撃ヒット！ player2 の証拠を1枚削り、player1 が証拠を1つ獲得！
+[1794652255][room:solo_6qucfhaz] 🔓 コスト支払い: player1 は裏向きの証拠を3つ表向きにしました
+[1794652255][room:solo_6qucfhaz] ⚡ player1 が [ブラックインパクト！] の【宣言】を発動！
+[1794652255][room:solo_6qucfhaz] 💸 [ブラックインパクト！] の効果/コスト: player2 が手札から [沖野ヨーコ] をリムーブしました
+[1794652267][room:solo_6qucfhaz] ⚔️ player1 の [キャンティ] が player2 の [青の古城探索事件] に攻撃を仕掛けました！
+[1794652267][room:solo_6qucfhaz] 🛡️ player2 が [小嶋元太] でガードを宣言！
+[1794652270][room:solo_6qucfhaz] 🛡️ バトル決着: [キャンティ] (AP1000) vs [小嶋元太] (AP4000) ➔ AP不足のためリムーブできず（守備成功）
+[1794652276][room:solo_6qucfhaz] 💡 player1 が ネクストヒント を使用（FILEから手札へ1枚回収）
+[1794652285][room:solo_6qucfhaz] 🃏 player1 が [シェリー] を登場させました
+[1794652285][room:solo_6qucfhaz] 🔍 [シェリー] の効果で山札の上から 4 枚めくりました
+[1794652288][room:solo_6qucfhaz] ✨ [シェリー] の効果でデッキから [ウォッカ] を手札に加え、残りをデッキ下に移しました
+[1794652309][room:solo_6qucfhaz] 💸 [シェリー] の効果/コスト: player1 が手札から [バーボン] をリムーブしました
+[1794652316][room:solo_6qucfhaz] 🔎 player1 の [シェリー] が 推理 を行いました（証拠 +1）
+[1794652317][room:solo_6qucfhaz] ⏭ player1 がターンを終了しました
+[1794652320][room:solo_6qucfhaz] 💸 [ジン] の効果/コスト: player1 が手札から [ウォッカ] をリムーブしました
+[1794652322][room:solo_6qucfhaz] 💥 [ジン] の効果で [灰原哀] をリムーブしました！
+[1794652322][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794652322][room:solo_6qucfhaz] 【ターン 10】player2 のターン開始
+[1794652322][room:solo_6qucfhaz] 📥 player2 はカードを1枚引き、FILEに 2 枚置きました
+[1794652322][room:solo_6qucfhaz] 🃏 player2 が [吉田歩美] (Lv.2) を登場させました
+[1794652322][room:solo_6qucfhaz] ⚡ player2 が [青の古城探索事件] の【宣言】を発動！
+[1794652322][room:solo_6qucfhaz] ✨ [青の古城探索事件] の効果で [小嶋元太] のAP +1000
+[1794652322][room:solo_6qucfhaz] 💡 player2 が ネクストヒント を使用（FILEから手札へ1枚回収）
+[1794652322][room:solo_6qucfhaz] 🃏 player2 が [小嶋元太] を登場させました
+[1794652322][room:solo_6qucfhaz] ⚠️ [小嶋元太] の登場時効果不発: FILEが5枚未満です（【FILE5】）
+[1794652322][room:solo_6qucfhaz] 💡 player2 が ネクストヒント を使用（FILEから手札へ1枚回収）
+[1794652322][room:solo_6qucfhaz] player2 はヒントからの登場をスキップしました
+[1794652322][room:solo_6qucfhaz] ⚔️ player2 の [小嶋元太] が player1 の [ウォッカ] に攻撃を仕掛けました！
+[1794652325][room:solo_6qucfhaz] player1 はガードを行いませんでした（スルー）
+[1794652325][room:solo_6qucfhaz] 💥 バトル決着: [小嶋元太] (AP5000) vs [ウォッカ] (AP5000) ➔ player1 の [ウォッカ] をリムーブ！
+[1794652325][room:solo_6qucfhaz] 🔎 player2 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794652325][room:solo_6qucfhaz] ⏭ player2 がターンを終了しました
+[1794652325][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794652325][room:solo_6qucfhaz] 【ターン 11】player1 のターン開始
+[1794652325][room:solo_6qucfhaz] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794652351][room:solo_6qucfhaz] 🔎 player1 の [ジン] が 推理 を行いました（証拠 +2）
+[1794652352][room:solo_6qucfhaz] 🔎 player1 の [ベルモット] が 推理 を行いました（証拠 +2）
+[1794652353][room:solo_6qucfhaz] 🎉 player1 が 事件解決 を宣言！
+[1794652353][room:solo_6qucfhaz] 🏆 【対戦終了】勝者: player1 (事件解決)
+[1794655182][room:default] ⚔️ 対戦開始！ 先攻: player1, 後攻: player2
+[1794655183][room:solo_hgg89uwk] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794655183][room:solo_hgg89uwk] 🃏 player2 が手札 5 枚を引き直しました
+[1794656674][room:solo_6qucfhaz] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794656674][room:solo_6qucfhaz] 🃏 player2 が手札 5 枚を引き直しました
+[1794656687][room:solo_6qucfhaz] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794656687][room:solo_6qucfhaz] 🃏 player2 が手札 4 枚を引き直しました
+[1794656712][room:solo_6qucfhaz] 🃏 player1 が手札 5 枚を引き直しました
+[1794656712][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794656712][room:solo_6qucfhaz] 【ターン 1】player2 のターン開始
+[1794656712][room:solo_6qucfhaz] 📥 player2 はカードを1枚引き、FILEに 1 枚置きました
+[1794656712][room:solo_6qucfhaz] 📜 player2 がイベント [小さくなった名探偵] (Lv.1) を使用しました
+[1794656712][room:solo_6qucfhaz] 🔍 [小さくなった名探偵] の効果で山札の上から 3 枚めくりました
+[1794656712][room:solo_6qucfhaz] ✨ [小さくなった名探偵] の効果でデッキから [灰原哀] を手札に加え、残りをデッキ下に移しました
+[1794656712][room:solo_6qucfhaz] ⚠️ [小さくなった名探偵] の効果: 条件を満たす有効な対象がいないためスキップされました
+[1794656712][room:solo_6qucfhaz] 🔎 player2 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794656712][room:solo_6qucfhaz] ⏭ player2 がターンを終了しました
+[1794656712][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794656712][room:solo_6qucfhaz] 【ターン 2】player1 のターン開始
+[1794656712][room:solo_6qucfhaz] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794656718][room:solo_6qucfhaz] 🔎 player1 の [シェリー] が 推理 を行いました（証拠 +1）
+[1794656719][room:solo_6qucfhaz] ⏭ player1 がターンを終了しました
+[1794656719][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794656719][room:solo_6qucfhaz] 【ターン 3】player2 のターン開始
+[1794656719][room:solo_6qucfhaz] 📥 player2 はカードを1枚引き、FILEに 2 枚置きました
+[1794656719][room:solo_6qucfhaz] 🃏 player2 が [灰原哀] (Lv.2) を登場させました
+[1794656719][room:solo_6qucfhaz] 🔎 player2 の [小さくなった新一] が 推理 を行いました（証拠 +1）
+[1794656719][room:solo_6qucfhaz] ⏭ player2 がターンを終了しました
+[1794656719][room:solo_6qucfhaz] ━━━━━━━━━━━━━━━━━━━━
+[1794656719][room:solo_6qucfhaz] 【ターン 4】player1 のターン開始
+[1794656719][room:solo_6qucfhaz] 📥 player1 はカードを1枚引き、FILEに 2 枚置きました
+[1794656723][room:solo_6qucfhaz] 🃏 player1 が [シェリー] (Lv.4) を登場させました
+[1794656723][room:solo_6qucfhaz] 🔍 [シェリー] の効果で山札の上から 4 枚めくりました
+[1794656731][room:solo_6qucfhaz] ✨ [シェリー] の効果でデッキから [烏丸蓮耶の影] を手札に加え、残りをデッキ下に移しました
+[1794656741][room:solo_6qucfhaz] 💸 [シェリー] の効果/コスト: player1 が手札から [ベルモット] をリムーブしました
+[1794656760][room:solo_6qucfhaz] 💸 [シェリー] の効果/コスト: player1 が手札から [ジン＆ウォッカ] をリムーブしました
+[1794659049][room:default] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794659049][room:default] 🃏 player2 が手札 4 枚を引き直しました
+[1794659050][room:solo_hgg89uwk] ⚔️ 対戦開始！ 先攻: player1, 後攻: player2
+[1794660213][room:default] ⚔️ 対戦開始！ 先攻: player1, 後攻: player2
+[1794660213][room:solo_hgg89uwk] ⚔️ 対戦開始！ 先攻: player1, 後攻: player2
+[1794661036][room:solo_6qucfhaz] ⚔️ 対戦開始！ 先攻: player1, 後攻: player2
+[1794666517][room:default] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794666517][room:default] 🃏 player2 が手札 4 枚を引き直しました
+[1794666517][room:solo_hgg89uwk] ⚔️ 対戦開始！ 先攻: player2, 後攻: player1
+[1794666517][room:solo_hgg89uwk] 🃏 player2 が手札 5 枚を引き直しました

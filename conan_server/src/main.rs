@@ -105,54 +105,96 @@ impl MatchRoom {
         self.flush_logs();
     }
 
+fn send_logs_to_gas_webhook(rows: Vec<Value>) {
+    let Ok(url) = std::env::var("GAS_LOG_WEBHOOK_URL") else {
+        return;
+    };
+    let url = url.trim().to_string();
+    if url.is_empty() {
+        return;
+    }
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        handle.spawn(async move {
+            let client = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(10))
+                .build();
+            let Ok(client) = client else {
+                return;
+            };
+            let payload = json!({ "rows": rows });
+            if let Err(e) = client.post(&url).json(&payload).send().await {
+                tracing::warn!("Failed to post logs to GAS webhook: {}", e);
+            }
+        });
+    }
+}
+
     fn flush_logs(&mut self) {
         use std::io::Write;
+        let mut webhook_rows: Vec<Value> = Vec::new();
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+
         if !self.engine.pending_file_logs.is_empty() {
             let _ = std::fs::create_dir_all("logs");
+            let lines: Vec<String> = self.engine.pending_file_logs.drain(..).collect();
             if let Ok(mut f) = std::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
                 .open("logs/all_rooms.log")
             {
-                let ts = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_secs())
-                    .unwrap_or(0);
-                for line in self.engine.pending_file_logs.drain(..) {
+                for line in &lines {
                     let _ = writeln!(f, "[{}][room:{}] {}", ts, self.room_id, line);
                 }
-            } else {
-                self.engine.pending_file_logs.clear();
+            }
+            for line in lines {
+                webhook_rows.push(json!({
+                    "timestamp": ts,
+                    "roomId": self.room_id,
+                    "type": "LOG",
+                    "message": line,
+                }));
             }
         }
         if !self.match_logged {
             if let Some(ref winner) = self.engine.winner_id {
                 self.match_logged = true;
                 let _ = std::fs::create_dir_all("logs");
+                let p1_ev = self.engine.players.get("player1").map(|p| p.evidence.len()).unwrap_or(0);
+                let p2_ev = self.engine.players.get("player2").map(|p| p.evidence.len()).unwrap_or(0);
+                let rec = json!({
+                    "timestamp": ts,
+                    "roomId": self.room_id,
+                    "p2IsCpu": self.p2_is_cpu,
+                    "winner": winner,
+                    "finishReason": self.engine.finish_reason,
+                    "turn": self.engine.turn,
+                    "p1Evidence": p1_ev,
+                    "p2Evidence": p2_ev,
+                });
                 if let Ok(mut f) = std::fs::OpenOptions::new()
                     .create(true)
                     .append(true)
                     .open("logs/matches.jsonl")
                 {
-                    let ts = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map(|d| d.as_secs())
-                        .unwrap_or(0);
-                    let p1_ev = self.engine.players.get("player1").map(|p| p.evidence.len()).unwrap_or(0);
-                    let p2_ev = self.engine.players.get("player2").map(|p| p.evidence.len()).unwrap_or(0);
-                    let rec = json!({
-                        "timestamp": ts,
-                        "roomId": self.room_id,
-                        "p2IsCpu": self.p2_is_cpu,
-                        "winner": winner,
-                        "finishReason": self.engine.finish_reason,
-                        "turn": self.engine.turn,
-                        "p1Evidence": p1_ev,
-                        "p2Evidence": p2_ev,
-                    });
                     let _ = writeln!(f, "{}", rec);
                 }
+                webhook_rows.push(json!({
+                    "timestamp": ts,
+                    "roomId": self.room_id,
+                    "type": "MATCH",
+                    "message": format!(
+                        "winner={} reason={:?} turn={} p1_ev={} p2_ev={} cpu={}",
+                        winner, self.engine.finish_reason, self.engine.turn, p1_ev, p2_ev, self.p2_is_cpu
+                    ),
+                }));
             }
+        }
+
+        if !webhook_rows.is_empty() {
+            Self::send_logs_to_gas_webhook(webhook_rows);
         }
     }
 
