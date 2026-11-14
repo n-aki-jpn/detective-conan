@@ -1,0 +1,14 @@
+{
+  "level_weight": 1160.5792554745,
+  "ap_weight": 1.4969402305494408,
+  "lp_weight": 509.5062437712779,
+  "rush_bonus": 1266.6863067844922,
+  "on_play_bonus": 1138.4356408934527,
+  "event_penalty": -347.8149771615102,
+  "removal_bonus": 585.0223842273056,
+  "assist_min_field": 2,
+  "deduce_lp_weight": 1000.0,
+  "attack_remove_weight": 1200.0,
+  "case_attack_bonus": 800.0,
+  "disguise_ap_threshold": 555
+}

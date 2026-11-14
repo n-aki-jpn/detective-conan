@@ -40,6 +40,7 @@ struct MatchRoom {
     p1_connected: bool,
     p2_connected: bool,
     created_at: std::time::Instant,
+    match_logged: bool,
 }
 
 impl MatchRoom {
@@ -57,6 +58,7 @@ impl MatchRoom {
             p1_connected: true,
             p2_connected: is_cpu,
             created_at: std::time::Instant::now(),
+            match_logged: false,
         };
 
         // 両プレイヤーの状態を初期化（クライアントでの観戦・表示用）
@@ -87,6 +89,8 @@ impl MatchRoom {
         engine.add_player("player2", &p2_deck);
         engine.start_match();
         self.engine = engine;
+        self.match_logged = false;
+        self.flush_logs();
     }
 
     fn reset_match(&mut self, catalog: &CardCatalog) {
@@ -96,7 +100,60 @@ impl MatchRoom {
         engine.add_player("player2", p2_deck);
         engine.start_match();
         self.engine = engine;
+        self.match_logged = false;
         self.process_cpu_if_needed();
+        self.flush_logs();
+    }
+
+    fn flush_logs(&mut self) {
+        use std::io::Write;
+        if !self.engine.pending_file_logs.is_empty() {
+            let _ = std::fs::create_dir_all("logs");
+            if let Ok(mut f) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("logs/all_rooms.log")
+            {
+                let ts = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
+                for line in self.engine.pending_file_logs.drain(..) {
+                    let _ = writeln!(f, "[{}][room:{}] {}", ts, self.room_id, line);
+                }
+            } else {
+                self.engine.pending_file_logs.clear();
+            }
+        }
+        if !self.match_logged {
+            if let Some(ref winner) = self.engine.winner_id {
+                self.match_logged = true;
+                let _ = std::fs::create_dir_all("logs");
+                if let Ok(mut f) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open("logs/matches.jsonl")
+                {
+                    let ts = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs())
+                        .unwrap_or(0);
+                    let p1_ev = self.engine.players.get("player1").map(|p| p.evidence.len()).unwrap_or(0);
+                    let p2_ev = self.engine.players.get("player2").map(|p| p.evidence.len()).unwrap_or(0);
+                    let rec = json!({
+                        "timestamp": ts,
+                        "roomId": self.room_id,
+                        "p2IsCpu": self.p2_is_cpu,
+                        "winner": winner,
+                        "finishReason": self.engine.finish_reason,
+                        "turn": self.engine.turn,
+                        "p1Evidence": p1_ev,
+                        "p2Evidence": p2_ev,
+                    });
+                    let _ = writeln!(f, "{}", rec);
+                }
+            }
+        }
     }
 
     fn process_cpu_if_needed(&mut self) {
@@ -123,6 +180,7 @@ impl MatchRoom {
             }
             steps += 1;
         }
+        self.flush_logs();
     }
 }
 
@@ -822,7 +880,23 @@ async fn handle_decision(
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
+    let args: Vec<String> = std::env::args().collect();
     let mgr = MatchManager::new().expect("MatchManager 初期化に失敗しました");
+
+    if args.get(1).map(|s| s.as_str()) == Some("train") {
+        let generations: usize = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(10);
+        let games_per_gen: usize = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(20);
+        agent::train_cpu_self_play(
+            &mgr.catalog,
+            &mgr.deck_def,
+            &mgr.deck_def,
+            generations,
+            games_per_gen,
+            "data/cpu_weights.json",
+        );
+        return Ok(());
+    }
+
     let shared_state: SharedState = Arc::new(Mutex::new(mgr));
 
     let static_dir = PathBuf::from("src/conan_engine/web/static");

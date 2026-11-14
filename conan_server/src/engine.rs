@@ -79,6 +79,7 @@ pub struct MatchEngine {
     pub finish_reason: Option<String>,
     pub action_context: Option<Value>,
     pub logs: Vec<String>,
+    pub pending_file_logs: Vec<String>,
 }
 
 fn normalize_color_set(raw_colors: &[String]) -> HashSet<String> {
@@ -119,11 +120,13 @@ impl MatchEngine {
             finish_reason: None,
             action_context: None,
             logs: vec![],
+            pending_file_logs: vec![],
         }
     }
 
     pub fn log(&mut self, msg: impl Into<String>) {
         let msg_str = msg.into();
+        self.pending_file_logs.push(msg_str.clone());
         self.logs.push(msg_str);
         if self.logs.len() > 500 {
             self.logs.drain(0..100);
