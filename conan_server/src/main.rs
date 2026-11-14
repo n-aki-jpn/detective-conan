@@ -158,13 +158,6 @@ impl MatchManager {
         let catalog = CardCatalog::load_from_json(&catalog_path)?;
         let deck_def = Self::load_deck(&deck_path)?;
 
-        let default_saved = decks_dir.join("default.json");
-        if !default_saved.exists() {
-            if let Ok(content) = serde_json::to_string_pretty(&deck_def) {
-                let _ = std::fs::write(&default_saved, content);
-            }
-        }
-
         let mut mgr = MatchManager {
             deck_path,
             decks_dir,

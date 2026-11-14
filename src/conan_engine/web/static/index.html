@@ -1342,11 +1342,19 @@
           style="display:none; background:#7f1d1d; color:#fca5a5; padding:6px 10px; border-radius:6px; font-size:0.75rem; font-weight:bold; line-height:1.3;">
         </div>
 
-        <div style="display:flex; gap:6px; margin-top:2px;">
-          <button class="btn btn-success" onclick="saveAndApplyDeck()" style="flex:1;">
+        <div style="display:flex; gap:6px; margin-top:2px; flex-wrap:wrap;">
+          <button class="btn btn-success" onclick="saveAndApplyDeck()" style="flex:1; min-width:120px;">
             💾 デッキ保存
           </button>
-          <button id="btn-publish-deck" class="btn" onclick="publishOfficialDeck()" style="background:#0284c7; flex:1;"
+          <button class="btn btn-secondary" onclick="openDeckShareModal('export')" style="flex:1; min-width:110px; border-color:#22c55e; color:#86efac;"
+            title="LINEやメッセージで送れる共有コードを作成">
+            📤 共有/書出
+          </button>
+          <button class="btn btn-secondary" onclick="openDeckShareModal('import')" style="flex:1; min-width:110px; border-color:#38bdf8; color:#7dd3fc;"
+            title="共有コードやメッセージからデッキを読み込む">
+            📥 読込/ｲﾝﾎﾟｰﾄ
+          </button>
+          <button id="btn-publish-deck" class="btn" onclick="publishOfficialDeck()" style="background:#0284c7; flex:1; min-width:120px;"
             title="タカラトミー公式デッキレシピコードを発行">
             🌐 公式コード発行
           </button>
@@ -1492,6 +1500,48 @@
       <div class="modal-footer" style="justify-content:flex-end; margin-top:10px;">
         <button class="btn btn-secondary" onclick="closeZoneModal()"
           style="padding:5px 14px; font-size:0.8rem; min-height:30px;">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Deck Share / Export & Import Modal -->
+  <div id="deck-share-modal" class="card-modal-backdrop" onclick="closeDeckShareModal()">
+    <div class="card-modal-content" style="max-width:480px; width:92%;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <span class="modal-title" style="color:#38bdf8;">📤 デッキ共有（エクスポート / インポート）</span>
+        <button class="qty-btn" onclick="closeDeckShareModal()">✕</button>
+      </div>
+      <div style="display:flex; gap:6px; margin-bottom:10px;">
+        <button id="tab-share-export" class="view-toggle-btn active" onclick="switchShareModalMode('export')" style="flex:1;">📤 エクスポート（送る）</button>
+        <button id="tab-share-import" class="view-toggle-btn" onclick="switchShareModalMode('import')" style="flex:1;">📥 インポート（受け取る）</button>
+      </div>
+
+      <div id="share-export-pane" style="display:flex; flex-direction:column; gap:8px;">
+        <div style="font-size:0.74rem; color:var(--text-muted);">
+          下のメッセージをコピーして LINE 等でそのまま送れます。相手は「インポート」に貼り付けるだけでデッキを取り込めます。
+        </div>
+        <textarea id="share-export-text" readonly rows="5"
+          style="width:100%; background:#0f172a; color:#e2e8f0; border:1px solid var(--border-color); border-radius:6px; padding:8px; font-size:0.75rem; font-family:monospace; resize:vertical;"></textarea>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="btn btn-success" onclick="copyShareText()" style="flex:1;">📋 コピーする</button>
+          <a id="share-line-link" href="#" target="_blank" rel="noopener noreferrer" class="btn"
+            style="flex:1; background:#06c755; color:white; text-decoration:none; display:flex; align-items:center; justify-content:center; font-weight:bold;">
+            💬 LINEで送る
+          </a>
+        </div>
+      </div>
+
+      <div id="share-import-pane" style="display:none; flex-direction:column; gap:8px;">
+        <div style="font-size:0.74rem; color:var(--text-muted);">
+          LINE等で受け取った共有メッセージ（<code>CONAN1:...</code> を含む文章全体でもOK）やデッキJSONを貼り付けてください。
+        </div>
+        <textarea id="share-import-text" rows="5" placeholder="例:&#10;【名探偵コナンTCG デッキ共有】&#10;デッキ名: 探偵団&#10;CONAN1:..."
+          style="width:100%; background:#0f172a; color:#f8fafc; border:1px solid var(--border-color); border-radius:6px; padding:8px; font-size:0.75rem; font-family:monospace; resize:vertical;"></textarea>
+        <button class="btn" onclick="importSharedDeck()" style="background:#0284c7; width:100%;">📥 デッキを取り込む</button>
+      </div>
+
+      <div class="modal-footer" style="justify-content:flex-end; margin-top:10px;">
+        <button class="btn btn-secondary" onclick="closeDeckShareModal()" style="padding:5px 14px; font-size:0.8rem; min-height:30px;">閉じる</button>
       </div>
     </div>
   </div>
@@ -3388,6 +3438,7 @@
       setActiveStoredDeckId(chosenId);
       renderSavedDecksDropdown(decks);
 
+      if (typeof loadBattleDecks === 'function') loadBattleDecks();
       // 2. サーバー側メモリの対戦盤面に反映
       try {
         const res = await fetch('/api/save_deck', {
@@ -3414,6 +3465,159 @@
     function closePublishModal() {
       const m = document.getElementById('publish-modal');
       if (m) m.style.display = 'none';
+    }
+
+    function encodeDeckShareCode(deckObj) {
+      const compact = {
+        n: deckObj.deckName || '共有デッキ',
+        p: deckObj.partnerId || '',
+        c: deckObj.caseId || '',
+        m: (deckObj.mainDeck || []).map(x => `${x.definitionId}:${x.count}`).join(','),
+      };
+      const jsonStr = JSON.stringify(compact);
+      const bytes = new TextEncoder().encode(jsonStr);
+      let bin = '';
+      bytes.forEach(b => { bin += String.fromCharCode(b); });
+      const b64 = btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      return `CONAN1:${b64}`;
+    }
+
+    function decodeDeckShareText(rawText) {
+      const text = (rawText || '').trim();
+      if (!text) throw new Error('共有コードまたはテキストを入力してください。');
+      const m = text.match(/CONAN1:([A-Za-z0-9_-]+)/);
+      if (m) {
+        let b64 = m[1].replace(/-/g, '+').replace(/_/g, '/');
+        while (b64.length % 4) b64 += '=';
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const jsonStr = new TextDecoder().decode(bytes);
+        const compact = JSON.parse(jsonStr);
+        const mainDeck = (compact.m || '').split(',').filter(Boolean).map(pair => {
+          const [definitionId, cntStr] = pair.split(':');
+          return { definitionId, count: parseInt(cntStr, 10) || 1 };
+        });
+        return {
+          deckName: compact.n || 'インポートデッキ',
+          partnerId: compact.p || '',
+          caseId: compact.c || '',
+          mainDeck,
+        };
+      }
+      const parsed = JSON.parse(text);
+      if (!parsed || !Array.isArray(parsed.mainDeck)) {
+        throw new Error('有効な共有コード（CONAN1:...）またはデッキJSONが見つかりません。');
+      }
+      return parsed;
+    }
+
+    function openDeckShareModal(mode = 'export') {
+      const modal = document.getElementById('deck-share-modal');
+      if (!modal) return;
+      modal.style.display = 'flex';
+      switchShareModalMode(mode);
+    }
+
+    function closeDeckShareModal() {
+      const modal = document.getElementById('deck-share-modal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    function switchShareModalMode(mode) {
+      const expPane = document.getElementById('share-export-pane');
+      const impPane = document.getElementById('share-import-pane');
+      const expTab = document.getElementById('tab-share-export');
+      const impTab = document.getElementById('tab-share-import');
+      if (expPane) expPane.style.display = mode === 'export' ? 'flex' : 'none';
+      if (impPane) impPane.style.display = mode === 'import' ? 'flex' : 'none';
+      if (expTab) expTab.classList.toggle('active', mode === 'export');
+      if (impTab) impTab.classList.toggle('active', mode === 'import');
+
+      if (mode === 'export') {
+        const mainList = [];
+        let total = 0;
+        for (const defId in deckQtyMap) {
+          const cnt = deckQtyMap[defId];
+          if (cnt > 0) {
+            total += cnt;
+            mainList.push({ definitionId: defId, count: cnt });
+          }
+        }
+        const deckNameInput = document.getElementById('builder-deck-name');
+        const deckName = (deckNameInput && deckNameInput.value.trim()) || currentDeckDef.deckName || 'マイデッキ';
+        const code = encodeDeckShareCode({
+          deckName,
+          partnerId: currentDeckDef.partnerId,
+          caseId: currentDeckDef.caseId,
+          mainDeck: mainList,
+        });
+        const shareText = `【名探偵コナンTCG デッキ共有】\nデッキ名: ${deckName} (${total}枚)\n${code}`;
+        const ta = document.getElementById('share-export-text');
+        if (ta) ta.value = shareText;
+        const lineLink = document.getElementById('share-line-link');
+        if (lineLink) lineLink.href = `https://line.me/R/msg/text/?${encodeURIComponent(shareText)}`;
+      }
+    }
+
+    async function copyShareText() {
+      const ta = document.getElementById('share-export-text');
+      if (!ta || !ta.value) return;
+      try {
+        await navigator.clipboard.writeText(ta.value);
+        alert('共有メッセージをコピーしました！LINE等に貼り付けて送信してください。');
+      } catch (e) {
+        ta.select();
+        document.execCommand('copy');
+        alert('共有メッセージをコピーしました！');
+      }
+    }
+
+    async function importSharedDeck() {
+      const ta = document.getElementById('share-import-text');
+      if (!ta) return;
+      try {
+        const imported = decodeDeckShareText(ta.value);
+        if (!imported.partnerId || !imported.caseId) {
+          alert('パートナーまたは事件カードの情報が不足しています。');
+          return;
+        }
+        const newId = 'deck_' + Date.now();
+        const newDeck = {
+          deckId: newId,
+          deckName: imported.deckName || 'インポートデッキ',
+          catalogVersion: currentDeckDef.catalogVersion || 'official-raw-v1',
+          partnerId: imported.partnerId,
+          caseId: imported.caseId,
+          mainDeck: imported.mainDeck,
+        };
+
+        const decks = getStoredDecks();
+        decks.push(newDeck);
+        saveStoredDecks(decks);
+        setActiveStoredDeckId(newId);
+
+        currentDeckDef = JSON.parse(JSON.stringify(newDeck));
+        deckQtyMap = {};
+        (currentDeckDef.mainDeck || []).forEach(item => {
+          if (item.count > 0) deckQtyMap[item.definitionId] = item.count;
+        });
+
+        const nameInput = document.getElementById('builder-deck-name');
+        if (nameInput) nameInput.value = currentDeckDef.deckName;
+
+        renderSavedDecksDropdown(decks);
+        populateFixedSelects();
+        updateBuilderSummary();
+        renderBuilderCatalog();
+        if (typeof loadBattleDecks === 'function') loadBattleDecks(newId);
+
+        closeDeckShareModal();
+        ta.value = '';
+        alert(`「${newDeck.deckName}」を取り込みました！\n（そのまま対戦画面で選択したり、編集・保存ができます）`);
+      } catch (e) {
+        alert(`インポートに失敗しました:\n${e.message}`);
+      }
     }
 
     function showPublishModal(code, url) {
