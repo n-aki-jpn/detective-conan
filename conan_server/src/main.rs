@@ -1922,6 +1922,23 @@ mod tests {
             "value": {"type": "HAND_PLAY", "cardId": "h_b04005"}
         }));
 
+        // B04005: 2枚ドロー後、手札を2枚選ぶ DISCARD_HAND が開く
+        let pd_disc = engine.pending_decision.as_ref().unwrap().clone();
+        assert_eq!(pd_disc["kind"], "targetSelect");
+        assert_eq!(pd_disc["options"]["effectType"], "DISCARD_HAND");
+        assert_eq!(pd_disc["options"]["maxSelect"], 2);
+        assert_eq!(pd_disc["options"]["optional"], false);
+
+        let cands = pd_disc["options"]["candidates"].as_array().unwrap();
+        assert_eq!(cands.len(), 2);
+        let ids: Vec<&str> = cands.iter().map(|c| c["instanceId"].as_str().unwrap()).collect();
+        let disc_id = pd_disc["decisionId"].as_str().unwrap().to_string();
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": disc_id,
+            "revision": engine.revision,
+            "value": {"targetIds": ids, "actorId": "h_b04005", "effectType": "DISCARD_HAND"}
+        }));
+
         let ps1_after = engine.players.get("p1").unwrap();
         assert_eq!(ps1_after.deck.len(), 0);
         assert_eq!(ps1_after.remove.len(), 2);
@@ -2351,6 +2368,125 @@ mod tests {
             "value": {"targetId": "h_dt", "actorId": "h_ev", "effectType": "PLAY_FROM_HAND"}
         }));
         assert!(engine.players.get("p1").unwrap().field.iter().any(|c| c.instance_id == "h_dt"));
+    }
+
+    #[test]
+    fn test_interactive_hand_discard_cost_optional_and_deck_search() {
+        let catalog = load_test_catalog();
+        let mut engine = engine::MatchEngine::new(catalog);
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        let ps2 = engine::PlayerState::new("p2".to_string());
+        ps1.partner = Some(test_inst("p1_partner", "B01001", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE)); // 青
+        ps1.r#case = Some(test_inst("p1_case", "B01002", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        for i in 0..8 {
+            ps1.file.push(test_inst(&format!("f{}", i), "B01021", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+        }
+
+        // 1) B01007 (【パートナー青】【宣言】〚手札を1枚リムーブする〛：AP+1000 & 突撃)
+        ps1.field.push(test_inst("f_ran", "B01007", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        ps1.hand.push(test_inst("h_keep", "B01021", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        ps1.hand.push(test_inst("h_drop", "B01020", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        engine.prompt_main_action("p1");
+        let pd1 = engine.pending_decision.as_ref().unwrap().clone();
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd1["decisionId"],
+            "revision": engine.revision,
+            "value": {"type": "DECLARE", "actorId": "f_ran"}
+        }));
+
+        // コストの手札1枚をプレイヤーが選べること
+        let pd_cost = engine.pending_decision.as_ref().unwrap().clone();
+        assert_eq!(pd_cost["kind"], "targetSelect");
+        assert_eq!(pd_cost["options"]["effectType"], "DISCARD_HAND");
+        assert_eq!(pd_cost["options"]["optional"], false);
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd_cost["decisionId"],
+            "revision": engine.revision,
+            "value": {"targetId": "h_drop", "actorId": "f_ran", "effectType": "DISCARD_HAND"}
+        }));
+
+        let ps1_after_decl = engine.players.get("p1").unwrap();
+        assert!(ps1_after_decl.hand.iter().any(|c| c.instance_id == "h_keep"));
+        assert!(ps1_after_decl.remove.iter().any(|c| c.instance_id == "h_drop"));
+        let ran = ps1_after_decl.field.iter().find(|c| c.instance_id == "f_ran").unwrap();
+        assert_eq!(ran.temp_ap_bonus, 1000);
+        assert!(ran.has_rush);
+
+        // 2) PR041 (【登場時】手札から【緑】のイベントを1枚リムーブしてもよい。そうした場合、カードを2枚引く。)
+        {
+            let ps1_mut = engine.players.get_mut("p1").unwrap();
+            ps1_mut.hand.push(test_inst("h_pr041", "PR041", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+            ps1_mut.hand.push(test_inst("h_green_ev", "B04026", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE)); // 緑イベント
+            ps1_mut.deck.push(test_inst("d1", "B01021", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+            ps1_mut.deck.push(test_inst("d2", "B01021", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        }
+        let pd2 = engine.pending_decision.as_ref().unwrap().clone();
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd2["decisionId"],
+            "revision": engine.revision,
+            "value": {"type": "HAND_PLAY", "cardId": "h_pr041"}
+        }));
+
+        let pd_opt = engine.pending_decision.as_ref().unwrap().clone();
+        assert_eq!(pd_opt["kind"], "targetSelect");
+        assert_eq!(pd_opt["options"]["effectType"], "DISCARD_HAND");
+        assert_eq!(pd_opt["options"]["optional"], true);
+        let opt_cands = pd_opt["options"]["candidates"].as_array().unwrap();
+        let opt_ids: Vec<&str> = opt_cands.iter().filter_map(|c| c["instanceId"].as_str()).collect();
+        assert!(opt_ids.contains(&"h_green_ev"), "【緑】イベントは候補に含まれる");
+        assert!(!opt_ids.contains(&"h_keep"), "【青】キャラは候補に含まれない");
+
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd_opt["decisionId"],
+            "revision": engine.revision,
+            "value": {"targetId": "h_green_ev", "actorId": "h_pr041", "effectType": "DISCARD_HAND"}
+        }));
+        let ps1_after_pr = engine.players.get("p1").unwrap();
+        assert!(ps1_after_pr.remove.iter().any(|c| c.instance_id == "h_green_ev"));
+        // h_keep(1) + d1 + d2 = 3枚
+        assert_eq!(ps1_after_pr.hand.len(), 3);
+
+        // 3) B01016 (【登場時】デッキ4枚見て【青】手札に加え、加えた場合手札を1枚リムーブ)
+        {
+            let ps1_mut = engine.players.get_mut("p1").unwrap();
+            ps1_mut.normal_hand_played_this_turn = false;
+            ps1_mut.hand.push(test_inst("h_b01016", "B01016", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+            for i in 0..4 {
+                ps1_mut.deck.push(test_inst(&format!("ds_{}", i), "B01021", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+            }
+        }
+        let pd3 = engine.pending_decision.as_ref().unwrap().clone();
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd3["decisionId"],
+            "revision": engine.revision,
+            "value": {"type": "HAND_PLAY", "cardId": "h_b01016"}
+        }));
+        let pd_ds = engine.pending_decision.as_ref().unwrap().clone();
+        assert_eq!(pd_ds["kind"], "deckSearch");
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd_ds["decisionId"],
+            "revision": engine.revision,
+            "value": {"chosenCardId": "ds_0", "actorId": "h_b01016"}
+        }));
+
+        // 手札に加えたあと、捨てる手札をプレイヤーが選べる targetSelect (DISCARD_HAND) が開くこと！
+        let pd_post_disc = engine.pending_decision.as_ref().unwrap().clone();
+        assert_eq!(pd_post_disc["kind"], "targetSelect");
+        assert_eq!(pd_post_disc["options"]["effectType"], "DISCARD_HAND");
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd_post_disc["decisionId"],
+            "revision": engine.revision,
+            "value": {"targetId": "ds_0", "actorId": "h_b01016", "effectType": "DISCARD_HAND"}
+        }));
+        assert!(engine.players.get("p1").unwrap().remove.iter().any(|c| c.instance_id == "ds_0"));
     }
 }
 

@@ -52,6 +52,7 @@ pub enum TargetAction {
     ReviveSleep,
     RecoverToHand,
     PlayFromHand,
+    DiscardHand,
 }
 
 impl TargetAction {
@@ -70,6 +71,7 @@ impl TargetAction {
             TargetAction::ReviveSleep => "REVIVE_SLEEP",
             TargetAction::RecoverToHand => "RECOVER_TO_HAND",
             TargetAction::PlayFromHand => "PLAY_FROM_HAND",
+            TargetAction::DiscardHand => "DISCARD_HAND",
         }
     }
 
@@ -84,12 +86,13 @@ impl TargetAction {
                 | TargetAction::ReviveSleep
                 | TargetAction::RecoverToHand
                 | TargetAction::PlayFromHand
+                | TargetAction::DiscardHand
         )
     }
 }
 
 /// デッキ公開後の処理種別
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DeckPickAction {
     ToHand,
     PlayActive,
@@ -148,6 +151,7 @@ impl Default for TargetFilter {
 pub struct ClauseCost {
     pub requires_sleep: bool,
     pub hand_remove: usize,
+    pub hand_filter: Option<TargetFilter>,
     pub evidence_remove: usize,
     pub evidence_flip_up: usize,
     pub file_remove: usize,
@@ -160,6 +164,8 @@ pub struct ClauseCost {
 pub enum ImmediateOp {
     Draw(usize),
     DiscardHand(usize),
+    DiscardFilteredHand { count: usize, filter: TargetFilter },
+    OptionalDiscardHand { count: usize, filter: Option<TargetFilter> },
     GainEvidence(usize),
     FlipEvidenceUp(usize),
     FlipEvidenceDown(usize),
@@ -183,7 +189,7 @@ pub struct TargetStep {
 }
 
 /// デッキサーチステップ
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeckSearchStep {
     pub search_count: usize,
     pub pick_action: DeckPickAction,
@@ -194,7 +200,7 @@ pub struct DeckSearchStep {
 }
 
 /// 1つの能力句（clause）の解析結果
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ParsedClausePlan {
     pub immediate_before: Vec<ImmediateOp>,
     pub target_step: Option<TargetStep>,
@@ -589,7 +595,9 @@ pub fn parse_clause_cost(clause: &str) -> ClauseCost {
     if let Some(colon_idx) = clean.find('：') {
         let prefix = &clean[..colon_idx];
         cost.requires_sleep = prefix.contains("【スリープ】");
-        cost.hand_remove = extract_count_around(prefix, "手札を", "枚リムーブ");
+        let (hc, hf) = extract_hand_remove_spec(prefix);
+        cost.hand_remove = hc;
+        cost.hand_filter = hf;
         cost.evidence_remove = extract_count_around(prefix, "証拠を", "つリムーブ");
         cost.evidence_flip_up = extract_count_around(prefix, "裏向きの証拠を", "つ表向き");
         cost.file_remove = extract_count_around(prefix, "FILEを", "枚リムーブ")
@@ -599,13 +607,35 @@ pub fn parse_clause_cost(clause: &str) -> ClauseCost {
     } else if let Some(opt_idx) = clean.find("てもよい。そうした場合、") {
         let opt_prefix = &clean[..opt_idx];
         let seg = opt_prefix.rsplit('。').next().unwrap_or(opt_prefix);
-        cost.hand_remove = extract_count_around(seg, "手札を", "枚リムーブ");
         cost.evidence_remove = extract_count_around(seg, "証拠を", "つリムーブ");
         cost.evidence_flip_up = extract_count_around(seg, "裏向きの証拠を", "つ表向き");
         cost.file_remove = extract_count_around(seg, "FILEを", "枚リムーブ");
     }
 
     cost
+}
+
+/// `"手札をN枚リムーブ"` / `"手札から<条件>をN枚リムーブ"` を解析する
+pub fn extract_hand_remove_spec(text: &str) -> (usize, Option<TargetFilter>) {
+    let simple = extract_count_around(text, "手札を", "枚リムーブ");
+    if simple > 0 {
+        return (simple, None);
+    }
+    if let Some(start) = text.find("手札から") {
+        let rest = &text[start..];
+        if let Some(rem_idx) = rest.find("リムーブ") {
+            let scope = &rest[..rem_idx];
+            let n = extract_count_around(scope, "を", "枚");
+            if n > 0 {
+                let mut f = parse_target_filter(scope, TargetZone::Hand, true, None);
+                f.owner = OwnerScope::SelfOnly;
+                f.zone = TargetZone::Hand;
+                f.count = n;
+                return (n, Some(f));
+            }
+        }
+    }
+    (0, None)
 }
 
 /// 能力句の解決プラン（事前処理・対象選択・デッキサーチ・事後効果）を解析する
@@ -624,8 +654,19 @@ pub fn parse_effect_steps(
         strip_leading_tags(&clean)
     };
 
-    // 「〜してもよい。そうした場合、〜」の前提コスト部をスキップ
+    // 「〜してもよい。そうした場合、〜」の前提コスト部を解析（任意手札リムーブはプレイヤー選択に委ねる）
     let effect_body = if let Some(idx) = after_colon.find("てもよい。そうした場合、") {
+        let opt_prefix = &after_colon[..idx];
+        let seg = opt_prefix.rsplit('。').next().unwrap_or(opt_prefix);
+        if !seg.contains("相手") {
+            let (hc, hf) = extract_hand_remove_spec(seg);
+            if hc > 0 {
+                plan.immediate_before.push(ImmediateOp::OptionalDiscardHand {
+                    count: hc,
+                    filter: hf,
+                });
+            }
+        }
         &after_colon[idx + "てもよい。そうした場合、".len()..]
     } else {
         after_colon
@@ -1430,9 +1471,18 @@ pub fn parse_immediate_ops(sentence: &str) -> Vec<ImmediateOp> {
             ops.push(ImmediateOp::Draw(draw));
         }
 
-        let discard = extract_count_around(p, "手札を", "枚リムーブ");
-        if discard > 0 {
-            ops.push(ImmediateOp::DiscardHand(discard));
+        if !p.contains("相手") {
+            let (discard, hand_filter) = extract_hand_remove_spec(p);
+            if discard > 0 {
+                if let Some(hf) = hand_filter {
+                    ops.push(ImmediateOp::DiscardFilteredHand {
+                        count: discard,
+                        filter: hf,
+                    });
+                } else {
+                    ops.push(ImmediateOp::DiscardHand(discard));
+                }
+            }
         }
 
         if p.contains("相手の証拠") && p.contains("リムーブ") {
@@ -1476,13 +1526,14 @@ pub fn parse_immediate_ops(sentence: &str) -> Vec<ImmediateOp> {
             ops.push(ImmediateOp::SelfActivate);
         }
 
-        if p.contains("このキャラは〚突撃［事件］〛") {
-            ops.push(ImmediateOp::SelfGiveRush(Some("CASE".to_string())));
-        } else if p.contains("このキャラは〚突撃［キャラ］〛") {
-            ops.push(ImmediateOp::SelfGiveRush(Some("CHAR".to_string())));
-        } else if p.contains("このキャラは〚突撃〛") || p.contains("このキャラは〚迅速〛")
-        {
-            ops.push(ImmediateOp::SelfGiveRush(None));
+        if !p.contains("与える") && (p.contains("このキャラ") || sentence.contains("このキャラ")) {
+            if p.contains("〚突撃［事件］〛") {
+                ops.push(ImmediateOp::SelfGiveRush(Some("CASE".to_string())));
+            } else if p.contains("〚突撃［キャラ］〛") {
+                ops.push(ImmediateOp::SelfGiveRush(Some("CHAR".to_string())));
+            } else if p.contains("〚突撃〛") || p.contains("〚迅速〛") {
+                ops.push(ImmediateOp::SelfGiveRush(None));
+            }
         }
     }
     ops

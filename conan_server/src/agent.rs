@@ -347,27 +347,28 @@ impl RandomAgent {
             "targetSelect" => {
                 let actor_id = opts.get("actorId").and_then(|v| v.as_str()).unwrap_or("");
                 let effect_type = opts.get("effectType").and_then(|v| v.as_str()).unwrap_or("");
+                let max_select = opts.get("maxSelect").and_then(|v| v.as_u64()).unwrap_or(1).max(1) as usize;
                 if let Some(candidates) = opts.get("candidates").and_then(|v| v.as_array()) {
-                    // 相手への妨害も味方へのバフも、候補の中で最もAP（次いでレベル）が高い対象を選ぶのが基本最適
-                    let mut best_tid: Option<&str> = None;
-                    let mut best_score = i32::MIN;
-                    for cand in candidates {
-                        let tid = match cand.get("instanceId").and_then(|v| v.as_str()) {
-                            Some(s) => s,
-                            None => continue,
-                        };
-                        let ap = cand.get("ap").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-                        let lvl = cand.get("level").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-                        let score = ap + lvl * 500;
-                        if score > best_score {
-                            best_score = score;
-                            best_tid = Some(tid);
-                        }
+                    let mut scored: Vec<(&str, i32)> = candidates
+                        .iter()
+                        .filter_map(|cand| {
+                            let tid = cand.get("instanceId").and_then(|v| v.as_str())?;
+                            let ap = cand.get("ap").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                            let lvl = cand.get("level").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                            Some((tid, ap + lvl * 500))
+                        })
+                        .collect();
+                    if effect_type == "DISCARD_HAND" {
+                        scored.sort_by_key(|&(_, s)| s);
+                    } else {
+                        scored.sort_by(|a, b| b.1.cmp(&a.1));
                     }
-                    if let Some(tid) = best_tid {
+                    let chosen_ids: Vec<&str> = scored.into_iter().take(max_select).map(|(id, _)| id).collect();
+                    if let Some(&first_id) = chosen_ids.first() {
                         return json!({
                             "value": {
-                                "targetId": tid,
+                                "targetId": first_id,
+                                "targetIds": chosen_ids,
                                 "actorId": actor_id,
                                 "effectType": effect_type
                             }
@@ -377,6 +378,7 @@ impl RandomAgent {
                 json!({
                     "value": {
                         "targetId": null,
+                        "targetIds": [],
                         "actorId": actor_id,
                         "effectType": effect_type
                     }
@@ -543,12 +545,17 @@ impl RandomAgent {
             "targetSelect" => {
                 let actor_id = opts.get("actorId").and_then(|v| v.as_str()).unwrap_or("");
                 let effect_type = opts.get("effectType").and_then(|v| v.as_str()).unwrap_or("");
+                let max_select = opts.get("maxSelect").and_then(|v| v.as_u64()).unwrap_or(1).max(1) as usize;
                 if let Some(candidates) = opts.get("candidates").and_then(|v| v.as_array()) {
-                    if let Some(chosen) = candidates.choose(&mut rng) {
-                        let tid = chosen.get("instanceId").and_then(|v| v.as_str());
+                    let chosen_ids: Vec<&str> = candidates
+                        .choose_multiple(&mut rng, max_select.min(candidates.len()))
+                        .filter_map(|c| c.get("instanceId").and_then(|v| v.as_str()))
+                        .collect();
+                    if let Some(&first_id) = chosen_ids.first() {
                         return json!({
                             "value": {
-                                "targetId": tid,
+                                "targetId": first_id,
+                                "targetIds": chosen_ids,
                                 "actorId": actor_id,
                                 "effectType": effect_type
                             }
@@ -558,6 +565,7 @@ impl RandomAgent {
                 json!({
                     "value": {
                         "targetId": null,
+                        "targetIds": [],
                         "actorId": actor_id,
                         "effectType": effect_type
                     }

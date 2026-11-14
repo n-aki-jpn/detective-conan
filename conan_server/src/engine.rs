@@ -3,8 +3,9 @@ use crate::effects::{
     branch_matches, branch_matches_with_ctx, card_matches_filter_with_ctx,
     check_clause_conditions, check_disguise_conditions, compute_passive_ap_bonus, extract_clauses,
     parse_branches_from_phrase, parse_clause_cost, parse_effect_steps, parse_immediate_ops,
-    resolve_state_branch, DeckPickAction, ImmediateOp, OwnerScope, ParsedClausePlan,
-    PlayerCondInfo, TargetAction, TargetFilter, TargetStep, TargetZone, TriggerKind,
+    resolve_state_branch, DeckPickAction, DeckSearchStep, ImmediateOp, OwnerScope,
+    ParsedClausePlan, PlayerCondInfo, TargetAction, TargetFilter, TargetStep, TargetZone,
+    TriggerKind,
 };
 use crate::models::{
     CardInstance, CardOrientation, CardType, CasePhase, DeckDefinition, MatchPhase, Zone,
@@ -1160,7 +1161,8 @@ impl MatchEngine {
         };
 
         let cost = parse_clause_cost(&clause);
-        if !self.pay_clause_cost(player_id, actor_id, &cost) {
+        let pay_auto = cost.hand_remove == 0;
+        if !self.pay_clause_cost_internal(player_id, actor_id, &cost, pay_auto) {
             self.prompt_main_action(player_id);
             return;
         }
@@ -1184,6 +1186,26 @@ impl MatchEngine {
         self.log(format!("⚡ {} が [{}] の【宣言】を発動！", player_id, card_name));
         let resolved_clause = resolve_state_branch(&clause, ori);
         let plan = parse_effect_steps(&resolved_clause, None, def.card_type);
+        if cost.hand_remove > 0 {
+            if self.prompt_hand_discard(
+                player_id,
+                actor_id,
+                &card_name,
+                Some(def.level),
+                cost.hand_remove,
+                cost.hand_filter.as_ref(),
+                false,
+                false,
+                &[],
+                None,
+                None,
+                Some(&plan),
+                "MAIN",
+                None,
+            ) {
+                return;
+            }
+        }
         if self.execute_clause_plan(player_id, actor_id, &card_name, Some(def.level), &plan, "MAIN", None) {
             return;
         }
@@ -1227,11 +1249,54 @@ impl MatchEngine {
             })
             .unwrap_or_default();
 
+        let max_select = opts.get("maxSelect").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
+        let abort_on_skip = opts.get("abortOnSkip").and_then(|v| v.as_bool()).unwrap_or(false);
+        let mut selected_ids: Vec<String> = Vec::new();
+        if let Some(arr) = val.get("targetIds").and_then(|v| v.as_array()) {
+            for item in arr {
+                if let Some(s) = item.as_str() {
+                    if !selected_ids.iter().any(|x| x == s) {
+                        selected_ids.push(s.to_string());
+                    }
+                }
+            }
+        } else if let Some(tid) = target_id {
+            selected_ids.push(tid.to_string());
+        }
+        selected_ids.truncate(max_select.max(1));
+
         let mut deployed_on_play: Option<(String, String)> = None;
         let mut chosen_def_for_cond: Option<String> = None;
         let mut applied = false;
 
-        if let Some(tid) = target_id {
+        if effect_type == "DISCARD_HAND" {
+            let valid_chosen: Vec<String> = selected_ids
+                .into_iter()
+                .filter(|id| valid_candidate_ids.is_empty() || valid_candidate_ids.contains(id))
+                .collect();
+            if valid_chosen.is_empty() {
+                self.log(format!("{} は手札をリムーブしませんでした", player_id));
+            } else {
+                let mut discarded_defs = Vec::new();
+                if let Some(ps) = self.players.get_mut(player_id) {
+                    for cid in &valid_chosen {
+                        if let Some(pos) = ps.hand.iter().position(|c| &c.instance_id == cid) {
+                            let mut c = ps.hand.remove(pos);
+                            c.zone = Zone::REMOVE;
+                            discarded_defs.push(c.definition_id.clone());
+                            ps.remove.push(c);
+                        }
+                    }
+                }
+                if !discarded_defs.is_empty() {
+                    applied = true;
+                    for did in discarded_defs {
+                        let cname = self.card_name_by_def(&did);
+                        self.log(format!("💸 [{}] の効果/コスト: {} が手札から [{}] をリムーブしました", actor_name, player_id, cname));
+                    }
+                }
+            }
+        } else if let Some(tid) = selected_ids.first().map(|s| s.as_str()) {
             if !valid_candidate_ids.is_empty() && !valid_candidate_ids.contains(tid) {
                 self.log(format!("⚠️ 無効な対象 ({}) が選択されたため拒否しました", tid));
                 // 再プロンプトせず現行フェーズに復帰
@@ -1398,13 +1463,39 @@ impl MatchEngine {
             self.log(format!("{} は [{}] の対象を選択しませんでした（スキップ）", player_id, actor_name));
         }
 
+        let follow_up_target: Option<TargetStep> = opts
+            .get("followUpTarget")
+            .filter(|v| !v.is_null())
+            .and_then(|v| serde_json::from_value(v.clone()).ok());
+        let follow_up_deck_search: Option<DeckSearchStep> = opts
+            .get("followUpDeckSearch")
+            .filter(|v| !v.is_null())
+            .and_then(|v| serde_json::from_value(v.clone()).ok());
+        let pending_clause_plan: Option<ParsedClausePlan> = opts
+            .get("pendingClausePlan")
+            .filter(|v| !v.is_null())
+            .and_then(|v| serde_json::from_value(v.clone()).ok());
+
         // 条件付き追撃 & 後続即時処理（「〜リムーブし、カードを1枚引く」「〇〇を登場させた場合〜」）
         if applied {
             if let Ok(follow_ops) = serde_json::from_value::<Vec<ImmediateOp>>(
                 opts.get("followUpOps").cloned().unwrap_or_else(|| json!([])),
             ) {
-                if !follow_ops.is_empty() {
-                    self.execute_immediate_ops(player_id, actor_id, &actor_name, &follow_ops, None);
+                if !follow_ops.is_empty()
+                    && self.execute_immediate_ops_with_continuation(
+                        player_id,
+                        actor_id,
+                        &actor_name,
+                        &follow_ops,
+                        None,
+                        follow_up_target.as_ref(),
+                        follow_up_deck_search.as_ref(),
+                        pending_clause_plan.as_ref(),
+                        &resume_context,
+                        after_hint_level,
+                    )
+                {
+                    return;
                 }
             }
             if let Some(cond_val) = opts.get("condFollowUp").filter(|v| !v.is_null()) {
@@ -1414,8 +1505,21 @@ impl MatchEngine {
                     chosen_def_for_cond.as_ref(),
                 ) {
                     if let Some(cdef) = self.catalog.get(did) {
-                        if branch_matches(cdef, cdef.ap, &branch) {
-                            self.execute_immediate_ops(player_id, actor_id, &actor_name, &cops, None);
+                        if branch_matches(cdef, cdef.ap, &branch)
+                            && self.execute_immediate_ops_with_continuation(
+                                player_id,
+                                actor_id,
+                                &actor_name,
+                                &cops,
+                                None,
+                                follow_up_target.as_ref(),
+                                follow_up_deck_search.as_ref(),
+                                pending_clause_plan.as_ref(),
+                                &resume_context,
+                                after_hint_level,
+                            )
+                        {
+                            return;
                         }
                     }
                 }
@@ -1429,15 +1533,44 @@ impl MatchEngine {
             }
         }
 
-        if self.pending_decision.is_none() {
-            if let Some(ft_val) = opts.get("followUpTarget").filter(|v| !v.is_null()) {
-                if let Ok(ft) = serde_json::from_value::<TargetStep>(ft_val.clone()) {
+        if applied || !abort_on_skip {
+            if let Some(ref pcp) = pending_clause_plan {
+                if self.execute_clause_plan(
+                    player_id,
+                    actor_id,
+                    &actor_name,
+                    source_level,
+                    pcp,
+                    &resume_context,
+                    None,
+                ) {
+                    return;
+                }
+            }
+            if self.pending_decision.is_none() {
+                if let Some(ref ds) = follow_up_deck_search {
+                    if self.prompt_deck_search_step(
+                        player_id,
+                        actor_id,
+                        &actor_name,
+                        source_level,
+                        ds,
+                        follow_up_target.as_ref(),
+                        &resume_context,
+                        after_hint_level,
+                    ) {
+                        return;
+                    }
+                }
+            }
+            if self.pending_decision.is_none() {
+                if let Some(ref ft) = follow_up_target {
                     if self.prompt_target_step(
                         player_id,
                         actor_id,
                         &actor_name,
                         source_level,
-                        &ft,
+                        ft,
                         None,
                         &resume_context,
                         after_hint_level,
@@ -1565,6 +1698,16 @@ impl MatchEngine {
             }
         }
 
+        let follow_up_target: Option<TargetStep> = opts
+            .get("followUpTarget")
+            .filter(|v| !v.is_null())
+            .and_then(|v| serde_json::from_value(v.clone()).ok());
+        let post_ops: Vec<ImmediateOp> = serde_json::from_value(
+            opts.get("postOps").cloned().unwrap_or_else(|| json!([])),
+        )
+        .unwrap_or_default();
+
+        let mut discarded_opened = false;
         if !picked_defs.is_empty() {
             for (_, did) in &picked_defs {
                 let cname = self.card_name_by_def(did);
@@ -1577,13 +1720,23 @@ impl MatchEngine {
                 }
             }
             if post_add_discard > 0 && pick_action == "TO_HAND" {
-                self.execute_immediate_ops(
+                let mut combined = vec![ImmediateOp::DiscardHand(post_add_discard)];
+                combined.extend(post_ops.clone());
+                if self.execute_immediate_ops_with_continuation(
                     player_id,
                     actor_id,
                     &actor_name,
-                    &[ImmediateOp::DiscardHand(post_add_discard)],
+                    &combined,
                     None,
-                );
+                    follow_up_target.as_ref(),
+                    None,
+                    None,
+                    &resume_context,
+                    after_hint_level,
+                ) {
+                    return;
+                }
+                discarded_opened = true;
             }
         } else if remainder_to_remove {
             self.log(format!("{} はカードを選びませんでした（残りをリムーブエリアへ）", player_id));
@@ -1591,11 +1744,20 @@ impl MatchEngine {
             self.log(format!("{} はカードを選びませんでした（残りをデッキ下へ）", player_id));
         }
 
-        if let Ok(post_ops) = serde_json::from_value::<Vec<ImmediateOp>>(
-            opts.get("postOps").cloned().unwrap_or_else(|| json!([])),
-        ) {
-            if !post_ops.is_empty() {
-                self.execute_immediate_ops(player_id, actor_id, &actor_name, &post_ops, None);
+        if !discarded_opened && !post_ops.is_empty() {
+            if self.execute_immediate_ops_with_continuation(
+                player_id,
+                actor_id,
+                &actor_name,
+                &post_ops,
+                None,
+                follow_up_target.as_ref(),
+                None,
+                None,
+                &resume_context,
+                after_hint_level,
+            ) {
+                return;
             }
         }
 
@@ -1608,20 +1770,18 @@ impl MatchEngine {
         }
 
         if self.pending_decision.is_none() {
-            if let Some(ft_val) = opts.get("followUpTarget").filter(|v| !v.is_null()) {
-                if let Ok(ft) = serde_json::from_value::<TargetStep>(ft_val.clone()) {
-                    if self.prompt_target_step(
-                        player_id,
-                        actor_id,
-                        &actor_name,
-                        source_level,
-                        &ft,
-                        None,
-                        &resume_context,
-                        after_hint_level,
-                    ) {
-                        return;
-                    }
+            if let Some(ref ft) = follow_up_target {
+                if self.prompt_target_step(
+                    player_id,
+                    actor_id,
+                    &actor_name,
+                    source_level,
+                    ft,
+                    None,
+                    &resume_context,
+                    after_hint_level,
+                ) {
+                    return;
                 }
             }
         }
@@ -2496,8 +2656,33 @@ impl MatchEngine {
                 return false;
             }
         }
-        if cost.hand_remove > 0 && ps.hand.len() < cost.hand_remove {
-            return false;
+        if cost.hand_remove > 0 {
+            if let Some(ref hf) = cost.hand_filter {
+                let fc = ps.file.len() as i32;
+                let matched = ps
+                    .hand
+                    .iter()
+                    .filter(|c| {
+                        card_matches_filter_with_ctx(
+                            &self.catalog,
+                            None,
+                            &ps.player_id,
+                            &ps.player_id,
+                            c,
+                            self.catalog.get(&c.definition_id).map(|d| d.ap).unwrap_or(0),
+                            hf,
+                            None,
+                            None,
+                            Some(fc),
+                        )
+                    })
+                    .count();
+                if matched < cost.hand_remove {
+                    return false;
+                }
+            } else if ps.hand.len() < cost.hand_remove {
+                return false;
+            }
         }
         if cost.evidence_remove > 0 && ps.evidence.len() < cost.evidence_remove {
             return false;
@@ -2515,6 +2700,16 @@ impl MatchEngine {
     }
 
     fn pay_clause_cost(&mut self, player_id: &str, actor_id: &str, cost: &crate::effects::ClauseCost) -> bool {
+        self.pay_clause_cost_internal(player_id, actor_id, cost, true)
+    }
+
+    fn pay_clause_cost_internal(
+        &mut self,
+        player_id: &str,
+        actor_id: &str,
+        cost: &crate::effects::ClauseCost,
+        pay_hand_auto: bool,
+    ) -> bool {
         let can_pay = self
             .players
             .get(player_id)
@@ -2540,11 +2735,13 @@ impl MatchEngine {
                     c.orientation = CardOrientation::SLEEP;
                 }
             }
-            for _ in 0..cost.hand_remove {
-                if let Some(mut c) = ps.hand.pop() {
-                    c.zone = Zone::REMOVE;
-                    removed_hand.push(c.definition_id.clone());
-                    ps.remove.push(c);
+            if pay_hand_auto {
+                for _ in 0..cost.hand_remove {
+                    if let Some(mut c) = ps.hand.pop() {
+                        c.zone = Zone::REMOVE;
+                        removed_hand.push(c.definition_id.clone());
+                        ps.remove.push(c);
+                    }
                 }
             }
             for ev in ps.evidence.iter_mut() {
@@ -2608,27 +2805,104 @@ impl MatchEngine {
         ops: &[ImmediateOp],
         evidence_source_inst_id: Option<&str>,
     ) {
-        for op in ops {
+        let _ = self.execute_immediate_ops_with_continuation(
+            player_id,
+            actor_id,
+            actor_name,
+            ops,
+            evidence_source_inst_id,
+            None,
+            None,
+            None,
+            "MAIN",
+            None,
+        );
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn execute_immediate_ops_with_continuation(
+        &mut self,
+        player_id: &str,
+        actor_id: &str,
+        actor_name: &str,
+        ops: &[ImmediateOp],
+        evidence_source_inst_id: Option<&str>,
+        follow_up_target: Option<&TargetStep>,
+        follow_up_deck_search: Option<&DeckSearchStep>,
+        pending_clause_plan: Option<&ParsedClausePlan>,
+        resume_context: &str,
+        after_hint_level: Option<i32>,
+    ) -> bool {
+        for (idx, op) in ops.iter().enumerate() {
             match op {
                 ImmediateOp::Draw(n) => {
                     self.draw_cards(player_id, *n);
                     self.log(format!("✨ [{}] の効果でカードを {} 枚引きました", actor_name, n));
                 }
                 ImmediateOp::DiscardHand(n) => {
-                    let mut removed = vec![];
-                    if let Some(ps) = self.players.get_mut(player_id) {
-                        for _ in 0..*n {
-                            if let Some(mut c) = ps.hand.pop() {
-                                c.zone = Zone::REMOVE;
-                                removed.push(c.definition_id.clone());
-                                ps.remove.push(c);
-                            }
-                        }
+                    let remaining = &ops[idx + 1..];
+                    if self.prompt_hand_discard(
+                        player_id,
+                        actor_id,
+                        actor_name,
+                        None,
+                        *n,
+                        None,
+                        false,
+                        false,
+                        remaining,
+                        follow_up_target,
+                        follow_up_deck_search,
+                        pending_clause_plan,
+                        resume_context,
+                        after_hint_level,
+                    ) {
+                        return true;
                     }
-                    for did in removed {
-                        let cname = self.card_name_by_def(&did);
-                        self.log(format!("💸 [{}] の効果: {} の手札から [{}] をリムーブしました", actor_name, player_id, cname));
+                }
+                ImmediateOp::DiscardFilteredHand { count, filter } => {
+                    let remaining = &ops[idx + 1..];
+                    if self.prompt_hand_discard(
+                        player_id,
+                        actor_id,
+                        actor_name,
+                        None,
+                        *count,
+                        Some(filter),
+                        false,
+                        false,
+                        remaining,
+                        follow_up_target,
+                        follow_up_deck_search,
+                        pending_clause_plan,
+                        resume_context,
+                        after_hint_level,
+                    ) {
+                        return true;
                     }
+                }
+                ImmediateOp::OptionalDiscardHand { count, filter } => {
+                    let remaining = &ops[idx + 1..];
+                    if self.prompt_hand_discard(
+                        player_id,
+                        actor_id,
+                        actor_name,
+                        None,
+                        *count,
+                        filter.as_ref(),
+                        true,
+                        true,
+                        remaining,
+                        follow_up_target,
+                        follow_up_deck_search,
+                        pending_clause_plan,
+                        resume_context,
+                        after_hint_level,
+                    ) {
+                        return true;
+                    }
+                    // 任意手札リムーブ用の候補が0枚だった場合、後続効果は発動しない
+                    return false;
                 }
                 ImmediateOp::GainEvidence(n) => {
                     self.gain_evidence(player_id, *n);
@@ -2753,6 +3027,7 @@ impl MatchEngine {
                 }
             }
         }
+        false
     }
 
     fn build_filtered_candidates(
@@ -2837,94 +3112,36 @@ impl MatchEngine {
         evidence_source_inst_id: Option<&str>,
     ) -> bool {
         if !plan.immediate_before.is_empty() {
-            self.execute_immediate_ops(
+            if self.execute_immediate_ops_with_continuation(
                 player_id,
                 actor_id,
                 actor_name,
                 &plan.immediate_before,
                 evidence_source_inst_id,
-            );
+                plan.target_step.as_ref(),
+                plan.deck_search.as_ref(),
+                None,
+                resume_context,
+                None,
+            ) {
+                return true;
+            }
             if self.phase == MatchPhase::FINISHED {
                 return true;
             }
         }
 
         if let Some(ref ds) = plan.deck_search {
-            let self_file_count = self.players.get(player_id).map(|p| p.file.len() as i32);
-            let mut revealed = vec![];
-            if let Some(ps) = self.players.get_mut(player_id) {
-                let deck_len = ps.deck.len();
-                let actual = ds.search_count.min(deck_len);
-                for i in 0..actual {
-                    let idx = deck_len - 1 - i;
-                    let card = &mut ps.deck[idx];
-                    card.face_up = true;
-                    revealed.push(card.clone());
-                }
-            }
-            if !revealed.is_empty() {
-                let mut candidates = Vec::new();
-                for c in &revealed {
-                    let selectable = self
-                        .catalog
-                        .get(&c.definition_id)
-                        .map(|def| {
-                            ds.filter
-                                .branches
-                                .iter()
-                                .any(|b| branch_matches_with_ctx(def, def.ap, b, self_file_count))
-                        })
-                        .unwrap_or(false);
-                    candidates.push(json!({
-                        "instanceId": c.instance_id,
-                        "definitionId": c.definition_id,
-                        "name": self.card_name_by_def(&c.definition_id),
-                        "level": self.catalog.get(&c.definition_id).map(|d| d.level).unwrap_or(0),
-                        "ap": self.catalog.get(&c.definition_id).map(|d| d.ap).unwrap_or(0),
-                        "colors": self.catalog.get(&c.definition_id).map(|d| d.colors.clone()).unwrap_or_default(),
-                        "traits": self.catalog.get(&c.definition_id).map(|d| d.traits.clone()).unwrap_or_default(),
-                        "selectable": selectable,
-                    }));
-                }
-                let pick_action_str = match ds.pick_action {
-                    DeckPickAction::ToHand => "TO_HAND",
-                    DeckPickAction::PlayActive => "PLAY_ACTIVE",
-                    DeckPickAction::PlaySleep => "PLAY_SLEEP",
-                };
-                let title_action = match ds.pick_action {
-                    DeckPickAction::ToHand => "手札に加える",
-                    DeckPickAction::PlayActive => "現場に登場させる",
-                    DeckPickAction::PlaySleep => "スリープ状態で現場に登場させる",
-                };
-                let rem_label = if ds.remainder_to_remove {
-                    "残りはリムーブエリアへ"
-                } else {
-                    "残りをデッキ下へ"
-                };
-                let dec_id = self.generate_decision_id();
-                self.pending_decision = Some(json!({
-                    "decisionId": dec_id,
-                    "revision": self.revision,
-                    "playerId": player_id,
-                    "kind": "deckSearch",
-                    "options": {
-                        "actorId": actor_id,
-                        "actorName": actor_name,
-                        "sourceLevel": source_level,
-                        "searchCount": ds.search_count,
-                        "maxSelect": ds.filter.count,
-                        "pickAction": pick_action_str,
-                        "postAddDiscard": ds.post_add_discard,
-                        "postOps": ds.post_ops,
-                        "remainderToRemove": ds.remainder_to_remove,
-                        "followUpTarget": plan.target_step,
-                        "resumeContext": resume_context,
-                        "title": format!("山札の上から{}枚めくりました。条件に合うカードを{}まで選び{}（{}）", ds.search_count, ds.filter.count, title_action, rem_label),
-                        "revealedCards": candidates,
-                        "optional": true
-                    }
-                }));
-                self.log(format!("🔍 [{}] の効果で山札の上から {} 枚めくりました", actor_name, ds.search_count));
+            if self.prompt_deck_search_step(
+                player_id,
+                actor_id,
+                actor_name,
+                source_level,
+                ds,
+                plan.target_step.as_ref(),
+                resume_context,
+                None,
+            ) {
                 return true;
             }
         }
@@ -2943,6 +3160,168 @@ impl MatchEngine {
         }
 
         false
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn prompt_deck_search_step(
+        &mut self,
+        player_id: &str,
+        actor_id: &str,
+        actor_name: &str,
+        source_level: Option<i32>,
+        ds: &DeckSearchStep,
+        follow_up_target: Option<&TargetStep>,
+        resume_context: &str,
+        after_hint_level: Option<i32>,
+    ) -> bool {
+        let self_file_count = self.players.get(player_id).map(|p| p.file.len() as i32);
+        let mut revealed = vec![];
+        if let Some(ps) = self.players.get_mut(player_id) {
+            let deck_len = ps.deck.len();
+            let actual = ds.search_count.min(deck_len);
+            for i in 0..actual {
+                let idx = deck_len - 1 - i;
+                let card = &mut ps.deck[idx];
+                card.face_up = true;
+                revealed.push(card.clone());
+            }
+        }
+        if revealed.is_empty() {
+            return false;
+        }
+        let mut candidates = Vec::new();
+        for c in &revealed {
+            let selectable = self
+                .catalog
+                .get(&c.definition_id)
+                .map(|def| {
+                    ds.filter
+                        .branches
+                        .iter()
+                        .any(|b| branch_matches_with_ctx(def, def.ap, b, self_file_count))
+                })
+                .unwrap_or(false);
+            candidates.push(json!({
+                "instanceId": c.instance_id,
+                "definitionId": c.definition_id,
+                "name": self.card_name_by_def(&c.definition_id),
+                "level": self.catalog.get(&c.definition_id).map(|d| d.level).unwrap_or(0),
+                "ap": self.catalog.get(&c.definition_id).map(|d| d.ap).unwrap_or(0),
+                "colors": self.catalog.get(&c.definition_id).map(|d| d.colors.clone()).unwrap_or_default(),
+                "traits": self.catalog.get(&c.definition_id).map(|d| d.traits.clone()).unwrap_or_default(),
+                "selectable": selectable,
+            }));
+        }
+        let pick_action_str = match ds.pick_action {
+            DeckPickAction::ToHand => "TO_HAND",
+            DeckPickAction::PlayActive => "PLAY_ACTIVE",
+            DeckPickAction::PlaySleep => "PLAY_SLEEP",
+        };
+        let title_action = match ds.pick_action {
+            DeckPickAction::ToHand => "手札に加える",
+            DeckPickAction::PlayActive => "現場に登場させる",
+            DeckPickAction::PlaySleep => "スリープ状態で現場に登場させる",
+        };
+        let rem_label = if ds.remainder_to_remove {
+            "残りはリムーブエリアへ"
+        } else {
+            "残りをデッキ下へ"
+        };
+        let dec_id = self.generate_decision_id();
+        self.pending_decision = Some(json!({
+            "decisionId": dec_id,
+            "revision": self.revision,
+            "playerId": player_id,
+            "kind": "deckSearch",
+            "options": {
+                "actorId": actor_id,
+                "actorName": actor_name,
+                "sourceLevel": source_level,
+                "searchCount": ds.search_count,
+                "maxSelect": ds.filter.count,
+                "pickAction": pick_action_str,
+                "postAddDiscard": ds.post_add_discard,
+                "postOps": ds.post_ops,
+                "remainderToRemove": ds.remainder_to_remove,
+                "followUpTarget": follow_up_target,
+                "afterHintLevel": after_hint_level,
+                "resumeContext": resume_context,
+                "title": format!("山札の上から{}枚めくりました。条件に合うカードを{}まで選び{}（{}）", ds.search_count, ds.filter.count, title_action, rem_label),
+                "revealedCards": candidates,
+                "optional": true
+            }
+        }));
+        self.log(format!("🔍 [{}] の効果で山札の上から {} 枚めくりました", actor_name, ds.search_count));
+        true
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn prompt_hand_discard(
+        &mut self,
+        player_id: &str,
+        actor_id: &str,
+        actor_name: &str,
+        source_level: Option<i32>,
+        count: usize,
+        filter: Option<&TargetFilter>,
+        optional: bool,
+        abort_on_skip: bool,
+        follow_up_ops: &[ImmediateOp],
+        follow_up_target: Option<&TargetStep>,
+        follow_up_deck_search: Option<&DeckSearchStep>,
+        pending_clause_plan: Option<&ParsedClausePlan>,
+        resume_context: &str,
+        after_hint_level: Option<i32>,
+    ) -> bool {
+        let fallback_filter = TargetFilter {
+            owner: OwnerScope::SelfOnly,
+            zone: TargetZone::Hand,
+            count,
+            ..Default::default()
+        };
+        let active_filter = filter.unwrap_or(&fallback_filter);
+        let candidates = self.build_filtered_candidates(player_id, Some(actor_id), active_filter);
+        if candidates.is_empty() {
+            if !optional {
+                self.log(format!("⚠️ [{}] の効果: 捨てる対象の手札がないためスキップされました", actor_name));
+            }
+            return false;
+        }
+        let max_select = count.min(candidates.len()).max(1);
+        let title = if optional {
+            format!("リムーブする手札を{}枚まで選んでください（任意）", max_select)
+        } else {
+            format!("リムーブする手札を{}枚選んでください", max_select)
+        };
+        let dec_id = self.generate_decision_id();
+        self.pending_decision = Some(json!({
+            "decisionId": dec_id,
+            "revision": self.revision,
+            "playerId": player_id,
+            "kind": "targetSelect",
+            "options": {
+                "actorId": actor_id,
+                "actorName": actor_name,
+                "sourceLevel": source_level,
+                "effectType": "DISCARD_HAND",
+                "targetZone": "HAND",
+                "maxSelect": max_select,
+                "apDelta": 0,
+                "rushTarget": null,
+                "followUpOps": follow_up_ops,
+                "condFollowUp": null,
+                "followUpTarget": follow_up_target,
+                "followUpDeckSearch": follow_up_deck_search,
+                "pendingClausePlan": pending_clause_plan,
+                "afterHintLevel": after_hint_level,
+                "resumeContext": resume_context,
+                "title": title,
+                "candidates": candidates,
+                "optional": optional,
+                "abortOnSkip": abort_on_skip
+            }
+        }));
+        true
     }
 
     fn prompt_target_step(
@@ -3098,5 +3477,6 @@ fn target_action_prompt_title(action: &TargetAction, filter: &TargetFilter) -> S
         TargetAction::ReviveSleep => "リムーブエリアからスリープ状態で登場させるカードを選択してください".to_string(),
         TargetAction::RecoverToHand => "リムーブエリアから手札に加えるカードを選択してください".to_string(),
         TargetAction::PlayFromHand => "手札から登場させるキャラを選択してください".to_string(),
+        TargetAction::DiscardHand => format!("リムーブする手札を{}枚選択してください", filter.count.max(1)),
     }
 }

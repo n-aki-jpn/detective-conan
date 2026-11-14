@@ -2517,19 +2517,39 @@
           });
         } else if (pd.kind === 'targetSelect') {
           const actorName = pd.options.actorName || '効果';
-          document.getElementById('decision-title').innerText = `⚡ 対象選択: ${actorName}`;
-          document.getElementById('decision-desc').innerText = pd.options.title || '効果の対象カードを1枚選んでください';
+          const isDiscard = pd.options.effectType === 'DISCARD_HAND';
+          const maxSelect = Number(pd.options.maxSelect || 1);
+          document.getElementById('decision-title').innerText = isDiscard
+            ? `💸 手札リムーブ選択: ${actorName}`
+            : `⚡ 対象選択: ${actorName}`;
+          document.getElementById('decision-desc').innerText = pd.options.title || '効果の対象カードを選んでください';
 
           if (pd.options.optional) {
             const btnSkip = document.createElement('button');
             btnSkip.className = 'btn btn-secondary';
-            btnSkip.innerText = 'スキップ（選択しない）';
+            btnSkip.innerText = isDiscard ? 'スキップ（捨てない）' : 'スキップ（選択しない）';
             btnSkip.onclick = () => submitDecision({
               targetId: null,
+              targetIds: [],
               actorId: pd.options.actorId,
               effectType: pd.options.effectType
             });
             decActs.appendChild(btnSkip);
+          }
+
+          const selectedIds = [];
+          const btnConfirm = maxSelect > 1 ? document.createElement('button') : null;
+          if (btnConfirm) {
+            btnConfirm.className = 'btn';
+            btnConfirm.style.cssText = 'background:#0284c7; border-color:#38bdf8;';
+            btnConfirm.innerText = `決定（0/${maxSelect}枚）`;
+            btnConfirm.disabled = !pd.options.optional;
+            btnConfirm.onclick = () => submitDecision({
+              targetIds: selectedIds,
+              actorId: pd.options.actorId,
+              effectType: pd.options.effectType
+            });
+            decActs.appendChild(btnConfirm);
           }
 
           const candContainer = document.createElement('div');
@@ -2541,9 +2561,14 @@
             const isOpp = cand.isOpponent;
             const zoneBadge = cand.zoneLabel ? `[${cand.zoneLabel}] ` : '';
             const sideLabel = isOpp ? '【相手】' : '【味方】';
-            btn.style.cssText = isOpp
-              ? 'background:#991b1b; border-color:#ef4444; font-size:0.8rem; display:flex; flex-direction:column; align-items:flex-start; padding:6px 10px; min-height:auto;'
-              : 'background:#1e3a8a; border-color:#3b82f6; font-size:0.8rem; display:flex; flex-direction:column; align-items:flex-start; padding:6px 10px; min-height:auto;';
+            const renderCandStyle = (isSelected) => {
+              const base = isOpp
+                ? 'background:#991b1b; border:1px solid #ef4444;'
+                : 'background:#1e3a8a; border:1px solid #3b82f6;';
+              const sel = isSelected ? 'background:#0369a1; border:2px solid #facc15;' : base;
+              return `${sel} font-size:0.8rem; display:flex; flex-direction:column; align-items:flex-start; padding:6px 10px; min-height:auto;`;
+            };
+            btn.style.cssText = renderCandStyle(false);
 
             const stateLabel = cand.orientation === 'SLEEP' ? ' 💤' : cand.orientation === 'STUN' ? ' 💫' : '';
             const traitsStr = (cand.traits && cand.traits.length > 0) ? ` ［${cand.traits.join('/')}］` : '';
@@ -2552,11 +2577,28 @@
               <span style="font-size:0.68rem; opacity:0.85;">Lv.${cand.level} / AP ${cand.ap}${traitsStr}</span>
             `;
 
-            btn.onclick = () => submitDecision({
-              targetId: cand.instanceId,
-              actorId: pd.options.actorId,
-              effectType: pd.options.effectType
-            });
+            btn.onclick = () => {
+              if (maxSelect > 1) {
+                const idx = selectedIds.indexOf(cand.instanceId);
+                if (idx >= 0) {
+                  selectedIds.splice(idx, 1);
+                } else if (selectedIds.length < maxSelect) {
+                  selectedIds.push(cand.instanceId);
+                }
+                btn.style.cssText = renderCandStyle(selectedIds.includes(cand.instanceId));
+                btnConfirm.innerText = `決定（${selectedIds.length}/${maxSelect}枚）`;
+                if (!pd.options.optional) {
+                  btnConfirm.disabled = selectedIds.length !== maxSelect;
+                }
+              } else {
+                submitDecision({
+                  targetId: cand.instanceId,
+                  targetIds: [cand.instanceId],
+                  actorId: pd.options.actorId,
+                  effectType: pd.options.effectType
+                });
+              }
+            };
 
             candContainer.appendChild(btn);
           });
