@@ -2361,7 +2361,10 @@
           decActs.appendChild(btnRow);
 
         } else if (pd.kind === 'mainAction') {
-          document.getElementById('decision-title').innerText = `⚡ あなたの手番です`;
+          const turnOrderLabel = me.isFirstPlayer ? '先攻' : '後攻';
+          const fileCnt = me.fileCount ?? (me.file ? me.file.length : 0);
+          const evCnt = me.evidenceCount ?? (me.evidence ? me.evidence.length : 0);
+          document.getElementById('decision-title').innerText = `⚡ あなたの手番です [${turnOrderLabel}] (FILE: ${fileCnt}枚 / 証拠: ${evCnt}枚)`;
           document.getElementById('decision-desc').innerText = `アクションを選択してください`;
 
           (pd.options.actions || []).forEach(act => {
@@ -2383,7 +2386,7 @@
             } else if (act.type === 'HINT_TAKE') {
               const b = document.createElement('button');
               b.className = 'btn';
-              b.innerText = '💡 ヒント (FILE回収)';
+              b.innerText = '💡 ネクストヒント (FILE回収)';
               b.onclick = () => submitDecision({ type: 'HINT_TAKE' });
               decActs.appendChild(b);
             } else if (act.type === 'ASSIST') {
@@ -2498,7 +2501,7 @@
             });
           }
         } else if (pd.kind === 'hintPlay') {
-          document.getElementById('decision-title').innerText = `💡 ヒント後の手札登場`;
+          document.getElementById('decision-title').innerText = `💡 ネクストヒント後の手札登場`;
           document.getElementById('decision-desc').innerText = `回収後、手札を登場させられます`;
 
           const btnPass = document.createElement('button');
