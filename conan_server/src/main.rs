@@ -301,6 +301,10 @@ async fn handle_state(
     let mut mgr = state.lock().unwrap();
 
     let room_id = params.room_id.unwrap_or_else(|| "default".to_string());
+    if room_id.starts_with("solo_") && !mgr.rooms.contains_key(&room_id) {
+        let solo_room = MatchRoom::new(&room_id, mgr.catalog.clone(), mgr.deck_def.clone(), true, mgr.deck_def.clone());
+        mgr.rooms.insert(room_id.clone(), solo_room);
+    }
     let room = match mgr.rooms.get_mut(&room_id) {
         Some(r) => r,
         None => {

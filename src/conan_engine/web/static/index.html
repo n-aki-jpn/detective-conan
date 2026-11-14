@@ -1602,7 +1602,15 @@
 
   <script>
     let currentViewingPlayer = "player1";
-    let currentRoomId = "default";
+    function getOrCreateSoloRoomId() {
+      let id = localStorage.getItem('conan_solo_room_id');
+      if (!id) {
+        id = 'solo_' + Math.random().toString(36).slice(2, 10);
+        localStorage.setItem('conan_solo_room_id', id);
+      }
+      return id;
+    }
+    let currentRoomId = getOrCreateSoloRoomId();
     let lastObs = null;
     let lastRevision = -1;
     let lastDecisionId = null;
