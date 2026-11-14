@@ -21,7 +21,7 @@ pub enum TriggerKind {
 }
 
 /// ターゲット所有者のスコープ
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OwnerScope {
     SelfOnly,
     OppOnly,
@@ -29,7 +29,7 @@ pub enum OwnerScope {
 }
 
 /// ターゲット探索対象ゾーン
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TargetZone {
     Field,
     Remove,
@@ -38,7 +38,7 @@ pub enum TargetZone {
 }
 
 /// ターゲットに対して実行するアクション
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TargetAction {
     Sleep,
     Stun,
@@ -107,6 +107,8 @@ pub struct TargetBranch {
     pub colors: Vec<String>,
     pub card_types: Vec<CardType>,
     pub max_level: Option<i32>,
+    #[serde(default)]
+    pub max_level_from_file: bool,
     pub min_level: Option<i32>,
     pub max_ap: Option<i32>,
     pub min_ap: Option<i32>,
@@ -116,7 +118,7 @@ pub struct TargetBranch {
 }
 
 /// 統一ターゲットフィルタ
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TargetFilter {
     pub owner: OwnerScope,
     pub zone: TargetZone,
@@ -172,7 +174,7 @@ pub enum ImmediateOp {
 }
 
 /// 対象選択ステップ
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TargetStep {
     pub action: TargetAction,
     pub filter: TargetFilter,
@@ -188,6 +190,7 @@ pub struct DeckSearchStep {
     pub filter: TargetFilter,
     pub post_add_discard: usize,
     pub post_ops: Vec<ImmediateOp>,
+    pub remainder_to_remove: bool,
 }
 
 /// 1つの能力句（clause）の解析結果
@@ -195,6 +198,7 @@ pub struct DeckSearchStep {
 pub struct ParsedClausePlan {
     pub immediate_before: Vec<ImmediateOp>,
     pub target_step: Option<TargetStep>,
+    pub follow_up_target: Option<Box<TargetStep>>,
     pub deck_search: Option<DeckSearchStep>,
 }
 
@@ -662,12 +666,9 @@ pub fn parse_effect_steps(
         {
             if plan.deck_search.is_none() {
                 if let Some(search_n) = parse_deck_look_count(effect_body) {
-                    let rest_from_look = effect_body
-                        .find("デッキのカードを上から")
-                        .map(|i| &effect_body[i..])
-                        .unwrap_or(effect_body);
+                    let search_scope = extract_deck_search_scope(effect_body);
                     plan.deck_search =
-                        Some(parse_deck_search_step(search_n, rest_from_look, dynamic_level));
+                        Some(parse_deck_search_step(search_n, search_scope, dynamic_level));
                     seen_target_or_search = true;
                 }
             }
@@ -685,9 +686,34 @@ pub fn parse_effect_steps(
         }
 
         // 3) 対象選択を伴う文（「〜選び、...」または「手札から〜登場させる」）
-        if !seen_target_or_search && is_target_selection_sentence(sentence) {
+        if (plan.target_step.is_none() || plan.follow_up_target.is_none())
+            && is_target_selection_sentence(sentence)
+        {
+            // 「カードを1枚引き、手札から〜登場させる」の前置即時処理を抽出
+            if !sentence.contains("選び") {
+                if let Some(hidx) = sentence.find("手札から") {
+                    let prefix = sentence[..hidx].trim();
+                    if !prefix.is_empty() {
+                        let pre_ops = parse_immediate_ops(prefix);
+                        if !pre_ops.is_empty() {
+                            if let Some(tstep) = plan.target_step.as_mut() {
+                                tstep.follow_up.extend(pre_ops);
+                            } else if let Some(ds) = plan.deck_search.as_mut() {
+                                ds.post_ops.extend(pre_ops);
+                            } else {
+                                plan.immediate_before.extend(pre_ops);
+                            }
+                        }
+                    }
+                }
+            }
+
             if let Some(tstep) = parse_target_step(sentence, dynamic_level, source_card_type) {
-                plan.target_step = Some(tstep);
+                if plan.target_step.is_none() {
+                    plan.target_step = Some(tstep);
+                } else {
+                    plan.follow_up_target = Some(Box::new(tstep));
+                }
                 seen_target_or_search = true;
                 continue;
             }
@@ -706,10 +732,12 @@ pub fn parse_effect_steps(
             }
         }
         if seen_target_or_search {
-            if let Some(ds) = plan.deck_search.as_mut() {
-                ds.post_ops.extend(ops);
+            if let Some(ft) = plan.follow_up_target.as_mut() {
+                ft.follow_up.extend(ops);
             } else if let Some(tstep) = plan.target_step.as_mut() {
                 tstep.follow_up.extend(ops);
+            } else if let Some(ds) = plan.deck_search.as_mut() {
+                ds.post_ops.extend(ops);
             }
         } else {
             plan.immediate_before.extend(ops);
@@ -719,11 +747,43 @@ pub fn parse_effect_steps(
     // fallback: 1文に「〜を見る。その中から〜」がまとまっていたが上で捕捉済み以外の場合
     if plan.deck_search.is_none() && effect_body.contains("デッキのカードを上から") {
         if let Some(search_n) = parse_deck_look_count(effect_body) {
-            plan.deck_search = Some(parse_deck_search_step(search_n, effect_body, dynamic_level));
+            let search_scope = extract_deck_search_scope(effect_body);
+            plan.deck_search = Some(parse_deck_search_step(search_n, search_scope, dynamic_level));
         }
     }
 
     plan
+}
+
+fn extract_deck_search_scope(effect_body: &str) -> &str {
+    let rest_from_look = effect_body
+        .find("デッキのカードを上から")
+        .map(|i| &effect_body[i..])
+        .unwrap_or(effect_body);
+
+    // 「残りを〜移す。」の文末までを切り出し、後続の「手札から〜登場させる。」が混入しないようにする
+    let mut end_idx = rest_from_look.len();
+    if let Some(rem_idx) = rest_from_look.find("残りを") {
+        let after_rem = &rest_from_look[rem_idx..];
+        if let Some(dot_rel) = after_rem.find('。') {
+            let after_dot_idx = rem_idx + dot_rel + '。'.len_utf8();
+            end_idx = after_dot_idx;
+            // 直後の文が「カードを手札に加えた場合、手札をN枚リムーブする。」ならそれも範囲に含める
+            let tail = rest_from_look[after_dot_idx..].trim_start();
+            if tail.starts_with("カードを手札に加えた場合、手札を") {
+                if let Some(dot2) = tail.find('。') {
+                    let offset = rest_from_look.len() - tail.len();
+                    end_idx = offset + dot2 + '。'.len_utf8();
+                } else {
+                    end_idx = rest_from_look.len();
+                }
+            }
+        }
+    } else if let Some(hidx) = rest_from_look.find("手札から") {
+        end_idx = hidx;
+    }
+
+    &rest_from_look[..end_idx]
 }
 
 fn is_target_selection_sentence(s: &str) -> bool {
@@ -784,6 +844,9 @@ fn parse_deck_search_step(
     if count == 0 {
         count = extract_count_around(text, "を", "枚まで登場");
     }
+    if count == 0 {
+        count = extract_count_around(text, "を", "枚手札");
+    }
     filter.count = count.max(1);
 
     let post_add_discard = if text.contains("手札に加えた場合、手札を") {
@@ -791,6 +854,7 @@ fn parse_deck_search_step(
     } else {
         0
     };
+    let remainder_to_remove = text.contains("残りをリムーブ");
 
     DeckSearchStep {
         search_count,
@@ -798,6 +862,7 @@ fn parse_deck_search_step(
         filter,
         post_add_discard,
         post_ops: Vec::new(),
+        remainder_to_remove,
     }
 }
 
@@ -1033,6 +1098,10 @@ pub fn parse_branches_from_phrase(phrase: &str, default_card_type: CardType) -> 
         Some("【カットイン】".to_string())
     } else if phrase.contains("【ヒラメキ】を持つ") {
         Some("【ヒラメキ】".to_string())
+    } else if phrase.contains("【変装】を持つ") {
+        Some("【変装】".to_string())
+    } else if phrase.contains("【疾風】を持つ") {
+        Some("【疾風】".to_string())
     } else {
         None
     };
@@ -1052,6 +1121,9 @@ pub fn parse_branches_from_phrase(phrase: &str, default_card_type: CardType) -> 
         // 先頭にだけ書かれた「レベル5以下の」や末尾の「【青】の」を他のブランチにも継承
         if idx > 0 && b.max_level.is_none() {
             b.max_level = branches.first().and_then(|f: &TargetBranch| f.max_level);
+        }
+        if global_base.max_level_from_file {
+            b.max_level_from_file = true;
         }
         if b.colors.is_empty() && !global_base.colors.is_empty() {
             // 「【青】か【白】」のときのみ個別色を優先、単一色修飾が末尾なら共有
@@ -1161,6 +1233,7 @@ fn parse_single_branch(
 
     b.max_level = extract_number_before(part, "レベル", "以下")
         .or_else(|| extract_number_before(part, "コスト", "以下"));
+    b.max_level_from_file = part.contains("FILEエリアの枚数以下");
     b.min_level = extract_number_before(part, "レベル", "以上")
         .or_else(|| extract_number_before(part, "コスト", "以上"));
     b.max_ap = extract_number_before(part, "AP", "以下");
@@ -1184,20 +1257,41 @@ pub fn card_matches_filter(
     opp_cond_info: Option<&PlayerCondInfo>,
     acting_card_id: Option<&str>,
 ) -> bool {
-    // 1) 所有者チェック
+    card_matches_filter_with_ctx(
+        catalog,
+        actor_id,
+        owner_player_id,
+        card_owner_id,
+        card,
+        effective_ap,
+        filter,
+        opp_cond_info,
+        acting_card_id,
+        None,
+    )
+}
+
+pub fn card_matches_filter_with_ctx(
+    catalog: &CardCatalog,
+    actor_id: Option<&str>,
+    owner_player_id: &str,
+    card_owner_id: &str,
+    card: &CardInstance,
+    effective_ap: i32,
+    filter: &TargetFilter,
+    opp_cond_info: Option<&PlayerCondInfo>,
+    acting_card_id: Option<&str>,
+    self_file_count: Option<i32>,
+) -> bool {
     match filter.owner {
         OwnerScope::SelfOnly if card_owner_id != owner_player_id => return false,
         OwnerScope::OppOnly if card_owner_id == owner_player_id => return false,
         OwnerScope::Both => {}
         _ => {}
     }
-
-    // 2) このキャラ以外チェック
     if filter.exclude_self && actor_id == Some(card.instance_id.as_str()) {
         return false;
     }
-
-    // 3) アクション中のキャラ限定チェック
     if filter.acting_only {
         if let Some(aid) = acting_card_id {
             if card.instance_id != aid {
@@ -1205,17 +1299,12 @@ pub fn card_matches_filter(
             }
         }
     }
-
-    // 4) 状態（アクティブ / スリープ / スタン）チェック
     if !filter.orientations.is_empty() && !filter.orientations.contains(&card.orientation) {
         return false;
     }
-
     let Some(def) = catalog.get(&card.definition_id) else {
         return false;
     };
-
-    // 5) 相手の効果で選ばれない（「【絆〇〇】相手の能力や効果によって選ばれない。」）チェック
     if card_owner_id != owner_player_id {
         if let Some(opp_ctx) = opp_cond_info {
             if card_is_untargetable_by_opponent(def, opp_ctx) {
@@ -1223,16 +1312,33 @@ pub fn card_matches_filter(
             }
         }
     }
+    card_matches_branches_with_ctx(def, effective_ap, filter, self_file_count)
+}
 
-    // 6) ブランチ（特徴 / カード名 / 色 / レベル / AP / LP / カードタイプ）のいずれかに一致するか
+fn card_matches_branches_with_ctx(
+    def: &CardDefinition,
+    effective_ap: i32,
+    filter: &TargetFilter,
+    self_file_count: Option<i32>,
+) -> bool {
     filter
         .branches
         .iter()
-        .any(|b| branch_matches(def, effective_ap, b))
+        .any(|b| branch_matches_with_ctx(def, effective_ap, b, self_file_count))
 }
 
 /// `CardDefinition` + 有効APが 1 つの `TargetBranch` に一致するか判定
 pub fn branch_matches(def: &CardDefinition, effective_ap: i32, b: &TargetBranch) -> bool {
+    branch_matches_with_ctx(def, effective_ap, b, None)
+}
+
+/// FILE枚数など動的コンテキスト付きで `TargetBranch` 一致判定を行う
+pub fn branch_matches_with_ctx(
+    def: &CardDefinition,
+    effective_ap: i32,
+    b: &TargetBranch,
+    self_file_count: Option<i32>,
+) -> bool {
     if !b.card_types.is_empty() && !b.card_types.contains(&def.card_type) {
         return false;
     }
@@ -1267,6 +1373,13 @@ pub fn branch_matches(def: &CardDefinition, effective_ap: i32, b: &TargetBranch)
     if let Some(max_lv) = b.max_level {
         if def.level > max_lv {
             return false;
+        }
+    }
+    if b.max_level_from_file {
+        if let Some(fc) = self_file_count {
+            if def.level > fc {
+                return false;
+            }
         }
     }
     if let Some(min_lv) = b.min_level {

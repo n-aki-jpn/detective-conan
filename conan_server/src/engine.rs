@@ -1,10 +1,10 @@
 use crate::catalog::CardCatalog;
 use crate::effects::{
-    branch_matches, card_matches_filter, check_clause_conditions, check_disguise_conditions,
-    compute_passive_ap_bonus, extract_clauses, parse_branches_from_phrase, parse_clause_cost,
-    parse_effect_steps, parse_immediate_ops, resolve_state_branch, DeckPickAction, ImmediateOp,
-    OwnerScope, ParsedClausePlan, PlayerCondInfo, TargetAction, TargetFilter, TargetZone,
-    TriggerKind,
+    branch_matches, branch_matches_with_ctx, card_matches_filter_with_ctx,
+    check_clause_conditions, check_disguise_conditions, compute_passive_ap_bonus, extract_clauses,
+    parse_branches_from_phrase, parse_clause_cost, parse_effect_steps, parse_immediate_ops,
+    resolve_state_branch, DeckPickAction, ImmediateOp, OwnerScope, ParsedClausePlan,
+    PlayerCondInfo, TargetAction, TargetFilter, TargetStep, TargetZone, TriggerKind,
 };
 use crate::models::{
     CardInstance, CardOrientation, CardType, CasePhase, DeckDefinition, MatchPhase, Zone,
@@ -1429,6 +1429,25 @@ impl MatchEngine {
             }
         }
 
+        if self.pending_decision.is_none() {
+            if let Some(ft_val) = opts.get("followUpTarget").filter(|v| !v.is_null()) {
+                if let Ok(ft) = serde_json::from_value::<TargetStep>(ft_val.clone()) {
+                    if self.prompt_target_step(
+                        player_id,
+                        actor_id,
+                        &actor_name,
+                        source_level,
+                        &ft,
+                        None,
+                        &resume_context,
+                        after_hint_level,
+                    ) {
+                        return;
+                    }
+                }
+            }
+        }
+
         if let Some(hlv) = after_hint_level {
             if self.trigger_on_hint_use(player_id, hlv) {
                 return;
@@ -1455,6 +1474,10 @@ impl MatchEngine {
         let max_select = opts.get("maxSelect").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
         let source_level = opts.get("sourceLevel").and_then(|v| v.as_i64()).map(|n| n as i32);
         let post_add_discard = opts.get("postAddDiscard").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        let remainder_to_remove = opts
+            .get("remainderToRemove")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         let resume_context = opts
             .get("resumeContext")
             .and_then(|v| v.as_str())
@@ -1530,9 +1553,15 @@ impl MatchEngine {
                     remaining_cards.push(card);
                 }
             }
-            // 残りのカードをデッキの下に移す
-            for c in remaining_cards {
-                ps.deck.insert(0, c);
+            // 残りのカードをデッキの下またはリムーブエリアに移す
+            for mut c in remaining_cards {
+                if remainder_to_remove {
+                    c.zone = Zone::REMOVE;
+                    c.face_up = true;
+                    ps.remove.push(c);
+                } else {
+                    ps.deck.insert(0, c);
+                }
             }
         }
 
@@ -1541,6 +1570,8 @@ impl MatchEngine {
                 let cname = self.card_name_by_def(did);
                 if pick_action == "PLAY_ACTIVE" || pick_action == "PLAY_SLEEP" {
                     self.log(format!("✨ [{}] の効果でデッキから [{}] を登場させました", actor_name, cname));
+                } else if remainder_to_remove {
+                    self.log(format!("✨ [{}] の効果でデッキから [{}] を手札に加え、残りをリムーブエリアに移しました", actor_name, cname));
                 } else {
                     self.log(format!("✨ [{}] の効果でデッキから [{}] を手札に加え、残りをデッキ下に移しました", actor_name, cname));
                 }
@@ -1554,6 +1585,8 @@ impl MatchEngine {
                     None,
                 );
             }
+        } else if remainder_to_remove {
+            self.log(format!("{} はカードを選びませんでした（残りをリムーブエリアへ）", player_id));
         } else {
             self.log(format!("{} はカードを選びませんでした（残りをデッキ下へ）", player_id));
         }
@@ -1570,6 +1603,25 @@ impl MatchEngine {
             for (dep_inst, dep_def) in picked_defs {
                 if self.resolve_on_play_effects_with_source(player_id, &dep_inst, &dep_def, false, source_level) {
                     return;
+                }
+            }
+        }
+
+        if self.pending_decision.is_none() {
+            if let Some(ft_val) = opts.get("followUpTarget").filter(|v| !v.is_null()) {
+                if let Ok(ft) = serde_json::from_value::<TargetStep>(ft_val.clone()) {
+                    if self.prompt_target_step(
+                        player_id,
+                        actor_id,
+                        &actor_name,
+                        source_level,
+                        &ft,
+                        None,
+                        &resume_context,
+                        after_hint_level,
+                    ) {
+                        return;
+                    }
                 }
             }
         }
@@ -2709,6 +2761,7 @@ impl MatchEngine {
         actor_id: Option<&str>,
         filter: &TargetFilter,
     ) -> Vec<Value> {
+        let self_file_count = self.players.get(player_id).map(|p| p.file.len() as i32);
         let opp_id = self.opponent_id_of(player_id);
         let opp_cond = self.build_cond_info(&opp_id, None, CardOrientation::ACTIVE, None);
         let acting_card_id = self
@@ -2742,7 +2795,7 @@ impl MatchEngine {
                 } else {
                     self.catalog.get(&c.definition_id).map(|d| d.ap).unwrap_or(0)
                 };
-                if card_matches_filter(
+                if card_matches_filter_with_ctx(
                     &self.catalog,
                     actor_id,
                     player_id,
@@ -2752,6 +2805,7 @@ impl MatchEngine {
                     filter,
                     if is_opp { Some(&opp_cond) } else { None },
                     acting_card_id,
+                    self_file_count,
                 ) {
                     let level = self.catalog.get(&c.definition_id).map(|d| d.level).unwrap_or(0);
                     let traits = self.catalog.get(&c.definition_id).map(|d| d.traits.clone()).unwrap_or_default();
@@ -2795,54 +2849,8 @@ impl MatchEngine {
             }
         }
 
-        if let Some(ref ts) = plan.target_step {
-            let candidates = self.build_filtered_candidates(player_id, Some(actor_id), &ts.filter);
-            if candidates.is_empty() {
-                self.log(format!("⚠️ [{}] の効果: 条件を満たす有効な対象がいないためスキップされました", actor_name));
-                return false;
-            }
-            let title = target_action_prompt_title(&ts.action, &ts.filter);
-            let ap_delta = match ts.action {
-                TargetAction::ApBuff(v) => v,
-                TargetAction::ApDebuff(v) => -v,
-                _ => 0,
-            };
-            let rush_target = match &ts.action {
-                TargetAction::GiveRush(rt) => rt.clone(),
-                _ => None,
-            };
-            let target_zone_str = match ts.filter.zone {
-                TargetZone::Field => "FIELD",
-                TargetZone::Remove => "REMOVE",
-                TargetZone::Hand => "HAND",
-                TargetZone::Deck => "DECK",
-            };
-            let dec_id = self.generate_decision_id();
-            self.pending_decision = Some(json!({
-                "decisionId": dec_id,
-                "revision": self.revision,
-                "playerId": player_id,
-                "kind": "targetSelect",
-                "options": {
-                    "actorId": actor_id,
-                    "actorName": actor_name,
-                    "sourceLevel": source_level,
-                    "effectType": ts.action.as_effect_type(),
-                    "targetZone": target_zone_str,
-                    "apDelta": ap_delta,
-                    "rushTarget": rush_target,
-                    "followUpOps": ts.follow_up,
-                    "condFollowUp": ts.conditional_follow_up.as_ref().map(|(br, ops)| json!({"branch": br, "ops": ops})),
-                    "resumeContext": resume_context,
-                    "title": title,
-                    "candidates": candidates,
-                    "optional": true
-                }
-            }));
-            return true;
-        }
-
         if let Some(ref ds) = plan.deck_search {
+            let self_file_count = self.players.get(player_id).map(|p| p.file.len() as i32);
             let mut revealed = vec![];
             if let Some(ps) = self.players.get_mut(player_id) {
                 let deck_len = ps.deck.len();
@@ -2860,7 +2868,12 @@ impl MatchEngine {
                     let selectable = self
                         .catalog
                         .get(&c.definition_id)
-                        .map(|def| ds.filter.branches.iter().any(|b| branch_matches(def, def.ap, b)))
+                        .map(|def| {
+                            ds.filter
+                                .branches
+                                .iter()
+                                .any(|b| branch_matches_with_ctx(def, def.ap, b, self_file_count))
+                        })
                         .unwrap_or(false);
                     candidates.push(json!({
                         "instanceId": c.instance_id,
@@ -2883,6 +2896,11 @@ impl MatchEngine {
                     DeckPickAction::PlayActive => "現場に登場させる",
                     DeckPickAction::PlaySleep => "スリープ状態で現場に登場させる",
                 };
+                let rem_label = if ds.remainder_to_remove {
+                    "残りはリムーブエリアへ"
+                } else {
+                    "残りをデッキ下へ"
+                };
                 let dec_id = self.generate_decision_id();
                 self.pending_decision = Some(json!({
                     "decisionId": dec_id,
@@ -2898,8 +2916,10 @@ impl MatchEngine {
                         "pickAction": pick_action_str,
                         "postAddDiscard": ds.post_add_discard,
                         "postOps": ds.post_ops,
+                        "remainderToRemove": ds.remainder_to_remove,
+                        "followUpTarget": plan.target_step,
                         "resumeContext": resume_context,
-                        "title": format!("山札の上から{}枚めくりました。条件に合うカードを{}まで選び{}（残りはデッキ下へ）", ds.search_count, ds.filter.count, title_action),
+                        "title": format!("山札の上から{}枚めくりました。条件に合うカードを{}まで選び{}（{}）", ds.search_count, ds.filter.count, title_action, rem_label),
                         "revealedCards": candidates,
                         "optional": true
                     }
@@ -2909,7 +2929,79 @@ impl MatchEngine {
             }
         }
 
+        if let Some(ref ts) = plan.target_step {
+            return self.prompt_target_step(
+                player_id,
+                actor_id,
+                actor_name,
+                source_level,
+                ts,
+                plan.follow_up_target.as_deref(),
+                resume_context,
+                None,
+            );
+        }
+
         false
+    }
+
+    fn prompt_target_step(
+        &mut self,
+        player_id: &str,
+        actor_id: &str,
+        actor_name: &str,
+        source_level: Option<i32>,
+        ts: &TargetStep,
+        follow_up_target: Option<&TargetStep>,
+        resume_context: &str,
+        after_hint_level: Option<i32>,
+    ) -> bool {
+        let candidates = self.build_filtered_candidates(player_id, Some(actor_id), &ts.filter);
+        if candidates.is_empty() {
+            self.log(format!("⚠️ [{}] の効果: 条件を満たす有効な対象がいないためスキップされました", actor_name));
+            return false;
+        }
+        let title = target_action_prompt_title(&ts.action, &ts.filter);
+        let ap_delta = match ts.action {
+            TargetAction::ApBuff(v) => v,
+            TargetAction::ApDebuff(v) => -v,
+            _ => 0,
+        };
+        let rush_target = match &ts.action {
+            TargetAction::GiveRush(rt) => rt.clone(),
+            _ => None,
+        };
+        let target_zone_str = match ts.filter.zone {
+            TargetZone::Field => "FIELD",
+            TargetZone::Remove => "REMOVE",
+            TargetZone::Hand => "HAND",
+            TargetZone::Deck => "DECK",
+        };
+        let dec_id = self.generate_decision_id();
+        self.pending_decision = Some(json!({
+            "decisionId": dec_id,
+            "revision": self.revision,
+            "playerId": player_id,
+            "kind": "targetSelect",
+            "options": {
+                "actorId": actor_id,
+                "actorName": actor_name,
+                "sourceLevel": source_level,
+                "effectType": ts.action.as_effect_type(),
+                "targetZone": target_zone_str,
+                "apDelta": ap_delta,
+                "rushTarget": rush_target,
+                "followUpOps": ts.follow_up,
+                "condFollowUp": ts.conditional_follow_up.as_ref().map(|(br, ops)| json!({"branch": br, "ops": ops})),
+                "followUpTarget": follow_up_target,
+                "afterHintLevel": after_hint_level,
+                "resumeContext": resume_context,
+                "title": title,
+                "candidates": candidates,
+                "optional": true
+            }
+        }));
+        true
     }
 
     /// 証拠をリムーブし、該当カードの【ヒラメキ】を発動する

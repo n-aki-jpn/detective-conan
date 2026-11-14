@@ -2201,5 +2201,156 @@ mod tests {
         assert_eq!(engine.players.get("p2").unwrap().field.len(), 0);
         assert_eq!(engine.players.get("p2").unwrap().deck.len(), 1);
     }
+
+    #[test]
+    fn test_id0102_small_detective_deck_search_then_file_level_hand_play() {
+        let catalog = load_test_catalog();
+        let mut engine = engine::MatchEngine::new(catalog);
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        let ps2 = engine::PlayerState::new("p2".to_string());
+
+        ps1.r#case = Some(test_inst("p1_case", "B01002", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE)); // 青事件
+        // FILEエリア3枚（よって手札登場の上限レベルは 3 以下）
+        for i in 0..3 {
+            ps1.file.push(test_inst(&format!("f{}", i), "B01021", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+        }
+
+        // 山札上3枚（Vecの末尾がデッキトップ）: 青イベント(B01022), 緑キャラ(B01029), 青キャラ(B01021)
+        ps1.deck.push(test_inst("d_base", "B01020", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        ps1.deck.push(test_inst("d_ev", "B01022", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        ps1.deck.push(test_inst("d_green", "B01029", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        ps1.deck.push(test_inst("d_blue", "B01021", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+        // 手札: D01014 (小さくなった名探偵, ID0102), Lv3青キャラ(B01021), Lv5青キャラ(B01020), Lv5緑キャラ(B01029)
+        ps1.hand.push(test_inst("h_ev", "D01014", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        ps1.hand.push(test_inst("h_b3", "B01021", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        ps1.hand.push(test_inst("h_b5", "B01020", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        ps1.hand.push(test_inst("h_g5", "B01029", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        // D01014 をイベントプレイ
+        engine.prompt_main_action("p1");
+        let pd1 = engine.pending_decision.as_ref().unwrap().clone();
+        let d1_id = pd1["decisionId"].as_str().unwrap().to_string();
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": d1_id,
+            "revision": engine.revision,
+            "value": {"type": "HAND_PLAY", "cardId": "h_ev"}
+        }));
+
+        // 1段階目: deckSearch (TO_HAND であり PLAY_ACTIVE ではないこと！)
+        let pd_ds = engine.pending_decision.as_ref().unwrap().clone();
+        assert_eq!(pd_ds["kind"], "deckSearch");
+        assert_eq!(pd_ds["options"]["pickAction"], "TO_HAND");
+        let revealed = pd_ds["options"]["revealedCards"].as_array().unwrap();
+        assert_eq!(revealed.len(), 3);
+        let s_blue = revealed.iter().find(|c| c["instanceId"] == "d_blue").unwrap()["selectable"].as_bool().unwrap();
+        let s_green = revealed.iter().find(|c| c["instanceId"] == "d_green").unwrap()["selectable"].as_bool().unwrap();
+        let s_ev = revealed.iter().find(|c| c["instanceId"] == "d_ev").unwrap()["selectable"].as_bool().unwrap();
+        assert!(s_blue, "【青】キャラは選択可能");
+        assert!(!s_green, "【緑】キャラは選択不可");
+        assert!(!s_ev, "【青】イベントは選択不可");
+
+        let ds_id = pd_ds["decisionId"].as_str().unwrap().to_string();
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": ds_id,
+            "revision": engine.revision,
+            "value": {"chosenCardId": "d_blue", "actorId": "h_ev"}
+        }));
+
+        // d_blue は手札へ、残り2枚(d_green, d_ev)はデッキ下へ
+        assert!(engine.players.get("p1").unwrap().hand.iter().any(|c| c.instance_id == "d_blue"));
+        assert_eq!(engine.players.get("p1").unwrap().deck.len(), 3);
+
+        // 2段階目: 続けて「手札から自分のFILEエリアの枚数(3)以下のレベルの【青】のキャラを1枚まで登場させる」が開く！
+        let pd_ts = engine.pending_decision.as_ref().expect("followUpTarget で targetSelect が開くべき").clone();
+        assert_eq!(pd_ts["kind"], "targetSelect");
+        assert_eq!(pd_ts["options"]["effectType"], "PLAY_FROM_HAND");
+        assert_eq!(pd_ts["options"]["targetZone"], "HAND");
+        let cands = pd_ts["options"]["candidates"].as_array().unwrap();
+        let cand_ids: Vec<&str> = cands.iter().filter_map(|c| c["instanceId"].as_str()).collect();
+        assert!(cand_ids.contains(&"h_b3"), "Lv3青キャラは候補に含まれる");
+        assert!(cand_ids.contains(&"d_blue"), "先ほど加えたLv3青キャラも候補に含まれる");
+        assert!(!cand_ids.contains(&"h_b5"), "FILE3枚時にLv5青キャラは候補外");
+        assert!(!cand_ids.contains(&"h_g5"), "緑キャラは候補外");
+
+        let ts_id = pd_ts["decisionId"].as_str().unwrap().to_string();
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": ts_id,
+            "revision": engine.revision,
+            "value": {"targetId": "h_b3", "actorId": "h_ev", "effectType": "PLAY_FROM_HAND"}
+        }));
+
+        assert!(engine.players.get("p1").unwrap().field.iter().any(|c| c.instance_id == "h_b3"));
+    }
+
+    #[test]
+    fn test_b03025_remainder_to_remove_and_follow_up_hand_play() {
+        let catalog = load_test_catalog();
+        let mut engine = engine::MatchEngine::new(catalog);
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        let ps2 = engine::PlayerState::new("p2".to_string());
+        ps1.r#case = Some(test_inst("p1_case", "B01002", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        for i in 0..6 {
+            ps1.file.push(test_inst(&format!("f{}", i), "B01021", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+        }
+
+        // 山札上5枚: 少年探偵団(B01021) x1 + 非探偵団(B01020) x4
+        for i in 0..4 {
+            ps1.deck.push(test_inst(&format!("d_other_{}", i), "B01020", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        }
+        ps1.deck.push(test_inst("d_dt", "B01021", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+        ps1.hand.push(test_inst("h_ev", "B03025", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        ps1.hand.push(test_inst("h_dt", "B01021", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        engine.prompt_main_action("p1");
+        let pd1 = engine.pending_decision.as_ref().unwrap().clone();
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd1["decisionId"],
+            "revision": engine.revision,
+            "value": {"type": "HAND_PLAY", "cardId": "h_ev"}
+        }));
+
+        let pd_ds = engine.pending_decision.as_ref().unwrap().clone();
+        assert_eq!(pd_ds["kind"], "deckSearch");
+        assert_eq!(pd_ds["options"]["pickAction"], "TO_HAND");
+        assert_eq!(pd_ds["options"]["remainderToRemove"], true);
+
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd_ds["decisionId"],
+            "revision": engine.revision,
+            "value": {"chosenCardId": "d_dt", "actorId": "h_ev"}
+        }));
+
+        // 残り4枚はデッキ下ではなくリムーブエリアへ (B03025自身+残り4枚=5枚)
+        let ps1_mid = engine.players.get("p1").unwrap();
+        assert_eq!(ps1_mid.deck.len(), 0);
+        assert_eq!(ps1_mid.remove.len(), 5);
+
+        // 続けて手札から少年探偵団を登場させる targetSelect が開く
+        let pd_ts = engine.pending_decision.as_ref().unwrap().clone();
+        assert_eq!(pd_ts["kind"], "targetSelect");
+        assert_eq!(pd_ts["options"]["effectType"], "PLAY_FROM_HAND");
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd_ts["decisionId"],
+            "revision": engine.revision,
+            "value": {"targetId": "h_dt", "actorId": "h_ev", "effectType": "PLAY_FROM_HAND"}
+        }));
+        assert!(engine.players.get("p1").unwrap().field.iter().any(|c| c.instance_id == "h_dt"));
+    }
 }
 
