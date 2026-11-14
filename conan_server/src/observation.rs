@@ -28,6 +28,7 @@ pub fn build_player_observation(engine: &MatchEngine, viewing_player_id: &str) -
         let base_ap = c_def.map(|d| d.ap).unwrap_or(0);
         let effective_ap = engine.get_effective_ap(&c.owner_id, c);
         let lp = c_def.map(|d| d.lp).unwrap_or(0);
+        let traits = c_def.map(|d| d.traits.clone()).unwrap_or_default();
         let card_type = c_def.map(|d| format!("{:?}", d.card_type)).unwrap_or_else(|| "CHARACTER".to_string());
         let main_thumb = c_def.and_then(|d| d.main_thumb.clone());
         let main_path = c_def.and_then(|d| d.main_path.clone());
@@ -38,6 +39,7 @@ pub fn build_player_observation(engine: &MatchEngine, viewing_player_id: &str) -
             "name": name,
             "description": desc,
             "colors": colors,
+            "traits": traits,
             "level": level,
             "ap": effective_ap,
             "baseAp": base_ap,

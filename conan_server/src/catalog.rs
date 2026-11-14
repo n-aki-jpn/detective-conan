@@ -100,11 +100,65 @@ impl CardCatalog {
                     })
                     .unwrap_or_else(|| vec![name]);
 
-                let description = card
+                let clean_desc = |s: &str| -> String {
+                    s.replace("\r\n", "\n")
+                        .replace('\r', "\n")
+                        .replace("<br>", "\n")
+                        .lines()
+                        .map(|l| l.trim())
+                        .filter(|l| !l.is_empty())
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                };
+
+                let raw_desc = card
                     .get("description")
+                    .or_else(|| card.get("feature"))
                     .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
+                    .unwrap_or("");
+                let mut desc_parts: Vec<String> = clean_desc(raw_desc)
+                    .lines()
+                    .map(|l| l.to_string())
+                    .collect();
+                let desc_joined = desc_parts.join("\n");
+                if let Some(henso) = card.get("henso").and_then(|v| v.as_str()) {
+                    let h = clean_desc(henso);
+                    if !h.is_empty() && !desc_joined.contains(&h) {
+                        desc_parts.insert(0, h);
+                    }
+                }
+                for key in ["hirameki", "cut_in"] {
+                    if let Some(extra) = card.get(key).and_then(|v| v.as_str()) {
+                        let e = clean_desc(extra);
+                        if !e.is_empty() && !desc_joined.contains(&e) {
+                            desc_parts.push(e);
+                        }
+                    }
+                }
+                let description = desc_parts.join("\n");
+
+                let mut traits: Vec<String> = Vec::new();
+                if let Some(arr) = card.get("traits").and_then(|v| v.as_array()) {
+                    for item in arr {
+                        if let Some(s) = item.as_str() {
+                            let t = s.trim();
+                            if !t.is_empty() && t != "なし" && !traits.iter().any(|x| x == t) {
+                                traits.push(t.to_string());
+                            }
+                        }
+                    }
+                } else {
+                    for key in ["category1", "category2", "category3"] {
+                        if let Some(val) = card.get(key).and_then(|v| v.as_str()) {
+                            for part in val.split([',', '、']) {
+                                let t = part.trim();
+                                if !t.is_empty() && t != "なし" && !traits.iter().any(|x| x == t) {
+                                    traits.push(t.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
 
                 let main_thumb = card
                     .get("mainThumb")
@@ -137,7 +191,7 @@ impl CardCatalog {
                     lp,
                     names,
                     description,
-                    traits: vec![],
+                    traits,
                     case_levels,
                     main_thumb,
                     main_path,

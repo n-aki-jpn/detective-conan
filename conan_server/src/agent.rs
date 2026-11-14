@@ -389,6 +389,9 @@ impl RandomAgent {
                     let mut best_score = i32::MIN;
                     let eff_file = my_ps.effective_file_count() as i32;
                     for c in cards {
+                        if c.get("selectable").and_then(|v| v.as_bool()) == Some(false) {
+                            continue;
+                        }
                         let cid = match c.get("instanceId").and_then(|v| v.as_str()) {
                             Some(s) => s,
                             None => continue,
@@ -563,7 +566,11 @@ impl RandomAgent {
             "deckSearch" => {
                 let actor_id = opts.get("actorId").and_then(|v| v.as_str()).unwrap_or("");
                 if let Some(cards) = opts.get("revealedCards").and_then(|v| v.as_array()) {
-                    if let Some(chosen) = cards.choose(&mut rng) {
+                    let selectable: Vec<&Value> = cards
+                        .iter()
+                        .filter(|c| c.get("selectable").and_then(|v| v.as_bool()).unwrap_or(true))
+                        .collect();
+                    if let Some(chosen) = selectable.choose(&mut rng) {
                         let cid = chosen.get("instanceId").and_then(|v| v.as_str());
                         return json!({
                             "value": {
