@@ -2309,6 +2309,50 @@ mod tests {
         }));
 
         assert!(engine.players.get("p1").unwrap().field.iter().any(|c| c.instance_id == "h_b3"));
+
+        // 追加検証: FILE2・手札にキャラ0枚の状態でD01014を使い、デッキからLv2青キャラ(B01019)を加えてそのまま登場できること
+        let mut engine2 = engine::MatchEngine::new(load_test_catalog());
+        engine2.phase = models::MatchPhase::MAIN;
+        engine2.turn_player_id = "p1".to_string();
+        engine2.player_order = vec!["p1".to_string(), "p2".to_string()];
+        let mut p1_s = engine::PlayerState::new("p1".to_string());
+        let p2_s = engine::PlayerState::new("p2".to_string());
+        p1_s.r#case = Some(test_inst("p1_case", "B01002", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        for i in 0..2 {
+            p1_s.file.push(test_inst(&format!("f2_{}", i), "B01021", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+        }
+        p1_s.deck.push(test_inst("d2_0", "B01020", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        p1_s.deck.push(test_inst("d2_1", "B01020", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        p1_s.deck.push(test_inst("d2_lv2", "B01019", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        p1_s.hand.push(test_inst("h2_ev", "D01014", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        engine2.players.insert("p1".to_string(), p1_s);
+        engine2.players.insert("p2".to_string(), p2_s);
+
+        engine2.prompt_main_action("p1");
+        let pd2_1 = engine2.pending_decision.as_ref().unwrap().clone();
+        let _ = engine2.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd2_1["decisionId"],
+            "revision": engine2.revision,
+            "value": {"type": "HAND_PLAY", "cardId": "h2_ev"}
+        }));
+        let pd2_ds = engine2.pending_decision.as_ref().unwrap().clone();
+        assert_eq!(pd2_ds["kind"], "deckSearch");
+        let _ = engine2.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd2_ds["decisionId"],
+            "revision": engine2.revision,
+            "value": {"chosenCardId": "d2_lv2", "actorId": "h2_ev"}
+        }));
+        let pd2_ts = engine2.pending_decision.as_ref().expect("FILE2でも手札に加えたLv2キャラが登場選択に出るべき").clone();
+        assert_eq!(pd2_ts["kind"], "targetSelect");
+        assert_eq!(pd2_ts["options"]["effectType"], "PLAY_FROM_HAND");
+        let cands2 = pd2_ts["options"]["candidates"].as_array().unwrap();
+        assert!(cands2.iter().any(|c| c["instanceId"] == "d2_lv2"), "手札に加えたLv2キャラが候補に含まれる");
+        let _ = engine2.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd2_ts["decisionId"],
+            "revision": engine2.revision,
+            "value": {"targetId": "d2_lv2", "actorId": "h2_ev", "effectType": "PLAY_FROM_HAND"}
+        }));
+        assert!(engine2.players.get("p1").unwrap().field.iter().any(|c| c.instance_id == "d2_lv2"));
     }
 
     #[test]
