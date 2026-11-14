@@ -1123,22 +1123,22 @@
 
     <div id="battle-deck-bar"
       style="display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:6px 10px; background:rgba(15,23,42,0.75); border-bottom:1px solid var(--border-color); font-size:0.75rem;">
-      <label style="display:flex; align-items:center; gap:4px; flex:1; min-width:150px;">
-        <span style="color:#38bdf8; font-weight:bold; white-space:nowrap;">P1:</span>
-        <select id="battle-p1-deck"
+      <label style="display:flex; align-items:center; gap:4px; flex:1; min-width:160px;">
+        <span style="color:#38bdf8; font-weight:bold; white-space:nowrap;">自分デッキ:</span>
+        <select id="battle-p1-deck" onchange="onBattleDeckSelectionChanged()"
           style="flex:1; min-width:0; background:#0f172a; color:white; border:1px solid #475569; padding:4px 6px; border-radius:4px; font-size:0.75rem;">
-          <option value="">(現在のデッキ)</option>
+          <option value="">(現在の使用中デッキ)</option>
         </select>
       </label>
-      <label style="display:flex; align-items:center; gap:4px; flex:1; min-width:150px;">
-        <span style="color:#f87171; font-weight:bold; white-space:nowrap;">CPU/P2:</span>
-        <select id="battle-p2-deck"
+      <label style="display:flex; align-items:center; gap:4px; flex:1; min-width:160px;">
+        <span style="color:#f87171; font-weight:bold; white-space:nowrap;">相手/CPU:</span>
+        <select id="battle-p2-deck" onchange="onBattleDeckSelectionChanged()"
           style="flex:1; min-width:0; background:#0f172a; color:white; border:1px solid #475569; padding:4px 6px; border-radius:4px; font-size:0.75rem;">
-          <option value="">(現在のデッキ)</option>
+          <option value="">(現在の使用中デッキ)</option>
         </select>
       </label>
-      <button class="btn btn-secondary" onclick="resetMatch()"
-        style="padding:4px 10px; font-size:0.75rem; min-height:26px; white-space:nowrap;">🔄 デッキ適用</button>
+      <button id="btn-apply-battle-decks" class="btn btn-secondary" onclick="resetMatch()"
+        style="padding:4px 10px; font-size:0.75rem; min-height:26px; white-space:nowrap;">🔄 このデッキで対戦</button>
     </div>
 
     <div class="board-container">
@@ -1546,8 +1546,8 @@
         if (typeof syncBgm === 'function') syncBgm();
       } else {
         lastRevision = -1;
+        loadBattleDecks();
         fetchState();
-        if (typeof resumeBgmIfEnabled === 'function') resumeBgmIfEnabled();
         if (typeof syncBgm === 'function') syncBgm();
       }
     }
@@ -1740,39 +1740,89 @@
       fetchState();
     }
 
-    async function loadBattleDecks() {
+    function onBattleDeckSelectionChanged() {
+      const btn = document.getElementById('btn-apply-battle-decks');
+      if (btn) {
+        btn.style.background = '#0284c7';
+        btn.style.borderColor = '#38bdf8';
+        btn.innerText = '⚡ 適用して新規対戦';
+      }
+    }
+
+    async function loadBattleDecks(preferredP1Id = null) {
       try {
-        const res = await fetch('/api/decks');
-        if (!res.ok) return;
-        const raw = await res.json();
+        const [decksRes, activeRes] = await Promise.all([
+          fetch('/api/decks'),
+          fetch('/api/deck').catch(() => null),
+        ]);
+        if (!decksRes.ok) return;
+        const raw = await decksRes.json();
         const decks = Array.isArray(raw) ? raw : (raw.decks || []);
+        let activeDeckId = '';
+        let activeDeckName = '';
+        if (activeRes && activeRes.ok) {
+          const activeData = await activeRes.json().catch(() => null);
+          if (activeData && activeData.deckId) {
+            activeDeckId = activeData.deckId;
+            activeDeckName = activeData.deckName || activeData.deckId;
+          }
+        }
+
         const p1Sel = document.getElementById('battle-p1-deck');
         const p2Sel = document.getElementById('battle-p2-deck');
         if (!p1Sel || !p2Sel) return;
 
-        const prevP1 = p1Sel.value;
-        const prevP2 = p2Sel.value;
+        const prevP1 = preferredP1Id || p1Sel.value || activeDeckId || '';
+        const prevP2 = p2Sel.value || '';
 
-        const sorted = [...decks].sort((a, b) => {
-          const ap = (a.deckId || '').startsWith('preset_') ? 1 : 0;
-          const bp = (b.deckId || '').startsWith('preset_') ? 1 : 0;
-          if (ap !== bp) return ap - bp;
-          return (a.deckName || a.deckId || '').localeCompare(b.deckName || b.deckId || '', 'ja');
-        });
+        const myDecks = decks
+          .filter(d => !(d.deckId || '').startsWith('preset_'))
+          .sort((a, b) => (a.deckName || a.deckId || '').localeCompare(b.deckName || b.deckId || '', 'ja'));
+        const presetDecks = decks
+          .filter(d => (d.deckId || '').startsWith('preset_'))
+          .sort((a, b) => (a.deckName || a.deckId || '').localeCompare(b.deckName || b.deckId || '', 'ja'));
 
-        const buildOptions = (sel, prevVal) => {
-          sel.innerHTML = '<option value="">(現在のデッキ)</option>';
-          for (const d of sorted) {
-            const opt = document.createElement('option');
-            opt.value = d.deckId;
-            opt.textContent = d.deckName || d.deckId;
-            sel.appendChild(opt);
+        const buildOptions = (sel, selectedVal, defaultLabel) => {
+          sel.innerHTML = '';
+          const defOpt = document.createElement('option');
+          defOpt.value = '';
+          defOpt.textContent = defaultLabel;
+          sel.appendChild(defOpt);
+
+          if (myDecks.length > 0) {
+            const grpMy = document.createElement('optgroup');
+            grpMy.label = '⭐ マイデッキ（デッキ構築で保存）';
+            for (const d of myDecks) {
+              const opt = document.createElement('option');
+              opt.value = d.deckId;
+              opt.textContent = d.deckName || d.deckId;
+              grpMy.appendChild(opt);
+            }
+            sel.appendChild(grpMy);
           }
-          if (prevVal) sel.value = prevVal;
+
+          if (presetDecks.length > 0) {
+            const grpPre = document.createElement('optgroup');
+            grpPre.label = '🎴 プリセットデッキ（全色・混色）';
+            for (const d of presetDecks) {
+              const opt = document.createElement('option');
+              opt.value = d.deckId;
+              opt.textContent = d.deckName || d.deckId;
+              grpPre.appendChild(opt);
+            }
+            sel.appendChild(grpPre);
+          }
+
+          if (selectedVal) {
+            sel.value = selectedVal;
+          }
         };
 
-        buildOptions(p1Sel, prevP1);
-        buildOptions(p2Sel, prevP2);
+        const p1DefaultLabel = activeDeckName
+          ? `(使用中: ${activeDeckName})`
+          : '(現在の使用中デッキ)';
+        buildOptions(p1Sel, prevP1, p1DefaultLabel);
+        buildOptions(p2Sel, prevP2, '(現在の相手/CPUデッキ)');
       } catch (e) {
         console.error('Failed to load battle decks:', e);
       }
@@ -1796,6 +1846,12 @@
           p2DeckId: p2DeckId || undefined
         })
       });
+      const btn = document.getElementById('btn-apply-battle-decks');
+      if (btn) {
+        btn.style.background = '';
+        btn.style.borderColor = '';
+        btn.innerText = '🔄 このデッキで対戦';
+      }
       fetchState();
     }
 
@@ -3237,6 +3293,7 @@
         });
         const result = await res.json();
         if (res.ok) {
+          await loadBattleDecks(chosenId);
           alert("デッキをブラウザに保存しました！対戦画面に移動します。");
           switchTab('battle');
         } else {
