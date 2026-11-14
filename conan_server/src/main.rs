@@ -131,7 +131,6 @@ fn send_logs_to_gas_webhook(rows: Vec<Value>) {
 
     fn flush_logs(&mut self) {
         use std::io::Write;
-        let mut webhook_rows: Vec<Value> = Vec::new();
         let ts = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs())
@@ -148,14 +147,6 @@ fn send_logs_to_gas_webhook(rows: Vec<Value>) {
                 for line in &lines {
                     let _ = writeln!(f, "[{}][room:{}] {}", ts, self.room_id, line);
                 }
-            }
-            for line in lines {
-                webhook_rows.push(json!({
-                    "timestamp": ts,
-                    "roomId": self.room_id,
-                    "type": "LOG",
-                    "message": line,
-                }));
             }
         }
         if !self.match_logged {
@@ -181,6 +172,21 @@ fn send_logs_to_gas_webhook(rows: Vec<Value>) {
                 {
                     let _ = writeln!(f, "{}", rec);
                 }
+
+                // 試合終了時にその試合の全ログと試合結果をまとめて GAS Webhook へ送信
+                let mut webhook_rows: Vec<Value> = self
+                    .engine
+                    .logs
+                    .iter()
+                    .map(|line| {
+                        json!({
+                            "timestamp": ts,
+                            "roomId": self.room_id,
+                            "type": "LOG",
+                            "message": line,
+                        })
+                    })
+                    .collect();
                 webhook_rows.push(json!({
                     "timestamp": ts,
                     "roomId": self.room_id,
@@ -190,11 +196,8 @@ fn send_logs_to_gas_webhook(rows: Vec<Value>) {
                         winner, self.engine.finish_reason, self.engine.turn, p1_ev, p2_ev, self.p2_is_cpu
                     ),
                 }));
+                Self::send_logs_to_gas_webhook(webhook_rows);
             }
-        }
-
-        if !webhook_rows.is_empty() {
-            Self::send_logs_to_gas_webhook(webhook_rows);
         }
     }
 
