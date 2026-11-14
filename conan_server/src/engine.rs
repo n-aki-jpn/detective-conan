@@ -812,34 +812,6 @@ impl MatchEngine {
 
         // 9. Disguise (変装)
         if !ps.field.is_empty() {
-            let effective_file = ps.effective_file_count() as i32;
-            let case_colors = case_def.map(|d| normalize_color_set(&d.colors)).unwrap_or_default();
-            let cond_ctx = self.build_cond_info(player_id, None, CardOrientation::ACTIVE, None);
-            let mut disguise_card_ids = vec![];
-            for c in &ps.hand {
-                if let Some(c_def) = self.catalog.get(&c.definition_id) {
-                    if c_def.card_type == CardType::CHARACTER
-                        && (c_def.description.contains("【変装】") || c_def.description.contains("【変装時】"))
-                    {
-                        let disguise_clauses = extract_clauses(&c_def.description, TriggerKind::DisguiseCond, c_def.card_type);
-                        let cond_ok = disguise_clauses.is_empty()
-                            || disguise_clauses.iter().any(|cl| check_disguise_conditions(cl, &cond_ctx).is_ok());
-                        let card_colors = normalize_color_set(&c_def.colors);
-                        let color_ok = card_colors.is_empty() || case_colors.is_empty() || card_colors.is_subset(&case_colors);
-                        if cond_ok && c_def.level <= effective_file && color_ok {
-                            disguise_card_ids.push(c.instance_id.clone());
-                        }
-                    }
-                }
-            }
-            if !disguise_card_ids.is_empty() {
-                let target_field_ids: Vec<String> = ps.field.iter().map(|c| c.instance_id.clone()).collect();
-                actions.push(json!({
-                    "type": "DISGUISE",
-                    "cardIds": disguise_card_ids,
-                    "targetIds": target_field_ids
-                }));
-            }
         }
 
         let dec_id = self.generate_decision_id();
@@ -1825,34 +1797,71 @@ impl MatchEngine {
         };
 
         // ガード可能カード（フィールドのACTIVE状態キャラ）
+        let cutin_or_disguise_used = self.action_context.as_ref().and_then(|c| c.get("cutinOrDisguiseUsed")).and_then(|v| v.as_bool()).unwrap_or(false);
+        let contact_target_id = self.action_context.as_ref().and_then(|c| c.get("targetId")).and_then(|v| v.as_str()).unwrap_or("").to_string();
+
         let guards: Vec<String> = opp_ps.field.iter()
             .filter(|c| c.orientation == CardOrientation::ACTIVE)
             .map(|c| c.instance_id.clone())
             .collect();
 
-        // カットイン可能カード（手札の【カットイン】持ちカードで発動条件を満たすもの）
+        // カットイン・変装可能カード（コンタクト時にカットインと変装を含めて合計1枚まで）
         let cond_ctx = self.build_cond_info(defender_pid, None, CardOrientation::ACTIVE, None);
-        let cutins: Vec<Value> = opp_ps.hand.iter()
-            .filter_map(|c| {
-                let def = self.catalog.get(&c.definition_id)?;
-                let clauses = extract_clauses(&def.description, TriggerKind::Cutin, def.card_type);
-                let any_ok = !clauses.is_empty()
-                    && clauses.iter().any(|cl| check_clause_conditions(cl, &cond_ctx).is_ok());
-                if any_ok {
-                    Some(json!({
-                        "instanceId": c.instance_id,
-                        "definitionId": c.definition_id,
-                        "name": self.card_name_by_def(&c.definition_id),
-                        "desc": def.description.clone(),
-                    }))
-                } else {
-                    None
-                }
-            })
-            .collect();
+        let mut cutins: Vec<Value> = vec![];
+        let mut disguises: Vec<Value> = vec![];
+        let mut disguise_target_id: Option<String> = None;
 
-        if guards.is_empty() && cutins.is_empty() {
-            // ガードもカットインもない場合は即アクション解決
+        if !cutin_or_disguise_used {
+            cutins = opp_ps.hand.iter()
+                .filter_map(|c| {
+                    let def = self.catalog.get(&c.definition_id)?;
+                    let clauses = extract_clauses(&def.description, TriggerKind::Cutin, def.card_type);
+                    let any_ok = !clauses.is_empty()
+                        && clauses.iter().any(|cl| check_clause_conditions(cl, &cond_ctx).is_ok());
+                    if any_ok {
+                        Some(json!({
+                            "instanceId": c.instance_id,
+                            "definitionId": c.definition_id,
+                            "name": self.card_name_by_def(&c.definition_id),
+                            "desc": def.description.clone(),
+                        }))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            if opp_ps.field.iter().any(|c| c.instance_id == contact_target_id) {
+                disguise_target_id = Some(contact_target_id.clone());
+                let effective_file = opp_ps.effective_file_count() as i32;
+                let case_def = opp_ps.r#case.as_ref().and_then(|c| self.catalog.get(&c.definition_id));
+                let case_colors = case_def.map(|d| normalize_color_set(&d.colors)).unwrap_or_default();
+                for c in &opp_ps.hand {
+                    if let Some(c_def) = self.catalog.get(&c.definition_id) {
+                        if c_def.card_type == CardType::CHARACTER
+                            && (c_def.description.contains("【変装】") || c_def.description.contains("【変装時】"))
+                        {
+                            let disguise_clauses = extract_clauses(&c_def.description, TriggerKind::DisguiseCond, c_def.card_type);
+                            let cond_ok = disguise_clauses.is_empty()
+                                || disguise_clauses.iter().any(|cl| check_disguise_conditions(cl, &cond_ctx).is_ok());
+                            let card_colors = normalize_color_set(&c_def.colors);
+                            let color_ok = card_colors.is_empty() || case_colors.is_empty() || card_colors.is_subset(&case_colors);
+                            if cond_ok && c_def.level <= effective_file && color_ok {
+                                disguises.push(json!({
+                                    "instanceId": c.instance_id,
+                                    "definitionId": c.definition_id,
+                                    "name": self.card_name_by_def(&c.definition_id),
+                                    "desc": c_def.description.clone(),
+                                }));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if guards.is_empty() && cutins.is_empty() && disguises.is_empty() {
+            // ガードもカットインも変装もない場合は即アクション解決
             self.proceed_to_action_resolution(None);
             return;
         }
@@ -1865,7 +1874,9 @@ impl MatchEngine {
             "kind": "guard",
             "options": {
                 "guardCardIds": guards,
-                "cutinCardIds": cutins
+                "cutinCardIds": cutins,
+                "disguiseOptions": disguises,
+                "disguiseTargetId": disguise_target_id
             }
         }));
     }
@@ -1927,33 +1938,94 @@ impl MatchEngine {
     }
 
     fn handle_guard_answer(&mut self, player_id: &str, val: &Value) {
-        // カットイン使用かチェック
-        if let Some(cutin_instance_id) = val.get("cutinCardId").and_then(|v| v.as_str()) {
-            let cutin_instance_id = cutin_instance_id.to_string();
-            let cutin_def_id = {
-                let ps = self.players.get_mut(player_id).unwrap();
-                if let Some(idx) = ps.hand.iter().position(|c| c.instance_id == cutin_instance_id) {
-                    let mut card = ps.hand.remove(idx);
-                    let def_id = card.definition_id.clone();
-                    card.zone = Zone::REMOVE;
-                    ps.remove.push(card);
-                    Some(def_id)
-                } else {
-                    None
-                }
-            };
+        let cutin_or_disguise_used = self.action_context.as_ref().and_then(|c| c.get("cutinOrDisguiseUsed")).and_then(|v| v.as_bool()).unwrap_or(false);
 
-            if let Some(def_id) = cutin_def_id {
-                let cutin_name = self.card_name_by_def(&def_id);
-                self.log(format!("⚡ {} が [{}] の【カットイン】を発動！", player_id, cutin_name));
-                let needs_target = self.resolve_cutin_effects(player_id, &cutin_instance_id, &def_id);
-                if needs_target {
+        // 変装使用かチェック（コンタクト時にカットインと変装を含めて合計1枚まで）
+        if let Some(disguise_instance_id) = val.get("disguiseCardId").and_then(|v| v.as_str()) {
+            if !cutin_or_disguise_used {
+                let target_id = val.get("targetId").and_then(|v| v.as_str())
+                    .or_else(|| self.action_context.as_ref().and_then(|c| c.get("targetId")).and_then(|v| v.as_str()))
+                    .unwrap_or("")
+                    .to_string();
+                let turn = self.turn;
+                let mut disguised_def_id = None;
+                let mut disguised_inst_id = None;
+                let mut replaced_def_id = None;
+
+                if let Some(ps) = self.players.get_mut(player_id) {
+                    if let (Some(h_idx), Some(f_idx)) = (
+                        ps.hand.iter().position(|c| c.instance_id == disguise_instance_id),
+                        ps.field.iter().position(|c| c.instance_id == target_id),
+                    ) {
+                        let mut hand_card = ps.hand.remove(h_idx);
+                        let mut old_card = ps.field.remove(f_idx);
+                        replaced_def_id = Some(old_card.definition_id.clone());
+                        disguised_def_id = Some(hand_card.definition_id.clone());
+                        disguised_inst_id = Some(hand_card.instance_id.clone());
+
+                        hand_card.zone = Zone::FIELD;
+                        hand_card.orientation = old_card.orientation;
+                        hand_card.entered_turn = turn;
+                        hand_card.face_up = true;
+                        ps.field.push(hand_card);
+
+                        old_card.zone = Zone::DECK;
+                        old_card.face_up = false;
+                        ps.deck.insert(0, old_card);
+                    }
+                }
+
+                if let (Some(def_id), Some(inst_id), Some(old_def_id)) = (disguised_def_id, disguised_inst_id, replaced_def_id) {
+                    if let Some(ctx) = self.action_context.as_mut() {
+                        ctx["cutinOrDisguiseUsed"] = json!(true);
+                        ctx["targetId"] = json!(inst_id.clone());
+                    }
+                    let new_name = self.card_name_by_def(&def_id);
+                    let old_name = self.card_name_by_def(&old_def_id);
+                    self.log(format!("🎭 {} が [{}] と入れ替えて [{}] を【変装】登場させました！", player_id, old_name, new_name));
+                    let need_ui = self.trigger_on_disguise(player_id, &inst_id, &def_id);
+                    if need_ui {
+                        return;
+                    }
+                    let defender_pid = player_id.to_string();
+                    self.prompt_guard_or_cutin(&defender_pid);
                     return;
                 }
-                // カットイン後も再度ガードできる
-                let defender_pid = player_id.to_string();
-                self.prompt_guard_or_cutin(&defender_pid);
-                return;
+            }
+        }
+
+        // カットイン使用かチェック（コンタクト時にカットインと変装を含めて合計1枚まで）
+        if let Some(cutin_instance_id) = val.get("cutinCardId").and_then(|v| v.as_str()) {
+            if !cutin_or_disguise_used {
+                let cutin_instance_id = cutin_instance_id.to_string();
+                let cutin_def_id = {
+                    let ps = self.players.get_mut(player_id).unwrap();
+                    if let Some(idx) = ps.hand.iter().position(|c| c.instance_id == cutin_instance_id) {
+                        let mut card = ps.hand.remove(idx);
+                        let def_id = card.definition_id.clone();
+                        card.zone = Zone::REMOVE;
+                        ps.remove.push(card);
+                        Some(def_id)
+                    } else {
+                        None
+                    }
+                };
+
+                if let Some(def_id) = cutin_def_id {
+                    if let Some(ctx) = self.action_context.as_mut() {
+                        ctx["cutinOrDisguiseUsed"] = json!(true);
+                    }
+                    let cutin_name = self.card_name_by_def(&def_id);
+                    self.log(format!("⚡ {} が [{}] の【カットイン】を発動！", player_id, cutin_name));
+                    let needs_target = self.resolve_cutin_effects(player_id, &cutin_instance_id, &def_id);
+                    if needs_target {
+                        return;
+                    }
+                    // カットイン後も再度ガードできる
+                    let defender_pid = player_id.to_string();
+                    self.prompt_guard_or_cutin(&defender_pid);
+                    return;
+                }
             }
         }
 

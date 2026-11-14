@@ -2453,13 +2453,14 @@
           });
         } else if (pd.kind === 'guard') {
           const hasCutins = (pd.options.cutinCardIds || []).length > 0;
+          const hasDisguises = (pd.options.disguiseOptions || []).length > 0 && !!pd.options.disguiseTargetId;
           const hasGuards = (pd.options.guardCardIds || []).length > 0;
 
-          document.getElementById('decision-title').innerText = hasCutins
-            ? `🛡️⚡ ガード / カットイン`
+          document.getElementById('decision-title').innerText = (hasCutins || hasDisguises)
+            ? `🛡️⚡ ガード / カットイン / 変装`
             : `🛡️ ガード選択`;
-          document.getElementById('decision-desc').innerText = hasCutins
-            ? `ガードするキャラを選ぶか、カットインを使用するかスルーしてください`
+          document.getElementById('decision-desc').innerText = (hasCutins || hasDisguises)
+            ? `ガードするキャラを選ぶか、カットイン/変装（合計1枚まで）を使用するかスルーしてください`
             : `ガードするキャラを選ぶかスルー`;
 
           // スルーボタン
@@ -2497,6 +2498,27 @@
               btn.innerText = `⚡ カットイン: ${name}`;
               btn.title = catCard ? (catCard.description || '') : '';
               btn.onclick = () => submitDecision({ cutinCardId: ci.instanceId });
+              decActs.appendChild(btn);
+            });
+          }
+
+          // 変装カード（手札からコンタクト中のキャラと入れ替えて使用）
+          if (hasDisguises) {
+            const sepD = document.createElement('div');
+            sepD.style.cssText = 'width:100%; text-align:center; font-size:0.72rem; color:#f59e0b; margin:4px 0; border-top:1px solid var(--border-color); padding-top:4px;';
+            sepD.innerText = '🎭 変装';
+            decActs.appendChild(sepD);
+
+            (pd.options.disguiseOptions || []).forEach(di => {
+              const btn = document.createElement('button');
+              btn.className = 'btn';
+              btn.style.cssText = 'background:#b45309; border-color:#f59e0b; font-size:0.78rem;';
+              const defId = di.definitionId || '';
+              const catCard = catalogData.find(c => c.definitionId === defId);
+              const name = (catCard && catCard.title) || di.name || defId;
+              btn.innerText = `🎭 変装: ${name}`;
+              btn.title = catCard ? (catCard.description || '') : (di.desc || '');
+              btn.onclick = () => submitDecision({ disguiseCardId: di.instanceId, targetId: pd.options.disguiseTargetId });
               decActs.appendChild(btn);
             });
           }

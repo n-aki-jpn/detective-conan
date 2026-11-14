@@ -2488,5 +2488,135 @@ mod tests {
         }));
         assert!(engine.players.get("p1").unwrap().remove.iter().any(|c| c.instance_id == "ds_0"));
     }
+
+    #[test]
+    fn test_contact_disguise_and_cutin_limit() {
+        let mut catalog = CardCatalog::load_from_json(std::path::Path::new("../data/dummy/cards.json"))
+            .expect("catalog load failed");
+
+        catalog.definitions.insert("T_BASE".to_string(), models::CardDefinition {
+            definition_id: "T_BASE".to_string(),
+            canonical_id: "T_BASE".to_string(),
+            card_type: models::CardType::CHARACTER,
+            colors: vec!["青".to_string()],
+            level: 2,
+            ap: 2000,
+            lp: 1,
+            names: vec!["ベースキャラ".to_string()],
+            description: String::new(),
+            traits: vec![],
+            case_levels: None,
+            main_thumb: None,
+            main_path: None,
+        });
+        catalog.definitions.insert("T_DISG".to_string(), models::CardDefinition {
+            definition_id: "T_DISG".to_string(),
+            canonical_id: "T_DISG".to_string(),
+            card_type: models::CardType::CHARACTER,
+            colors: vec!["青".to_string()],
+            level: 2,
+            ap: 5000,
+            lp: 1,
+            names: vec!["変装キャラ".to_string()],
+            description: "【変装】自分のキャラ1人と入れ替える。".to_string(),
+            traits: vec![],
+            case_levels: None,
+            main_thumb: None,
+            main_path: None,
+        });
+        catalog.definitions.insert("T_CUTIN".to_string(), models::CardDefinition {
+            definition_id: "T_CUTIN".to_string(),
+            canonical_id: "T_CUTIN".to_string(),
+            card_type: models::CardType::CHARACTER,
+            colors: vec!["青".to_string()],
+            level: 1,
+            ap: 1000,
+            lp: 1,
+            names: vec!["カットインキャラ".to_string()],
+            description: "【カットイン】自分のキャラ1人のAP+1000。".to_string(),
+            traits: vec![],
+            case_levels: None,
+            main_thumb: None,
+            main_path: None,
+        });
+
+        let mut engine = MatchEngine::new(catalog);
+        engine.turn = 3;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+        engine.phase = models::MatchPhase::MAIN;
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+
+        let mk = |id: &str, def: &str, owner: &str, zone: models::Zone, ori: models::CardOrientation| {
+            models::CardInstance {
+                instance_id: id.to_string(),
+                definition_id: def.to_string(),
+                owner_id: owner.to_string(),
+                zone,
+                orientation: ori,
+                entered_turn: 1,
+                face_up: true,
+                temp_ap_bonus: 0,
+                has_rush: false,
+                rush_target: None,
+                used_declare_this_turn: false,
+            }
+        };
+
+        for i in 0..5 {
+            ps1.file.push(mk(&format!("f1_{}", i), "T_BASE", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+            ps2.file.push(mk(&format!("f2_{}", i), "T_BASE", "p2", models::Zone::FILE, models::CardOrientation::ACTIVE));
+        }
+        ps2.deck.push(mk("d2_top", "T_BASE", "p2", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+        ps1.field.push(mk("p1_atk", "T_BASE", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        ps2.field.push(mk("p2_def", "T_BASE", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP));
+        ps2.field.push(mk("p2_guard", "T_BASE", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        ps2.hand.push(mk("p2_disg", "T_DISG", "p2", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        ps2.hand.push(mk("p2_cutin", "T_CUTIN", "p2", models::Zone::HAND, models::CardOrientation::ACTIVE));
+
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        // 1. MAINフェイズにはDISGUISEが含まれない
+        engine.prompt_main_action("p1");
+        let pd_main = engine.pending_decision.clone().unwrap();
+        let actions = pd_main["options"]["actions"].as_array().unwrap();
+        assert!(!actions.iter().any(|a| a["type"] == "DISGUISE"));
+
+        // 2. p1がp2_defへコンタクト
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd_main["decisionId"],
+            "revision": engine.revision,
+            "value": {"type": "ACTION", "actorId": "p1_atk", "targetId": "p2_def"}
+        }));
+
+        // 3. p2のguard決定にdisguiseOptionsとcutinCardIdsの両方が提示される
+        let pd_guard = engine.pending_decision.clone().unwrap();
+        assert_eq!(pd_guard["kind"], "guard");
+        assert_eq!(pd_guard["options"]["disguiseTargetId"], "p2_def");
+        assert!(!pd_guard["options"]["disguiseOptions"].as_array().unwrap().is_empty());
+        assert!(!pd_guard["options"]["cutinCardIds"].as_array().unwrap().is_empty());
+
+        // 4. p2が変装を使用
+        let _ = engine.submit_decision("p2", &serde_json::json!({
+            "decisionId": pd_guard["decisionId"],
+            "revision": engine.revision,
+            "value": {"disguiseCardId": "p2_disg", "targetId": "p2_def"}
+        }));
+
+        // p2_defはデッキの一番下(index 0)へ移動し、p2_disgが場に出る
+        let ps2_after = engine.players.get("p2").unwrap();
+        assert_eq!(ps2_after.deck[0].instance_id, "p2_def");
+        assert!(ps2_after.field.iter().any(|c| c.instance_id == "p2_disg"));
+
+        // 5. 変装後の再guardプロンプトでは、カットインも変装も使えない（合計1枚まで）
+        let pd_guard2 = engine.pending_decision.clone().unwrap();
+        assert_eq!(pd_guard2["kind"], "guard");
+        assert!(pd_guard2["options"]["cutinCardIds"].as_array().unwrap().is_empty());
+        assert!(pd_guard2["options"]["disguiseOptions"].as_array().unwrap().is_empty());
+    }
 }
 
