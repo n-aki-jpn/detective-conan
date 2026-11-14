@@ -273,6 +273,10 @@ struct ResetRequest {
     p1_deck_id: Option<String>,
     #[serde(rename = "p2DeckId")]
     p2_deck_id: Option<String>,
+    #[serde(rename = "p1Deck")]
+    p1_deck: Option<DeckDefinition>,
+    #[serde(rename = "p2Deck")]
+    p2_deck: Option<DeckDefinition>,
 }
 
 #[derive(Deserialize)]
@@ -486,23 +490,29 @@ async fn handle_reset(
     Json(body): Json<Option<ResetRequest>>,
 ) -> impl IntoResponse {
     let mut mgr = state.lock().unwrap();
-    let (room_id, p1_deck_id, p2_deck_id) = match body {
+    let (room_id, p1_deck_id, p2_deck_id, p1_deck_body, p2_deck_body) = match body {
         Some(b) => (
             b.room_id.unwrap_or_else(|| "default".to_string()),
             b.p1_deck_id,
             b.p2_deck_id,
+            b.p1_deck,
+            b.p2_deck,
         ),
-        None => ("default".to_string(), None, None),
+        None => ("default".to_string(), None, None, None, None),
     };
 
-    let p1_loaded = p1_deck_id
-        .as_deref()
-        .filter(|s| !s.is_empty())
-        .and_then(|id| load_deck_from_dir(&mgr.decks_dir, id));
-    let p2_loaded = p2_deck_id
-        .as_deref()
-        .filter(|s| !s.is_empty())
-        .and_then(|id| load_deck_from_dir(&mgr.decks_dir, id));
+    let p1_loaded = p1_deck_body.or_else(|| {
+        p1_deck_id
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .and_then(|id| load_deck_from_dir(&mgr.decks_dir, id))
+    });
+    let p2_loaded = p2_deck_body.or_else(|| {
+        p2_deck_id
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .and_then(|id| load_deck_from_dir(&mgr.decks_dir, id))
+    });
 
     let catalog = mgr.catalog.clone();
     if let Some(room) = mgr.rooms.get_mut(&room_id) {

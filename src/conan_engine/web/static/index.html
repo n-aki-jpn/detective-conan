@@ -1817,8 +1817,15 @@
         const prevP1 = preferredP1Id || p1Sel.value || activeDeckId || '';
         const prevP2 = p2Sel.value || '';
 
-        const myDecks = decks
+        const localDecks = typeof getStoredDecks === 'function' ? getStoredDecks() : [];
+        const myDeckMap = new Map();
+        decks
           .filter(d => !(d.deckId || '').startsWith('preset_'))
+          .forEach(d => myDeckMap.set(d.deckId, d));
+        localDecks.forEach(d => {
+          if (d && d.deckId) myDeckMap.set(d.deckId, d);
+        });
+        const myDecks = Array.from(myDeckMap.values())
           .sort((a, b) => (a.deckName || a.deckId || '').localeCompare(b.deckName || b.deckId || '', 'ja'));
         const presetDecks = decks
           .filter(d => (d.deckId || '').startsWith('preset_'))
@@ -1879,13 +1886,18 @@
       if (typeof syncBgm === 'function') syncBgm();
       const p1DeckId = document.getElementById('battle-p1-deck')?.value || null;
       const p2DeckId = document.getElementById('battle-p2-deck')?.value || null;
+      const localDecks = typeof getStoredDecks === 'function' ? getStoredDecks() : [];
+      const p1Local = p1DeckId ? localDecks.find(d => d.deckId === p1DeckId) : null;
+      const p2Local = p2DeckId ? localDecks.find(d => d.deckId === p2DeckId) : null;
       await fetch('/api/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           roomId: currentRoomId,
-          p1DeckId: p1DeckId || undefined,
-          p2DeckId: p2DeckId || undefined
+          p1DeckId: p1Local ? undefined : (p1DeckId || undefined),
+          p2DeckId: p2Local ? undefined : (p2DeckId || undefined),
+          p1Deck: p1Local || undefined,
+          p2Deck: p2Local || undefined
         })
       });
       const btn = document.getElementById('btn-apply-battle-decks');
