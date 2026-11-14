@@ -2298,21 +2298,25 @@
       lastLogCount = 0;
       lastObs = null;
       if (typeof syncBgm === 'function') syncBgm();
+      const isOnlinePvp = currentRoomId !== 'default' && !(lastObs && lastObs.isCpu);
       const p1DeckId = document.getElementById('battle-p1-deck')?.value || null;
       const p2DeckId = document.getElementById('battle-p2-deck')?.value || null;
       const localDecks = typeof getStoredDecks === 'function' ? getStoredDecks() : [];
       const p1Local = p1DeckId ? localDecks.find(d => d.deckId === p1DeckId) : null;
       const p2Local = p2DeckId ? localDecks.find(d => d.deckId === p2DeckId) : null;
+      const payload = { roomId: currentRoomId };
+      if (!isOnlinePvp || currentViewingPlayer === 'player1') {
+        payload.p1DeckId = p1Local ? undefined : (p1DeckId || undefined);
+        payload.p1Deck = p1Local || undefined;
+      }
+      if (!isOnlinePvp || currentViewingPlayer === 'player2') {
+        payload.p2DeckId = p2Local ? undefined : (p2DeckId || undefined);
+        payload.p2Deck = p2Local || undefined;
+      }
       await fetch('/api/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          roomId: currentRoomId,
-          p1DeckId: p1Local ? undefined : (p1DeckId || undefined),
-          p2DeckId: p2Local ? undefined : (p2DeckId || undefined),
-          p1Deck: p1Local || undefined,
-          p2Deck: p2Local || undefined
-        })
+        body: JSON.stringify(payload)
       });
       const btn = document.getElementById('btn-apply-battle-decks');
       if (btn) {

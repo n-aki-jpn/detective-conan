@@ -2770,16 +2770,27 @@ mod tests {
             "value": {"type": "ACTION", "actorId": "p1_atk", "targetId": "p2_def"}
         }));
 
-        // 3. p2のguard決定にdisguiseOptionsとcutinCardIdsの両方が提示される
+        // 3. まずp2のガードフェーズ（ガードをスルー）
         let pd_guard = engine.pending_decision.clone().unwrap();
         assert_eq!(pd_guard["kind"], "guard");
-        assert_eq!(pd_guard["options"]["disguiseTargetId"], "p2_def");
-        assert!(!pd_guard["options"]["disguiseOptions"].as_array().unwrap().is_empty());
-        assert!(!pd_guard["options"]["cutinCardIds"].as_array().unwrap().is_empty());
-
-        // 4. p2が変装を使用
+        assert_eq!(pd_guard["playerId"], "p2");
         let _ = engine.submit_decision("p2", &serde_json::json!({
             "decisionId": pd_guard["decisionId"],
+            "revision": engine.revision,
+            "value": {}
+        }));
+
+        // 4. カットインフェーズでp2にdisguiseOptionsとcutinCardIdsの両方が提示される
+        let pd_cutin = engine.pending_decision.clone().unwrap();
+        assert_eq!(pd_cutin["kind"], "guard");
+        assert_eq!(pd_cutin["playerId"], "p2");
+        assert_eq!(pd_cutin["options"]["disguiseTargetId"], "p2_def");
+        assert!(!pd_cutin["options"]["disguiseOptions"].as_array().unwrap().is_empty());
+        assert!(!pd_cutin["options"]["cutinCardIds"].as_array().unwrap().is_empty());
+
+        // 5. p2が変装を使用
+        let _ = engine.submit_decision("p2", &serde_json::json!({
+            "decisionId": pd_cutin["decisionId"],
             "revision": engine.revision,
             "value": {"disguiseCardId": "p2_disg", "targetId": "p2_def"}
         }));
@@ -2789,11 +2800,9 @@ mod tests {
         assert_eq!(ps2_after.deck[0].instance_id, "p2_def");
         assert!(ps2_after.field.iter().any(|c| c.instance_id == "p2_disg"));
 
-        // 5. 変装後の再guardプロンプトでは、カットインも変装も使えない（合計1枚まで）
-        let pd_guard2 = engine.pending_decision.clone().unwrap();
-        assert_eq!(pd_guard2["kind"], "guard");
-        assert!(pd_guard2["options"]["cutinCardIds"].as_array().unwrap().is_empty());
-        assert!(pd_guard2["options"]["disguiseOptions"].as_array().unwrap().is_empty());
+        // 6. カットイン・変装は各プレイヤー1回までのため、p1にカットインがなければバトル解決してmainActionへ戻る
+        let pd_after = engine.pending_decision.clone().unwrap();
+        assert_eq!(pd_after["kind"], "mainAction");
     }
 
     #[test]
@@ -3263,25 +3272,25 @@ mod tests {
             "value": {"guardCardId": "p2_guard"}
         }));
 
-        // 3. ガードによるコンタクト発生後、まずは防御側p2のコンタクトカットインフェーズへ移行する
-        let pd_cut_def = engine.pending_decision.clone().expect("defender contactCutin should be prompted after guard");
-        assert_eq!(pd_cut_def["kind"], "guard");
-        assert_eq!(pd_cut_def["playerId"], "p2");
-        assert!(pd_cut_def["options"]["guardCardIds"].as_array().unwrap().is_empty());
-        assert!(pd_cut_def["options"]["cutinCardIds"].as_array().unwrap().iter().any(|v| v["instanceId"] == "p2_cutin"));
-        let _ = engine.submit_decision("p2", &serde_json::json!({
-            "decisionId": pd_cut_def["decisionId"],
-            "revision": engine.revision,
-            "value": {}
-        }));
-
-        // 4. 相手(p2)がパスしたら、攻撃側p1のカットインフェーズに移る（即座にバトル解決しない）
-        assert_eq!(engine.players.get("p2").unwrap().remove.len(), 0);
-        let pd_cut_atk = engine.pending_decision.clone().expect("attacker contactCutin should be prompted after defender pass");
+        // 3. ガードによるコンタクト発生後、APが低い方（同APなら攻撃側p1）からカットインフェーズへ移行する
+        let pd_cut_atk = engine.pending_decision.clone().expect("attacker contactCutin should be prompted first when AP <= defender");
         assert_eq!(pd_cut_atk["kind"], "guard");
         assert_eq!(pd_cut_atk["playerId"], "p1");
         assert!(pd_cut_atk["options"]["guardCardIds"].as_array().unwrap().is_empty());
         assert!(pd_cut_atk["options"]["cutinCardIds"].as_array().unwrap().iter().any(|v| v["instanceId"] == "p1_cutin"));
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd_cut_atk["decisionId"],
+            "revision": engine.revision,
+            "value": {}
+        }));
+
+        // 4. p1がパスしたら、防御側p2のカットインフェーズに移る（即座にバトル解決しない）
+        assert_eq!(engine.players.get("p2").unwrap().remove.len(), 0);
+        let pd_cut_def = engine.pending_decision.clone().expect("defender contactCutin should be prompted after attacker pass");
+        assert_eq!(pd_cut_def["kind"], "guard");
+        assert_eq!(pd_cut_def["playerId"], "p2");
+        assert!(pd_cut_def["options"]["guardCardIds"].as_array().unwrap().is_empty());
+        assert!(pd_cut_def["options"]["cutinCardIds"].as_array().unwrap().iter().any(|v| v["instanceId"] == "p2_cutin"));
 
         // 5. 攻撃側p1がガードされた事件アタック中にカットインを使用できる
         let _ = engine.submit_decision("p1", &serde_json::json!({

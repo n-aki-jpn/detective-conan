@@ -3759,22 +3759,17 @@ impl MatchEngine {
             (vec![], vec![], None)
         };
 
-        if guards.is_empty() && cutins.is_empty() && disguises.is_empty() {
+        if guards.is_empty() {
             if is_case_attack {
                 self.proceed_to_action_resolution(None);
                 return;
             }
-            // 防衛側にガードもカットインも変装もない場合は、攻撃側のカットイン/変装確認へ
-            let attacker_pid = self.action_context.as_ref().and_then(|c| c.get("attackerPlayerId")).and_then(|v| v.as_str()).unwrap_or("").to_string();
+            // 防衛側にガード可能なキャラがいない場合は、カットインフェーズへ（APの低い方から）
             if let Some(ctx) = self.action_context.as_mut() {
                 ctx["guardResolved"] = json!(true);
-                ctx["consecutivePasses"] = json!(1);
+                ctx["consecutivePasses"] = json!(0);
             }
-            if !attacker_pid.is_empty() {
-                self.prompt_contact_cutin(&attacker_pid);
-            } else {
-                self.proceed_to_action_resolution(None);
-            }
+            self.start_cutin_phase();
             return;
         }
 
@@ -3786,12 +3781,54 @@ impl MatchEngine {
             "kind": "guard",
             "options": {
                 "guardCardIds": guards,
-                "cutinCardIds": cutins,
-                "disguiseOptions": disguises,
-                "disguiseTargetId": disguise_target_id,
+                "cutinCardIds": [],
+                "disguiseOptions": [],
+                "disguiseTargetId": null,
                 "mustGuard": must_guard
             }
         }));
+    }
+
+    /// カットインフェーズを開始し、コンタクト中キャラの現在APが低い方のプレイヤーから確認する
+    /// （APが同じ場合は攻撃側＝ターンプレイヤーから）
+    fn start_cutin_phase(&mut self) {
+        let (attacker_pid, defender_pid, actor_id, target_id, guard_id) = {
+            let ctx = match self.action_context.as_ref() {
+                Some(c) => c,
+                None => return,
+            };
+            (
+                ctx.get("attackerPlayerId").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                ctx.get("defenderPlayerId").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                ctx.get("actorId").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                ctx.get("targetId").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                ctx.get("guardCardId").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            )
+        };
+
+        let def_char_id = guard_id.clone().unwrap_or(target_id);
+        let att_ap = self.players.get(&attacker_pid)
+            .and_then(|ps| ps.field.iter().find(|c| c.instance_id == actor_id))
+            .map(|c| self.get_effective_ap(&attacker_pid, c))
+            .unwrap_or(0);
+        let def_ap = self.players.get(&defender_pid)
+            .and_then(|ps| ps.field.iter().find(|c| c.instance_id == def_char_id))
+            .map(|c| self.get_effective_ap(&defender_pid, c))
+            .unwrap_or(0);
+
+        let first_pid = if def_ap < att_ap && !defender_pid.is_empty() {
+            defender_pid
+        } else if !attacker_pid.is_empty() {
+            attacker_pid
+        } else {
+            defender_pid
+        };
+
+        if first_pid.is_empty() {
+            self.proceed_to_action_resolution(guard_id.as_deref());
+        } else {
+            self.prompt_contact_cutin(&first_pid);
+        }
     }
 
     fn collect_cutin_and_disguise_options(&self, pid: &str, contact_char_id: &str) -> (Vec<Value>, Vec<Value>, Option<String>) {
@@ -4220,21 +4257,12 @@ impl MatchEngine {
                 return;
             }
 
-            let has_guard = guard_id.is_some();
             if let Some(ctx) = self.action_context.as_mut() {
                 ctx["guardResolved"] = json!(true);
                 ctx["guardCardId"] = json!(guard_id);
-                ctx["consecutivePasses"] = json!(if has_guard || defender_used { 0 } else { 1 });
+                ctx["consecutivePasses"] = json!(0);
             }
-            let def_pid = self.action_context.as_ref().and_then(|c| c.get("defenderPlayerId")).and_then(|v| v.as_str()).unwrap_or("").to_string();
-            if has_guard && !defender_used && !def_pid.is_empty() {
-                self.prompt_contact_cutin(&def_pid);
-            } else if !attacker_pid.is_empty() {
-                self.prompt_contact_cutin(&attacker_pid);
-            } else {
-                let gid = self.action_context.as_ref().and_then(|c| c.get("guardCardId")).and_then(|v| v.as_str()).map(|s| s.to_string());
-                self.proceed_to_action_resolution(gid.as_deref());
-            }
+            self.start_cutin_phase();
             return;
         }
 
