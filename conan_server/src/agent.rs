@@ -130,10 +130,10 @@ impl RandomAgent {
                     return json!({"value": {"type": "RESOLVE_CASE"}});
                 }
 
-                // 2. パートナーアシスト: FILE 6枚なら即解決編突入のため最優先、それ以外でも中盤なら積極的にFILEへ
+                // 2. パートナーアシスト: FILE 6枚以上なら即解決編突入のため最優先、それ以外でも中盤なら積極的にFILEへ
                 if find_act("ASSIST").is_some() && my_ps.case_phase != CasePhase::RESOLUTION {
                     let eff_file = my_ps.effective_file_count();
-                    if eff_file == 6 || (eff_file >= 4 && my_ps.field.len() >= self.weights.assist_min_field) {
+                    if eff_file >= 6 || (eff_file >= 4 && my_ps.field.len() >= self.weights.assist_min_field) {
                         return json!({"value": {"type": "ASSIST"}});
                     }
                 }

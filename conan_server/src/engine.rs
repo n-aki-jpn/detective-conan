@@ -458,11 +458,6 @@ impl MatchEngine {
         }
         self.log(format!("📥 {} はカードを1枚引き、FILEに {} 枚置きました", turn_player_id, file_count));
 
-        self.check_resolution_transition(turn_player_id);
-        if self.phase == MatchPhase::FINISHED {
-            return;
-        }
-
         self.phase = MatchPhase::MAIN;
         self.prompt_main_action(turn_player_id);
     }
