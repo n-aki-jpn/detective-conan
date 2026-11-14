@@ -783,15 +783,52 @@
       position: sticky;
       top: 44px;
       z-index: 40;
-      background: rgba(30, 41, 59, 0.98);
+      background: rgba(30, 41, 59, 0.96);
       backdrop-filter: blur(8px);
       border: 1px solid var(--border-color);
       border-radius: 8px;
-      padding: 8px 10px;
+      padding: 6px 8px;
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 5px;
       box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+    }
+
+    .deck-pagination-bar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin: 8px 0;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    .deck-page-btn {
+      padding: 5px 12px;
+      border-radius: 6px;
+      border: 1px solid #475569;
+      background: #1e293b;
+      color: #f8fafc;
+      font-size: 0.78rem;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .deck-page-btn.has-next {
+      background: #0284c7;
+      border-color: #38bdf8;
+      color: #ffffff;
+    }
+
+    .deck-page-btn:disabled {
+      opacity: 0.38;
+      cursor: not-allowed;
     }
 
     .level-filter-bar {
@@ -1316,10 +1353,10 @@
         </div>
       </div>
 
-      <!-- Sticky View Selector, Summary & Filters -->
-      <div id="deck-sticky-toolbar" class="deck-sticky-toolbar">
+      <!-- Non-sticky View Selector & Summary (visible when scrolled to top) -->
+      <div style="background:var(--panel-bg); border:1px solid var(--border-color); border-radius:8px; padding:8px 10px; display:flex; flex-direction:column; gap:6px;">
         <div
-          style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,0.08);">
+          style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
           <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
             <span style="font-size:0.82rem; font-weight:bold;">🃏 選択中: <span id="sticky-total-count"
                 style="color:var(--accent); font-size:1rem;">0</span> / 40枚</span>
@@ -1340,7 +1377,10 @@
             🔍 全カードから探す (2,466枚)
           </button>
         </div>
+      </div>
 
+      <!-- Sticky Compact Filters ONLY -->
+      <div id="deck-sticky-toolbar" class="deck-sticky-toolbar">
         <div class="catalog-search-bar" style="margin-bottom:0;">
           <input type="text" id="catalog-search-input" placeholder="🔍 カード名・効果・番号で絞り込み..."
             oninput="onSearchInput(this.value)">
@@ -1348,8 +1388,8 @@
             style="padding:4px 10px; font-size:0.75rem; flex-shrink:0;">クリア</button>
         </div>
 
-        <!-- Color Filter Pills -->
-        <div class="color-filter-bar">
+        <!-- Color & Type Filter Pills -->
+        <div class="color-filter-bar" style="align-items:center;">
           <button class="color-pill active" data-color="" onclick="setColorFilter('')">すべて</button>
           <button class="color-pill" data-color="青" style="border-color:#0284c7;"
             onclick="setColorFilter('青')">青</button>
@@ -1363,6 +1403,10 @@
             onclick="setColorFilter('黄')">黄</button>
           <button class="color-pill" data-color="黒" style="border-color:#64748b;"
             onclick="setColorFilter('黒')">黒</button>
+          <span style="width:1px; height:16px; background:rgba(255,255,255,0.18); margin:0 4px;"></span>
+          <button class="level-pill type-pill active" data-type="" onclick="setTypeFilter('')">全種別</button>
+          <button class="level-pill type-pill" data-type="CHARACTER" onclick="setTypeFilter('CHARACTER')">キャラ</button>
+          <button class="level-pill type-pill" data-type="EVENT" onclick="setTypeFilter('EVENT')">イベント</button>
         </div>
 
         <!-- Level Filter & Per-Level Deck Count Pills -->
@@ -2660,6 +2704,7 @@
     let builderViewMode = 'deck'; // 'deck' (投入中カード一覧) or 'catalog' (全カード)
     let selectedColorFilter = ''; // '' or '青', '緑', etc.
     let selectedLevelFilter = ''; // '' or '1'..'8', '9+'
+    let selectedTypeFilter = ''; // '' or 'CHARACTER' or 'EVENT'
 
     function formatCardColors(colors) {
       if (!colors || colors.length === 0) return '無色';
@@ -2942,8 +2987,17 @@
     function setLevelFilter(lv) {
       selectedLevelFilter = lv;
       builderPage = 0;
-      document.querySelectorAll('.level-pill').forEach(btn => {
+      document.querySelectorAll('.level-pill:not(.type-pill)').forEach(btn => {
         btn.classList.toggle('active', btn.getAttribute('data-level') === lv);
+      });
+      renderBuilderCatalog();
+    }
+
+    function setTypeFilter(type) {
+      selectedTypeFilter = type;
+      builderPage = 0;
+      document.querySelectorAll('.type-pill').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-type') === type);
       });
       renderBuilderCatalog();
     }
@@ -2957,8 +3011,12 @@
       const input = document.getElementById('catalog-search-input');
       if (input) input.value = '';
       selectedLevelFilter = '';
-      document.querySelectorAll('.level-pill').forEach(btn => {
+      document.querySelectorAll('.level-pill:not(.type-pill)').forEach(btn => {
         btn.classList.toggle('active', btn.getAttribute('data-level') === '');
+      });
+      selectedTypeFilter = '';
+      document.querySelectorAll('.type-pill').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-type') === '');
       });
       setColorFilter('');
     }
@@ -3137,6 +3195,12 @@
           const cols = c.colors || [];
           if (!cols.includes(selectedColorFilter)) return false;
         }
+        if (selectedTypeFilter) {
+          const t = c.cardType || '';
+          const isEvent = (t === 'EVENT' || t === 'イベント');
+          if (selectedTypeFilter === 'EVENT' && !isEvent) return false;
+          if (selectedTypeFilter === 'CHARACTER' && isEvent) return false;
+        }
         if (selectedLevelFilter) {
           const lv = Number(c.level || 0);
           if (selectedLevelFilter === '9+') {
@@ -3181,18 +3245,38 @@
       const start = builderPage * PAGE_SIZE_ACTIVE;
       const pageItems = filtered.slice(start, start + PAGE_SIZE_ACTIVE);
 
-      const pageInfo = document.createElement('div');
-      pageInfo.style.cssText = 'font-size:0.75rem; color:var(--text-muted); margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;';
       const labelPrefix = builderViewMode === 'deck' ? '投入カード' : 'カタログ';
-      pageInfo.innerHTML = `
-        <span>${labelPrefix} ${filtered.length}種 (表示: ${start + 1}〜${Math.min(start + PAGE_SIZE_ACTIVE, filtered.length)})</span>
-        <span style="display:flex; gap:6px; align-items:center;">
-          <button class="qty-btn" style="width:auto; padding:2px 10px;" onclick="builderPage=Math.max(0,builderPage-1);renderBuilderCatalog();" ${builderPage === 0 ? 'disabled' : ''}>◀</button>
-          <span>${builderPage + 1} / ${totalPages}</span>
-          <button class="qty-btn" style="width:auto; padding:2px 10px;" onclick="builderPage=Math.min(${totalPages - 1},builderPage+1);renderBuilderCatalog();" ${builderPage >= totalPages - 1 ? 'disabled' : ''}>▶</button>
-        </span>
-      `;
-      container.appendChild(pageInfo);
+      const hasNext = builderPage < totalPages - 1;
+      const hasPrev = builderPage > 0;
+
+      const buildPaginationBar = (scrollToTopOnMove) => {
+        const bar = document.createElement('div');
+        bar.className = 'deck-pagination-bar';
+        bar.innerHTML = `
+          <span>
+            ${labelPrefix} <b>${filtered.length}</b>種 (${start + 1}〜${Math.min(start + PAGE_SIZE_ACTIVE, filtered.length)}件表示)
+            ${totalPages > 1 ? `｜ <b style="color:#38bdf8;">${builderPage + 1} / ${totalPages} ページ</b>` : ''}
+          </span>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <button class="deck-page-btn" ${!hasPrev ? 'disabled' : ''}>◀ 前のページ</button>
+            <button class="deck-page-btn ${hasNext ? 'has-next' : ''}" ${!hasNext ? 'disabled' : ''}>${hasNext ? `次のページ (${builderPage + 2}/${totalPages}) ▶` : '最終ページ'}</button>
+          </div>
+        `;
+        const [prevBtn, nextBtn] = bar.querySelectorAll('button');
+        prevBtn.onclick = () => {
+          builderPage = Math.max(0, builderPage - 1);
+          renderBuilderCatalog();
+          if (scrollToTopOnMove) container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
+        nextBtn.onclick = () => {
+          builderPage = Math.min(totalPages - 1, builderPage + 1);
+          renderBuilderCatalog();
+          if (scrollToTopOnMove) container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
+        return bar;
+      };
+
+      container.appendChild(buildPaginationBar(false));
 
       const cardGrid = document.createElement('div');
       cardGrid.className = 'catalog-grid';
@@ -3238,6 +3322,10 @@
         item.querySelector('.card-click-area').addEventListener('click', () => showCardModal(c));
         cardGrid.appendChild(item);
       });
+
+      if (totalPages > 1) {
+        container.appendChild(buildPaginationBar(true));
+      }
     }
 
     function filterCatalog(q) {
