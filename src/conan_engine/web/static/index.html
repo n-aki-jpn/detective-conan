@@ -2641,32 +2641,75 @@
           }
 
           const cardContainer = document.createElement('div');
-          cardContainer.style.cssText = 'display:flex; flex-wrap:wrap; gap:8px; width:100%; margin-top:6px;';
+          cardContainer.style.cssText = 'display:grid; grid-template-columns:repeat(auto-fill, minmax(112px, 1fr)); gap:8px; width:100%; margin-top:8px;';
 
           (pd.options.revealedCards || []).forEach(card => {
-            const btn = document.createElement('button');
-            btn.className = 'btn';
+            const catCard = catalogData.find(c => c.definitionId === card.definitionId);
             const isSelectable = card.selectable !== false;
             const colorsStr = (card.colors && card.colors.length > 0) ? `[${card.colors.join('/')}] ` : '';
-            const traitsStr = (card.traits && card.traits.length > 0) ? ` ［${card.traits.join('/')}］` : '';
+            const traitsStr = (card.traits && card.traits.length > 0) ? `［${card.traits.join('/')}］` : '';
 
-            const renderStyle = (isSelected) => {
+            const tile = document.createElement('div');
+            const renderTileStyle = (isSelected) => {
               if (!isSelectable) {
-                return 'background:#1e293b; border:1px solid #475569; opacity:0.45; cursor:not-allowed; font-size:0.8rem; display:flex; flex-direction:column; align-items:flex-start; padding:6px 10px; min-height:auto; text-align:left;';
+                return 'background:#0f172a; border:1px solid #334155; border-radius:8px; padding:6px; display:flex; flex-direction:column; gap:5px; opacity:0.55;';
               }
               return isSelected
-                ? 'background:#0369a1; border:2px solid #facc15; font-size:0.8rem; display:flex; flex-direction:column; align-items:flex-start; padding:6px 10px; min-height:auto; text-align:left;'
-                : 'background:#1e293b; border:1px solid #38bdf8; font-size:0.8rem; display:flex; flex-direction:column; align-items:flex-start; padding:6px 10px; min-height:auto; text-align:left;';
+                ? 'background:#0c4a6e; border:2px solid #facc15; border-radius:8px; padding:5px; display:flex; flex-direction:column; gap:5px;'
+                : 'background:#1e293b; border:1px solid #38bdf8; border-radius:8px; padding:6px; display:flex; flex-direction:column; gap:5px;';
             };
-            btn.style.cssText = renderStyle(false);
-            btn.disabled = !isSelectable;
-            btn.innerHTML = `
-              <span style="font-weight:bold; color:${isSelectable ? '#38bdf8' : '#94a3b8'};">${colorsStr}${card.name}${isSelectable ? '' : ' [条件外]'}</span>
-              <span style="font-size:0.68rem; opacity:0.85;">Lv.${card.level} / AP ${card.ap}${traitsStr}</span>
-            `;
+            tile.style.cssText = renderTileStyle(false);
 
-            if (isSelectable) {
-              btn.onclick = () => {
+            // 画像エリア（タップで拡大モーダル＆効果全文確認）
+            const imgWrap = document.createElement('div');
+            imgWrap.style.cssText = 'position:relative; width:100%; aspect-ratio:716/1000; border-radius:4px; overflow:hidden; background:#0f172a; cursor:pointer;';
+            if (catCard && catCard.mainPath) {
+              imgWrap.innerHTML = `
+                <img src="/card-images/${catCard.mainPath}" loading="lazy" style="width:100%; height:100%; object-fit:cover; display:block;" onerror="this.style.display='none'">
+                <span style="position:absolute; right:3px; bottom:3px; background:rgba(15,23,42,0.85); color:#e2e8f0; font-size:0.65rem; padding:1px 4px; border-radius:4px; border:1px solid #475569;">🔍詳細</span>
+              `;
+            } else {
+              imgWrap.innerHTML = `<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:0.7rem; color:#94a3b8; padding:4px; text-align:center;">${card.name}</div>`;
+            }
+            imgWrap.onclick = () => {
+              if (catCard) showCardModal(catCard);
+            };
+            tile.appendChild(imgWrap);
+
+            // カード情報
+            const info = document.createElement('div');
+            info.style.cssText = 'font-size:0.72rem; line-height:1.25;';
+            info.innerHTML = `
+              <div style="font-weight:bold; color:${isSelectable ? '#38bdf8' : '#94a3b8'}; word-break:break-word;">${colorsStr}${card.name}</div>
+              <div style="font-size:0.65rem; color:#cbd5e1; margin-top:2px;">Lv.${card.level} / AP ${card.ap}</div>
+              ${traitsStr ? `<div style="font-size:0.62rem; color:#94a3b8; margin-top:1px;">${traitsStr}</div>` : ''}
+            `;
+            tile.appendChild(info);
+
+            // 選択ボタン
+            const actBtn = document.createElement('button');
+            actBtn.className = 'btn';
+            actBtn.style.cssText = 'margin-top:auto; width:100%; padding:5px 4px; font-size:0.75rem; min-height:auto;';
+            if (!isSelectable) {
+              actBtn.disabled = true;
+              actBtn.style.background = '#334155';
+              actBtn.style.borderColor = '#475569';
+              actBtn.innerText = '条件外';
+            } else {
+              const updateBtnLabel = () => {
+                const isSel = selectedIds.includes(card.instanceId);
+                if (maxSelect > 1) {
+                  actBtn.innerText = isSel ? '✓ 選択中' : '選ぶ';
+                  actBtn.style.background = isSel ? '#eab308' : '#0284c7';
+                  actBtn.style.color = isSel ? '#0f172a' : '#fff';
+                } else {
+                  actBtn.innerText = 'これを選ぶ';
+                  actBtn.style.background = '#0284c7';
+                }
+                tile.style.cssText = renderTileStyle(isSel);
+              };
+              updateBtnLabel();
+              actBtn.onclick = () => {
                 if (maxSelect > 1) {
                   const idx = selectedIds.indexOf(card.instanceId);
                   if (idx >= 0) {
@@ -2674,7 +2717,7 @@
                   } else if (selectedIds.length < maxSelect) {
                     selectedIds.push(card.instanceId);
                   }
-                  btn.style.cssText = renderStyle(selectedIds.includes(card.instanceId));
+                  updateBtnLabel();
                   btnConfirm.innerText = `決定（${selectedIds.length}/${maxSelect}枚）`;
                 } else {
                   submitDecision({
@@ -2684,8 +2727,8 @@
                 }
               };
             }
-
-            cardContainer.appendChild(btn);
+            tile.appendChild(actBtn);
+            cardContainer.appendChild(tile);
           });
 
           decActs.appendChild(cardContainer);
