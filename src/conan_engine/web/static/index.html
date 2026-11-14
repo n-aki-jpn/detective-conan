@@ -1056,6 +1056,38 @@
       justify-content: space-between;
       align-items: center;
     }
+
+    @keyframes contactPulse {
+      0%, 100% { box-shadow: 0 0 0 2px #ef4444, 0 0 12px rgba(239, 68, 68, 0.8); }
+      50% { box-shadow: 0 0 0 3px #fca5a5, 0 0 20px rgba(239, 68, 68, 1); }
+    }
+    .card-attacking {
+      outline: 2.5px solid #f59e0b !important;
+      box-shadow: 0 0 14px rgba(245, 158, 11, 0.85) !important;
+      z-index: 4;
+    }
+    .card-targeted {
+      outline: 2.5px solid #ef4444 !important;
+      animation: contactPulse 1.1s infinite ease-in-out;
+      z-index: 4;
+    }
+    .contact-role-badge {
+      position: absolute;
+      top: 2px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 1px 5px;
+      border-radius: 999px;
+      font-size: 0.62rem;
+      font-weight: 800;
+      color: #fff;
+      white-space: nowrap;
+      z-index: 6;
+      pointer-events: none;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.6);
+    }
+    .contact-role-badge.atk { background: #d97706; }
+    .contact-role-badge.tgt { background: #dc2626; }
   </style>
 </head>
 
@@ -2151,6 +2183,22 @@
           showCardModal(card);
         };
       }
+      if (card && !isSecret && window.currentActionContext) {
+        const ctx = window.currentActionContext;
+        if (ctx.actorId && card.instanceId === ctx.actorId) {
+          el.classList.add('card-attacking');
+          const b = document.createElement('div');
+          b.className = 'contact-role-badge atk';
+          b.innerText = '⚔️ アタック中';
+          el.appendChild(b);
+        } else if (ctx.targetId && card.instanceId === ctx.targetId) {
+          el.classList.add('card-targeted');
+          const b = document.createElement('div');
+          b.className = 'contact-role-badge tgt';
+          b.innerText = '🎯 対象';
+          el.appendChild(b);
+        }
+      }
       return el;
     }
 
@@ -2265,6 +2313,8 @@
       document.getElementById('opp-evidence').innerText = opp.evidenceCount;
       document.getElementById('opp-remove').innerText = opp.removeCount;
       document.getElementById('opp-case-phase').innerText = opp.casePhase === 'RESOLUTION' ? '解決編' : '事件編';
+
+      window.currentActionContext = obs.actionContext || null;
 
       // Field
       const meField = document.getElementById('me-field');
@@ -2456,12 +2506,25 @@
           const hasDisguises = (pd.options.disguiseOptions || []).length > 0 && !!pd.options.disguiseTargetId;
           const hasGuards = (pd.options.guardCardIds || []).length > 0;
 
+          const ctx = obs.actionContext;
+          let contactInfo = '';
+          if (ctx && ctx.actorId && ctx.targetId) {
+            const allCards = [...(me.field || []), ...(opp.field || []), me.case, opp.case, me.partner, opp.partner].filter(Boolean);
+            const atkCard = allCards.find(c => c.instanceId === ctx.actorId);
+            const tgtCard = allCards.find(c => c.instanceId === ctx.targetId);
+            const atkCat = atkCard ? catalogData.find(c => c.definitionId === atkCard.definitionId) : null;
+            const tgtCat = tgtCard ? catalogData.find(c => c.definitionId === tgtCard.definitionId) : null;
+            const atkName = (atkCat && atkCat.title) || (atkCard && atkCard.definitionId) || ctx.actorId;
+            const tgtName = (tgtCard && tgtCard.zone === 'CASE') ? `事件 (${(tgtCat && tgtCat.title) || '事件'})` : ((tgtCat && tgtCat.title) || (tgtCard && tgtCard.definitionId) || ctx.targetId);
+            contactInfo = `⚔️ [${atkName}] ➔ 🎯 [${tgtName}]\n`;
+          }
+
           document.getElementById('decision-title').innerText = (hasCutins || hasDisguises)
             ? `🛡️⚡ ガード / カットイン / 変装`
             : `🛡️ ガード選択`;
-          document.getElementById('decision-desc').innerText = (hasCutins || hasDisguises)
+          document.getElementById('decision-desc').innerText = contactInfo + ((hasCutins || hasDisguises)
             ? `ガードするキャラを選ぶか、カットイン/変装（合計1枚まで）を使用するかスルーしてください`
-            : `ガードするキャラを選ぶかスルー`;
+            : `ガードするキャラを選ぶかスルー`);
 
           // スルーボタン
           const btnPass = document.createElement('button');

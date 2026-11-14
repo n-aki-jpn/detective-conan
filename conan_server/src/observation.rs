@@ -125,6 +125,7 @@ pub fn build_player_observation(engine: &MatchEngine, viewing_player_id: &str) -
         "me": me_ps.map(|p| serialize_player(p, true)).unwrap_or(Value::Null),
         "opponent": opp_ps.map(|p| serialize_player(p, false)).unwrap_or(Value::Null),
         "pendingDecision": pending_dec,
+        "actionContext": &engine.action_context,
         "winnerId": engine.winner_id,
         "finishReason": engine.finish_reason,
         "logs": &engine.logs
