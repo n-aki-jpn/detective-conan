@@ -1,11 +1,13 @@
 use crate::catalog::CardCatalog;
 use crate::effects::{
-    branch_matches, branch_matches_with_ctx, card_matches_filter_with_ctx,
-    check_clause_conditions, check_disguise_conditions, compute_passive_ap_bonus, extract_clauses,
-    parse_branches_from_phrase, parse_clause_cost, parse_effect_steps, parse_immediate_ops,
-    resolve_state_branch, DeckPickAction, DeckSearchStep, ImmediateOp, OwnerScope,
-    ParsedClausePlan, PlayerCondInfo, TargetAction, TargetFilter, TargetStep, TargetZone,
-    TriggerKind,
+    allows_partner_area, branch_matches, branch_matches_with_ctx, card_matches_filter_with_ctx,
+    check_action_trigger_match, check_ally_play_match, check_clause_conditions,
+    check_disguise_conditions, check_hint_use_match, clause_turn_limit,
+    compute_passive_ap_for_target, compute_passive_lp_bonus, extract_clauses,
+    parse_clause_cost, parse_effect_steps, parse_immediate_ops,
+    resolve_state_branch, ActionEventKind, DeckPickAction, DeckSearchStep, ImmediateOp,
+    OwnerScope, ParsedClausePlan, PassiveEvalContext, PlayerCondInfo, TargetAction, TargetFilter,
+    TargetStep, TargetZone, TriggerKind,
 };
 use crate::models::{
     CardInstance, CardOrientation, CardType, CasePhase, DeckDefinition, MatchPhase, Zone,
@@ -78,6 +80,10 @@ pub struct MatchEngine {
     pub winner_id: Option<String>,
     pub finish_reason: Option<String>,
     pub action_context: Option<Value>,
+    pub turn_clause_usage: HashMap<String, usize>,
+    pub turn_field_plays_by_player: HashMap<String, usize>,
+    pub pending_hint_trigger: Option<(String, i32, Vec<String>)>,
+    pub pending_ally_play: Option<(String, String, String, CardOrientation, Option<i32>, bool)>,
     pub logs: Vec<String>,
     pub pending_file_logs: Vec<String>,
 }
@@ -119,6 +125,10 @@ impl MatchEngine {
             winner_id: None,
             finish_reason: None,
             action_context: None,
+            turn_clause_usage: HashMap::new(),
+            turn_field_plays_by_player: HashMap::new(),
+            pending_hint_trigger: None,
+            pending_ally_play: None,
             logs: vec![],
             pending_file_logs: vec![],
         }
@@ -392,6 +402,10 @@ impl MatchEngine {
     fn start_turn(&mut self, turn: i32, turn_player_id: &str) {
         self.turn = turn;
         self.turn_player_id = turn_player_id.to_string();
+        self.turn_clause_usage.clear();
+        self.turn_field_plays_by_player.clear();
+        self.pending_hint_trigger = None;
+        self.pending_ally_play = None;
 
         let is_first_player;
         {
@@ -747,17 +761,21 @@ impl MatchEngine {
         }
 
         // 8. Declare (宣言効果)
-        let can_declare_clause = |actor_id: &str, actor_ori: CardOrientation, used_turn: bool, def: &crate::models::CardDefinition| -> bool {
+        let can_declare_clause = |actor_id: &str, actor_ori: CardOrientation, used_turn: bool, in_partner_area: bool, def: &crate::models::CardDefinition| -> bool {
             let clauses = extract_clauses(&def.description, TriggerKind::Declare, def.card_type);
             if clauses.is_empty() {
                 return false;
             }
             let ctx = self.build_cond_info(player_id, Some(actor_id), actor_ori, None);
+            let single_clause_legacy_used = used_turn && clauses.len() == 1;
             clauses.iter().any(|clause| {
+                if in_partner_area && def.card_type != CardType::PARTNER && !allows_partner_area(clause) {
+                    return false;
+                }
                 if check_clause_conditions(clause, &ctx).is_err() {
                     return false;
                 }
-                if clause.contains("【ターン1】") && used_turn {
+                if single_clause_legacy_used || !self.can_use_clause_this_turn(actor_id, clause) {
                     return false;
                 }
                 let cost = parse_clause_cost(clause);
@@ -768,7 +786,7 @@ impl MatchEngine {
         let mut declare_actors = vec![];
         for c in &ps.field {
             if let Some(c_def) = self.catalog.get(&c.definition_id) {
-                if can_declare_clause(&c.instance_id, c.orientation, c.used_declare_this_turn, c_def) {
+                if can_declare_clause(&c.instance_id, c.orientation, c.used_declare_this_turn, false, c_def) {
                     declare_actors.push(json!({
                         "actorId": c.instance_id.clone(),
                         "name": self.card_name_by_def(&c.definition_id),
@@ -780,7 +798,7 @@ impl MatchEngine {
         if let Some(ref p) = ps.partner {
             if p.zone == Zone::PARTNER {
                 if let Some(p_def) = self.catalog.get(&p.definition_id) {
-                    if can_declare_clause(&p.instance_id, p.orientation, p.used_declare_this_turn, p_def) {
+                    if can_declare_clause(&p.instance_id, p.orientation, p.used_declare_this_turn, true, p_def) {
                         declare_actors.push(json!({
                             "actorId": p.instance_id.clone(),
                             "name": self.card_name_by_def(&p.definition_id),
@@ -792,7 +810,7 @@ impl MatchEngine {
         }
         if let Some(ref cs) = ps.r#case {
             if let Some(c_def) = self.catalog.get(&cs.definition_id) {
-                if can_declare_clause(&cs.instance_id, cs.orientation, cs.used_declare_this_turn, c_def) {
+                if can_declare_clause(&cs.instance_id, cs.orientation, cs.used_declare_this_turn, false, c_def) {
                     declare_actors.push(json!({
                         "actorId": cs.instance_id.clone(),
                         "name": format!("📜 事件: {}", self.card_name_by_def(&cs.definition_id)),
@@ -871,12 +889,14 @@ impl MatchEngine {
                     let lvl = self.catalog.get(&def_id).map(|d| d.level).unwrap_or(0);
                     if is_event {
                         self.log(format!("📜 {} がイベント [{}] (Lv.{}) を使用しました", player_id, card_name, lvl));
+                        if self.resolve_on_play_effects(player_id, &inst_id, &def_id, true) {
+                            return;
+                        }
                     } else {
                         self.log(format!("🃏 {} が [{}] (Lv.{}) を登場させました", player_id, card_name, lvl));
-                    }
-                    let need_target = self.resolve_on_play_effects(player_id, &inst_id, &def_id, is_event);
-                    if need_target {
-                        return;
+                        if self.resolve_character_enter_field_with_source(player_id, &inst_id, &def_id, CardOrientation::ACTIVE, None, "MAIN") {
+                            return;
+                        }
                     }
                 }
                 self.prompt_main_action(player_id);
@@ -941,25 +961,25 @@ impl MatchEngine {
             }
             "DEDUCE" => {
                 let actor_id = val.get("actorId").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                let mut lp = 0;
+                let mut actor_card: Option<CardInstance> = None;
                 if let Some(ps) = self.players.get_mut(player_id) {
                     if let Some(ref mut p) = ps.partner {
                         if p.instance_id == actor_id {
                             p.orientation = CardOrientation::SLEEP;
-                            if let Some(c_def) = self.catalog.get(&p.definition_id) {
-                                lp = c_def.lp;
-                            }
+                            actor_card = Some(p.clone());
                         }
                     }
-                    if lp == 0 {
+                    if actor_card.is_none() {
                         if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == actor_id) {
                             c.orientation = CardOrientation::SLEEP;
-                            if let Some(c_def) = self.catalog.get(&c.definition_id) {
-                                lp = c_def.lp;
-                            }
+                            actor_card = Some(c.clone());
                         }
                     }
                 }
+                let lp = actor_card
+                    .as_ref()
+                    .map(|c| self.get_effective_lp(player_id, c))
+                    .unwrap_or(0);
 
                 let actor_name = self.card_name_by_inst(&actor_id);
                 if lp > 0 {
@@ -967,6 +987,9 @@ impl MatchEngine {
                     self.log(format!("🔎 {} の [{}] が 推理 を行いました（証拠 +{}）", player_id, actor_name, lp));
                 } else {
                     self.log(format!("🔎 {} の [{}] が 推理 を行いました", player_id, actor_name));
+                }
+                if self.trigger_on_action(player_id, &actor_id, ActionEventKind::Deduce, None, "MAIN") {
+                    return;
                 }
                 self.prompt_main_action(player_id);
             }
@@ -976,14 +999,19 @@ impl MatchEngine {
 
                 let opp_pid = self.player_order.iter().find(|p| *p != player_id).unwrap().clone();
 
+                let is_case_target = self
+                    .players
+                    .get(&opp_pid)
+                    .and_then(|opp_ps| opp_ps.r#case.as_ref())
+                    .map(|c| c.instance_id == target_id)
+                    .unwrap_or(false);
+
                 // 突撃の攻撃対象制限チェック
                 let rush_violation = {
                     let ps = self.players.get(player_id);
-                    let opp_ps = self.players.get(&opp_pid);
-                    if let (Some(ps), Some(opp_ps)) = (ps, opp_ps) {
+                    if let Some(ps) = ps {
                         if let Some(actor_c) = ps.field.iter().find(|c| c.instance_id == actor_id) {
                             if actor_c.entered_turn == self.turn && actor_c.has_rush {
-                                let is_case_target = opp_ps.r#case.as_ref().map(|c| c.instance_id == target_id).unwrap_or(false);
                                 match actor_c.rush_target.as_deref() {
                                     Some("CHAR") if is_case_target => Some("〚突撃［キャラ］〛は事件を攻撃できません"),
                                     Some("CASE") if !is_case_target => Some("〚突撃［事件］〛はキャラを攻撃できません"),
@@ -1015,15 +1043,30 @@ impl MatchEngine {
                 let target_name = self.card_name_by_inst(&target_id);
                 self.log(format!("⚔️ {} の [{}] が {} の [{}] に攻撃を仕掛けました！", player_id, actor_name, opp_pid, target_name));
 
-                // アクション時トリガーの解決
-                self.trigger_on_action(player_id, &actor_id);
-
                 self.action_context = Some(json!({
                     "actorId": actor_id,
                     "targetId": target_id,
                     "attackerPlayerId": player_id,
                     "defenderPlayerId": opp_pid
                 }));
+
+                // アクション時トリガーの解決
+                let action_kind = if is_case_target {
+                    ActionEventKind::AttackCase
+                } else {
+                    ActionEventKind::AttackChar
+                };
+                let start_guard_ctx = format!("START_GUARD:{}", opp_pid);
+                if self.trigger_on_action(player_id, &actor_id, action_kind, Some(&target_id), &start_guard_ctx) {
+                    return;
+                }
+
+                if !self.is_action_target_still_valid() {
+                    self.action_context = None;
+                    self.log("⚠️ 指定されていた対象が現場を離れたためアクションを終了します");
+                    self.prompt_main_action(player_id);
+                    return;
+                }
 
                 self.prompt_guard_or_cutin(&opp_pid);
             }
@@ -1080,21 +1123,24 @@ impl MatchEngine {
     }
 
     fn handle_declare_action(&mut self, player_id: &str, actor_id: &str) {
-        let def_id_opt = self.players.get(player_id).and_then(|ps| {
+        let info_opt = self.players.get(player_id).and_then(|ps| {
             if let Some(ref p) = ps.partner {
                 if p.instance_id == actor_id {
-                    return Some(p.definition_id.clone());
+                    return Some((p.definition_id.clone(), p.zone == Zone::PARTNER, p.used_declare_this_turn));
                 }
             }
             if let Some(ref cs) = ps.r#case {
                 if cs.instance_id == actor_id {
-                    return Some(cs.definition_id.clone());
+                    return Some((cs.definition_id.clone(), false, cs.used_declare_this_turn));
                 }
             }
-            ps.field.iter().find(|c| c.instance_id == actor_id).map(|c| c.definition_id.clone())
+            ps.field
+                .iter()
+                .find(|c| c.instance_id == actor_id)
+                .map(|c| (c.definition_id.clone(), false, c.used_declare_this_turn))
         });
 
-        let Some(def_id) = def_id_opt else {
+        let Some((def_id, in_partner_area, legacy_used)) = info_opt else {
             self.prompt_main_action(player_id);
             return;
         };
@@ -1107,11 +1153,18 @@ impl MatchEngine {
         let ori = self.find_actor_orientation(player_id, actor_id);
         let clauses = extract_clauses(&def.description, TriggerKind::Declare, def.card_type);
         let ctx = self.build_cond_info(player_id, Some(actor_id), ori, None);
+        let single_clause_legacy_used = legacy_used && clauses.len() == 1;
 
-        // 実行可能な宣言句を選出（複数宣言がある場合は条件・コストを満たす最初の有効句を優先）
+        // 実行可能な宣言句を選出（複数宣言がある場合は条件・ターン制限・コストを満たす最初の有効句を優先）
         let mut chosen_clause: Option<String> = None;
         for cl in &clauses {
+            if in_partner_area && def.card_type != CardType::PARTNER && !allows_partner_area(cl) {
+                continue;
+            }
             if check_clause_conditions(cl, &ctx).is_err() {
+                continue;
+            }
+            if single_clause_legacy_used || !self.can_use_clause_this_turn(actor_id, cl) {
                 continue;
             }
             let cost = parse_clause_cost(cl);
@@ -1139,6 +1192,7 @@ impl MatchEngine {
             return;
         }
 
+        self.mark_clause_used_this_turn(actor_id, &clause);
         if let Some(ps) = self.players.get_mut(player_id) {
             if let Some(ref mut p) = ps.partner {
                 if p.instance_id == actor_id {
@@ -1500,7 +1554,15 @@ impl MatchEngine {
 
         // 登場させたキャラの登場時効果（チェーン発火）
         if let Some((dep_inst, dep_def)) = deployed_on_play {
-            if self.resolve_on_play_effects_with_source(player_id, &dep_inst, &dep_def, false, source_level) {
+            let dep_ori = self.find_actor_orientation(player_id, &dep_inst);
+            if self.resolve_character_enter_field_with_source(
+                player_id,
+                &dep_inst,
+                &dep_def,
+                dep_ori,
+                source_level,
+                &resume_context,
+            ) {
                 return;
             }
         }
@@ -1553,10 +1615,12 @@ impl MatchEngine {
             }
         }
 
-        if let Some(hlv) = after_hint_level {
-            if self.trigger_on_hint_use(player_id, hlv) {
-                return;
-            }
+        if self.try_fire_pending_ally_play(&resume_context) {
+            return;
+        }
+
+        if self.try_fire_pending_hint_trigger(player_id, after_hint_level) {
+            return;
         }
 
         self.resume_after_decision(player_id, &resume_context);
@@ -1734,8 +1798,20 @@ impl MatchEngine {
         }
 
         if pick_action == "PLAY_ACTIVE" || pick_action == "PLAY_SLEEP" {
+            let play_ori = if pick_action == "PLAY_SLEEP" {
+                CardOrientation::SLEEP
+            } else {
+                CardOrientation::ACTIVE
+            };
             for (dep_inst, dep_def) in picked_defs {
-                if self.resolve_on_play_effects_with_source(player_id, &dep_inst, &dep_def, false, source_level) {
+                if self.resolve_character_enter_field_with_source(
+                    player_id,
+                    &dep_inst,
+                    &dep_def,
+                    play_ori,
+                    source_level,
+                    &resume_context,
+                ) {
                     return;
                 }
             }
@@ -1758,18 +1834,34 @@ impl MatchEngine {
             }
         }
 
-        if let Some(hlv) = after_hint_level {
-            if self.trigger_on_hint_use(player_id, hlv) {
-                return;
-            }
+        if self.try_fire_pending_ally_play(&resume_context) {
+            return;
+        }
+
+        if self.try_fire_pending_hint_trigger(player_id, after_hint_level) {
+            return;
         }
 
         self.resume_after_decision(player_id, &resume_context);
     }
 
     fn resume_after_decision(&mut self, decision_player_id: &str, resume_context: &str) {
+        if self.try_fire_pending_ally_play(resume_context) {
+            return;
+        }
+        if resume_context == "MAIN" && self.try_fire_pending_hint_trigger(decision_player_id, None) {
+            return;
+        }
         if resume_context == "GUARD" {
             self.prompt_guard_or_cutin(decision_player_id);
+        } else if let Some(def_pid) = resume_context.strip_prefix("START_GUARD:") {
+            if self.is_action_target_still_valid() {
+                self.prompt_guard_or_cutin(def_pid);
+            } else {
+                self.action_context = None;
+                self.log("⚠️ 指定されていた対象が現場を離れたためアクションを終了します");
+                self.prompt_main_action(&self.turn_player_id.clone());
+            }
         } else if resume_context == "END_TURN" {
             let next_turn = self.turn + 1;
             let cur_turn_pid = self.turn_player_id.clone();
@@ -1997,13 +2089,26 @@ impl MatchEngine {
         }
         if let (Some(def_id), Some(inst_id)) = (played_def_id, played_inst_id) {
             let card_name = self.card_name_by_def(&def_id);
-            let card_lv = self.catalog.get(&def_id).map(|d| d.level).unwrap_or(0);
-            if is_event {
+            let (card_lv, card_colors) = self
+                .catalog
+                .get(&def_id)
+                .map(|d| (d.level, d.colors.clone()))
+                .unwrap_or((0, vec![]));
+            self.pending_hint_trigger = Some((player_id.to_string(), card_lv, card_colors.clone()));
+            let need_target = if is_event {
                 self.log(format!("📜 {} がイベント [{}] を使用しました", player_id, card_name));
+                self.resolve_on_play_effects(player_id, &inst_id, &def_id, true)
             } else {
                 self.log(format!("🃏 {} が [{}] を登場させました", player_id, card_name));
-            }
-            let need_target = self.resolve_on_play_effects(player_id, &inst_id, &def_id, is_event);
+                self.resolve_character_enter_field_with_source(
+                    player_id,
+                    &inst_id,
+                    &def_id,
+                    CardOrientation::ACTIVE,
+                    None,
+                    "MAIN",
+                )
+            };
             if need_target {
                 if let Some(ref mut pd) = self.pending_decision {
                     if let Some(opts) = pd.get_mut("options").and_then(|v| v.as_object_mut()) {
@@ -2012,7 +2117,8 @@ impl MatchEngine {
                 }
                 return;
             }
-            if self.trigger_on_hint_use(player_id, card_lv) {
+            self.pending_hint_trigger = None;
+            if self.trigger_on_hint_use_with_colors(player_id, card_lv, &card_colors) {
                 return;
             }
         } else {
@@ -2440,26 +2546,123 @@ impl MatchEngine {
         false
     }
 
-    /// フィールド上のキャラの実効APを計算する（ベースAP + 一時バフ + 常時パッシブ）
+    /// フィールド上のキャラの実効APを計算する（ベースAP + 一時バフ + パッシブ自己/オーラ）
     pub fn get_effective_ap(&self, owner_id: &str, card: &CardInstance) -> i32 {
-        let base_ap = self.catalog.get(&card.definition_id).map(|d| d.ap).unwrap_or(0);
-        let mut total = base_ap + card.temp_ap_bonus;
+        let Some(target_def) = self.catalog.get(&card.definition_id) else {
+            return card.temp_ap_bonus;
+        };
+        let mut total = target_def.ap + card.temp_ap_bonus;
 
         if card.zone != Zone::FIELD {
             return total;
         }
 
-        if let Some(def) = self.catalog.get(&card.definition_id) {
-            let passive_clauses = extract_clauses(&def.description, TriggerKind::Passive, def.card_type);
-            if !passive_clauses.is_empty() {
-                let ctx = self.build_cond_info(owner_id, Some(&card.instance_id), card.orientation, None);
+        let target_base_ap = target_def.ap + card.temp_ap_bonus;
+        for src_pid in &self.player_order {
+            let Some(src_ps) = self.players.get(src_pid) else {
+                continue;
+            };
+            let opp_pid = self.opponent_id_of(src_pid);
+            let opp_field_cards: Vec<(&CardInstance, &crate::models::CardDefinition)> = self
+                .players
+                .get(&opp_pid)
+                .map(|ops| {
+                    ops.field
+                        .iter()
+                        .filter_map(|inst| self.catalog.get(&inst.definition_id).map(|d| (inst, d)))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let self_faceup_ev = src_ps.evidence.iter().filter(|e| e.face_up).count();
+            let self_hand_cnt = src_ps.hand.len();
+            let friendly = src_pid == owner_id;
+
+            let mut sources: Vec<(&CardInstance, bool)> = src_ps.field.iter().map(|c| (c, false)).collect();
+            if let Some(ref p) = src_ps.partner {
+                if p.zone == Zone::PARTNER {
+                    sources.push((p, true));
+                }
+            }
+            if let Some(ref cs) = src_ps.r#case {
+                sources.push((cs, false));
+            }
+
+            for (src_inst, in_partner) in sources {
+                let Some(src_def) = self.catalog.get(&src_inst.definition_id) else {
+                    continue;
+                };
+                let passive_clauses = extract_clauses(&src_def.description, TriggerKind::Passive, src_def.card_type);
+                if passive_clauses.is_empty() {
+                    continue;
+                }
+                let src_cond = self.build_cond_info(src_pid, Some(&src_inst.instance_id), src_inst.orientation, None);
+                let pctx = PassiveEvalContext {
+                    source_instance_id: &src_inst.instance_id,
+                    source_def: src_def,
+                    source_in_partner_area: in_partner && src_def.card_type != CardType::PARTNER,
+                    source_cond: &src_cond,
+                    target_instance_id: &card.instance_id,
+                    target_def,
+                    target_base_ap,
+                    target_is_friendly_to_source: friendly,
+                    opp_field_cards: &opp_field_cards,
+                    self_hand_count: self_hand_cnt,
+                    self_faceup_evidence_count: self_faceup_ev,
+                };
                 for clause in passive_clauses {
-                    total += compute_passive_ap_bonus(&clause, &ctx);
+                    total += compute_passive_ap_for_target(&clause, &pctx);
                 }
             }
         }
 
-        total
+        total.max(0)
+    }
+
+    /// フィールド上のキャラ・パートナーの実効LPを計算する（ベースLP + 常時パッシブ）
+    pub fn get_effective_lp(&self, owner_id: &str, card: &CardInstance) -> i32 {
+        let Some(target_def) = self.catalog.get(&card.definition_id) else {
+            return 0;
+        };
+        let mut total = target_def.lp;
+        if card.zone != Zone::FIELD && card.zone != Zone::PARTNER {
+            return total;
+        }
+        let Some(ps) = self.players.get(owner_id) else {
+            return total;
+        };
+        let passive_clauses = extract_clauses(&target_def.description, TriggerKind::Passive, target_def.card_type);
+        if passive_clauses.is_empty() {
+            return total;
+        }
+        let opp_pid = self.opponent_id_of(owner_id);
+        let opp_field_cards: Vec<(&CardInstance, &crate::models::CardDefinition)> = self
+            .players
+            .get(&opp_pid)
+            .map(|ops| {
+                ops.field
+                    .iter()
+                    .filter_map(|inst| self.catalog.get(&inst.definition_id).map(|d| (inst, d)))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let src_cond = self.build_cond_info(owner_id, Some(&card.instance_id), card.orientation, None);
+        let pctx = PassiveEvalContext {
+            source_instance_id: &card.instance_id,
+            source_def: target_def,
+            source_in_partner_area: card.zone == Zone::PARTNER && target_def.card_type != CardType::PARTNER,
+            source_cond: &src_cond,
+            target_instance_id: &card.instance_id,
+            target_def,
+            target_base_ap: target_def.ap + card.temp_ap_bonus,
+            target_is_friendly_to_source: true,
+            opp_field_cards: &opp_field_cards,
+            self_hand_count: ps.hand.len(),
+            self_faceup_evidence_count: ps.evidence.iter().filter(|e| e.face_up).count(),
+        };
+        for clause in passive_clauses {
+            total += compute_passive_lp_bonus(&clause, &pctx);
+        }
+        total.max(0)
     }
 
     /// プレイヤーのパートナー色を取得する
@@ -2568,82 +2771,142 @@ impl MatchEngine {
         }
     }
 
-    /// アクション宣言時トリガーを解決する（「このキャラがアクションしたとき」「〚...〛のキャラがアクションしたとき」）
-    pub fn trigger_on_action(&mut self, player_id: &str, actor_id: &str) {
-        let Some(actor_def_id) = self.find_card_def_id(actor_id) else {
-            return;
+    /// アクション・推理宣言時トリガーを解決する
+    pub fn trigger_on_action(
+        &mut self,
+        player_id: &str,
+        actor_id: &str,
+        kind: ActionEventKind,
+        target_id: Option<&str>,
+        resume_context: &str,
+    ) -> bool {
+        let actor_card_opt = self.players.get(player_id).and_then(|ps| {
+            ps.field
+                .iter()
+                .find(|c| c.instance_id == actor_id)
+                .or_else(|| ps.partner.as_ref().filter(|p| p.instance_id == actor_id))
+                .cloned()
+        });
+        let Some(actor_card) = actor_card_opt else {
+            return false;
         };
-        let Some(actor_def) = self.catalog.get(&actor_def_id).cloned() else {
-            return;
+        let Some(actor_def) = self.catalog.get(&actor_card.definition_id).cloned() else {
+            return false;
         };
-        let actor_name = self.card_name_by_def(&actor_def_id);
+        let actor_ap = self.get_effective_ap(player_id, &actor_card);
+        let actor_name = self.card_name_by_def(&actor_card.definition_id);
 
-        // 1. 攻撃キャラ自身の「このキャラがアクションしたとき」
-        let actor_ori = self.find_actor_orientation(player_id, actor_id);
-        for clause in extract_clauses(&actor_def.description, TriggerKind::OnAction, actor_def.card_type) {
-            if !clause.contains("このキャラがアクションしたとき")
-                && !clause.contains("このキャラが推理かアクションしたとき")
-            {
-                continue;
-            }
-            let ctx = self.build_cond_info(player_id, Some(actor_id), actor_ori, None);
-            if check_clause_conditions(&clause, &ctx).is_err() {
-                continue;
-            }
-            let plan = parse_effect_steps(&clause, None, actor_def.card_type);
-            self.execute_immediate_ops(player_id, actor_id, &actor_name, &plan.immediate_before, None);
-        }
-
-        // 2. 自分の場のキャラの「〇〇がアクションしたとき」
-        let field_cards: Vec<(String, String, CardOrientation)> = self
-            .players
-            .get(player_id)
-            .map(|ps| {
-                ps.field
-                    .iter()
-                    .map(|c| (c.instance_id.clone(), c.definition_id.clone(), c.orientation))
-                    .collect()
+        let opp_pid = self.opponent_id_of(player_id);
+        let target_info = target_id.and_then(|tid| {
+            self.players.get(&opp_pid).and_then(|ops| {
+                ops.field.iter().find(|c| c.instance_id == tid).and_then(|tc| {
+                    self.catalog
+                        .get(&tc.definition_id)
+                        .cloned()
+                        .map(|tdef| (tdef, self.get_effective_ap(&opp_pid, tc)))
+                })
             })
-            .unwrap_or_default();
+        });
 
-        for (watcher_id, def_id, ori) in field_cards {
-            let Some(def) = self.catalog.get(&def_id).cloned() else {
-                continue;
-            };
-            let watcher_name = self.card_name_by_def(&def_id);
-            for clause in extract_clauses(&def.description, TriggerKind::OnAction, def.card_type) {
-                if !clause.contains("キャラがアクションしたとき") {
+        let watch_sides: Vec<(String, bool)> = vec![(player_id.to_string(), true), (opp_pid.clone(), false)];
+        for (watch_pid, owner_is_acting) in watch_sides {
+            let watchers: Vec<(String, String, CardOrientation, bool)> = self
+                .players
+                .get(&watch_pid)
+                .map(|ps| {
+                    let mut list: Vec<(String, String, CardOrientation, bool)> = ps
+                        .field
+                        .iter()
+                        .map(|c| (c.instance_id.clone(), c.definition_id.clone(), c.orientation, false))
+                        .collect();
+                    if let Some(ref p) = ps.partner {
+                        if p.zone == Zone::PARTNER {
+                            list.push((p.instance_id.clone(), p.definition_id.clone(), p.orientation, true));
+                        }
+                    }
+                    if let Some(ref cs) = ps.r#case {
+                        list.push((cs.instance_id.clone(), cs.definition_id.clone(), cs.orientation, false));
+                    }
+                    list
+                })
+                .unwrap_or_default();
+
+            for (watcher_id, def_id, ori, in_partner) in watchers {
+                let Some(def) = self.catalog.get(&def_id).cloned() else {
                     continue;
-                }
-                let ctx = self.build_cond_info(player_id, Some(&watcher_id), ori, None);
-                if check_clause_conditions(&clause, &ctx).is_err() {
-                    continue;
-                }
-                if let Some(end_idx) = clause.find("がアクションしたとき") {
-                    let trigger_subject = &clause[..end_idx];
-                    let branches = parse_branches_from_phrase(trigger_subject, CardType::CHARACTER);
-                    if !branches.is_empty() && !branches.iter().any(|b| branch_matches(&actor_def, actor_def.ap, b)) {
+                };
+                let watcher_name = self.card_name_by_def(&def_id);
+                for clause in extract_clauses(&def.description, TriggerKind::OnAction, def.card_type) {
+                    if in_partner && def.card_type != CardType::PARTNER && !allows_partner_area(&clause) {
                         continue;
                     }
-                }
-                let plan = parse_effect_steps(&clause, None, def.card_type);
-                for op in &plan.immediate_before {
-                    match op {
-                        ImmediateOp::SelfApBuff(amt) => {
-                            if let Some(ps) = self.players.get_mut(player_id) {
-                                if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == actor_id) {
-                                    c.temp_ap_bonus += *amt;
+                    if !check_action_trigger_match(
+                        &clause,
+                        kind,
+                        owner_is_acting,
+                        &watcher_id,
+                        actor_id,
+                        &actor_def,
+                        actor_ap,
+                        target_id,
+                        target_info.as_ref().map(|(d, _)| d),
+                        target_info.as_ref().map(|(_, ap)| *ap),
+                    ) {
+                        continue;
+                    }
+                    let ctx = self.build_cond_info(&watch_pid, Some(&watcher_id), ori, None);
+                    if check_clause_conditions(&clause, &ctx).is_err() {
+                        continue;
+                    }
+                    if !self.can_use_clause_this_turn(&watcher_id, &clause) {
+                        continue;
+                    }
+                    let cost = parse_clause_cost(&clause);
+                    if !self.pay_clause_cost(&watch_pid, &watcher_id, &cost) {
+                        continue;
+                    }
+                    self.mark_clause_used_this_turn(&watcher_id, &clause);
+                    let kind_label = match kind {
+                        ActionEventKind::Deduce => "推理時",
+                        ActionEventKind::AttackCase => "アクション［事件］時",
+                        ActionEventKind::AttackChar => "アクション時",
+                    };
+                    self.log(format!("✨ [{}] の誘発効果（{}）が発動！", watcher_name, kind_label));
+
+                    let plan = parse_effect_steps(&clause, None, def.card_type);
+                    if watcher_id != actor_id && clause.contains("そのキャラをAP") && !clause.contains("このキャラをAP") {
+                        for op in &plan.immediate_before {
+                            match op {
+                                ImmediateOp::SelfApBuff(amt) => {
+                                    if let Some(ps) = self.players.get_mut(player_id) {
+                                        if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == actor_id) {
+                                            c.temp_ap_bonus += *amt;
+                                        }
+                                    }
+                                    self.log(format!("✨ [{}] の効果: [{}] のAP +{}", watcher_name, actor_name, amt));
+                                }
+                                other => {
+                                    self.execute_immediate_ops(&watch_pid, &watcher_id, &watcher_name, &[other.clone()], None);
                                 }
                             }
-                            self.log(format!("✨ [{}] の誘発効果（アクション一致）: [{}] のAP +{}", watcher_name, actor_name, amt));
                         }
-                        other => {
-                            self.execute_immediate_ops(player_id, &watcher_id, &watcher_name, &[other.clone()], None);
-                        }
+                        continue;
+                    }
+                    if self.execute_clause_plan(
+                        &watch_pid,
+                        &watcher_id,
+                        &watcher_name,
+                        Some(def.level),
+                        &plan,
+                        resume_context,
+                        None,
+                    ) {
+                        return true;
                     }
                 }
             }
         }
+        false
     }
 
     /// コンタクト突入時トリガーを解決する
@@ -2757,55 +3020,61 @@ impl MatchEngine {
         false
     }
 
-    /// ネクストヒントで手札を使用したときのトリガー（例: B01005）
+    /// ネクストヒントで手札を使用したときのトリガー（例: B01005 / B05005）
     pub fn trigger_on_hint_use(&mut self, player_id: &str, hint_card_level: i32) -> bool {
-        let actors: Vec<(String, String, CardOrientation)> = {
+        self.trigger_on_hint_use_with_colors(player_id, hint_card_level, &[])
+    }
+
+    pub fn trigger_on_hint_use_with_colors(
+        &mut self,
+        player_id: &str,
+        hint_card_level: i32,
+        hint_colors: &[String],
+    ) -> bool {
+        let actors: Vec<(String, String, CardOrientation, bool)> = {
             let Some(ps) = self.players.get(player_id) else {
                 return false;
             };
             let mut list = vec![];
             for c in &ps.field {
-                list.push((c.instance_id.clone(), c.definition_id.clone(), c.orientation));
+                list.push((c.instance_id.clone(), c.definition_id.clone(), c.orientation, false));
             }
             if let Some(ref p) = ps.partner {
-                list.push((p.instance_id.clone(), p.definition_id.clone(), p.orientation));
+                if p.zone == Zone::PARTNER {
+                    list.push((p.instance_id.clone(), p.definition_id.clone(), p.orientation, true));
+                }
+            }
+            if let Some(ref cs) = ps.r#case {
+                list.push((cs.instance_id.clone(), cs.definition_id.clone(), cs.orientation, false));
             }
             list
         };
 
-        for (actor_id, def_id, ori) in actors {
+        for (actor_id, def_id, ori, in_partner) in actors {
             let Some(def) = self.catalog.get(&def_id).cloned() else {
                 continue;
             };
             let card_name = self.card_name_by_def(&def_id);
             for clause in extract_clauses(&def.description, TriggerKind::OnHintUse, def.card_type) {
+                if in_partner && def.card_type != CardType::PARTNER && !allows_partner_area(&clause) {
+                    continue;
+                }
+                if !check_hint_use_match(&clause, hint_colors) {
+                    continue;
+                }
                 let ctx = self.build_cond_info(player_id, Some(&actor_id), ori, None);
                 if check_clause_conditions(&clause, &ctx).is_err() {
                     continue;
                 }
-                if clause.contains("【ターン1】") {
-                    let already_used = self
-                        .players
-                        .get(player_id)
-                        .map(|ps| {
-                            ps.partner.as_ref().map(|p| p.instance_id == actor_id && p.used_declare_this_turn).unwrap_or(false)
-                                || ps.field.iter().any(|c| c.instance_id == actor_id && c.used_declare_this_turn)
-                        })
-                        .unwrap_or(false);
-                    if already_used {
-                        continue;
-                    }
-                    if let Some(ps) = self.players.get_mut(player_id) {
-                        if let Some(ref mut p) = ps.partner {
-                            if p.instance_id == actor_id {
-                                p.used_declare_this_turn = true;
-                            }
-                        }
-                        if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == actor_id) {
-                            c.used_declare_this_turn = true;
-                        }
-                    }
+                if !self.can_use_clause_this_turn(&actor_id, &clause) {
+                    continue;
                 }
+                let cost = parse_clause_cost(&clause);
+                if !self.pay_clause_cost(player_id, &actor_id, &cost) {
+                    continue;
+                }
+                self.mark_clause_used_this_turn(&actor_id, &clause);
+                self.log(format!("💡 [{}] の誘発効果（ネクストヒント使用時）が発動！", card_name));
                 let plan = parse_effect_steps(&clause, Some(hint_card_level), def.card_type);
                 if self.execute_clause_plan(player_id, &actor_id, &card_name, Some(def.level), &plan, "MAIN", None) {
                     return true;
@@ -2813,6 +3082,201 @@ impl MatchEngine {
             }
         }
         false
+    }
+
+    /// キャラ登場時の常駐ウォッチャートリガー（`【疾風】`・「〜が登場したとき」）
+    pub fn trigger_on_ally_play(
+        &mut self,
+        playing_pid: &str,
+        played_inst_id: &str,
+        played_def_id: &str,
+        played_ori: CardOrientation,
+        played_by_effect_level: Option<i32>,
+        is_first_play_this_turn: bool,
+        resume_context: &str,
+    ) -> bool {
+        let Some(played_def) = self.catalog.get(played_def_id).cloned() else {
+            return false;
+        };
+        let played_ap = self
+            .players
+            .get(playing_pid)
+            .and_then(|ps| ps.field.iter().find(|c| c.instance_id == played_inst_id))
+            .map(|c| self.get_effective_ap(playing_pid, c))
+            .unwrap_or(played_def.ap);
+
+        let opp_pid = self.opponent_id_of(playing_pid);
+        let watch_sides: Vec<(String, bool)> = vec![(playing_pid.to_string(), true), (opp_pid, false)];
+
+        for (watch_pid, owner_is_playing) in watch_sides {
+            let watchers: Vec<(String, String, CardOrientation, bool)> = self
+                .players
+                .get(&watch_pid)
+                .map(|ps| {
+                    let mut list: Vec<(String, String, CardOrientation, bool)> = ps
+                        .field
+                        .iter()
+                        .map(|c| (c.instance_id.clone(), c.definition_id.clone(), c.orientation, false))
+                        .collect();
+                    if let Some(ref p) = ps.partner {
+                        if p.zone == Zone::PARTNER {
+                            list.push((p.instance_id.clone(), p.definition_id.clone(), p.orientation, true));
+                        }
+                    }
+                    if let Some(ref cs) = ps.r#case {
+                        list.push((cs.instance_id.clone(), cs.definition_id.clone(), cs.orientation, false));
+                    }
+                    list
+                })
+                .unwrap_or_default();
+
+            for (watcher_id, def_id, ori, in_partner) in watchers {
+                let Some(def) = self.catalog.get(&def_id).cloned() else {
+                    continue;
+                };
+                let watcher_name = self.card_name_by_def(&def_id);
+                for clause in extract_clauses(&def.description, TriggerKind::OnAllyPlay, def.card_type) {
+                    if in_partner && def.card_type != CardType::PARTNER && !allows_partner_area(&clause) {
+                        continue;
+                    }
+                    if !check_ally_play_match(
+                        &clause,
+                        owner_is_playing,
+                        &watcher_id,
+                        played_inst_id,
+                        &played_def,
+                        played_ap,
+                        played_ori,
+                        played_by_effect_level,
+                        is_first_play_this_turn,
+                    ) {
+                        continue;
+                    }
+                    let ctx = self.build_cond_info(&watch_pid, Some(&watcher_id), ori, played_by_effect_level);
+                    if check_clause_conditions(&clause, &ctx).is_err() {
+                        continue;
+                    }
+                    if !self.can_use_clause_this_turn(&watcher_id, &clause) {
+                        continue;
+                    }
+                    let cost = parse_clause_cost(&clause);
+                    if !self.pay_clause_cost(&watch_pid, &watcher_id, &cost) {
+                        continue;
+                    }
+                    self.mark_clause_used_this_turn(&watcher_id, &clause);
+                    self.log(format!("✨ [{}] の誘発効果（キャラ登場時）が発動！", watcher_name));
+                    let plan = parse_effect_steps(&clause, Some(played_def.level), def.card_type);
+                    if self.execute_clause_plan(
+                        &watch_pid,
+                        &watcher_id,
+                        &watcher_name,
+                        Some(def.level),
+                        &plan,
+                        resume_context,
+                        None,
+                    ) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    fn resolve_character_enter_field_with_source(
+        &mut self,
+        player_id: &str,
+        actor_id: &str,
+        definition_id: &str,
+        orientation: CardOrientation,
+        source_effect_level: Option<i32>,
+        resume_context: &str,
+    ) -> bool {
+        let entry = self
+            .turn_field_plays_by_player
+            .entry(player_id.to_string())
+            .or_insert(0);
+        *entry += 1;
+        let is_first = *entry == 1;
+
+        self.pending_ally_play = Some((
+            player_id.to_string(),
+            actor_id.to_string(),
+            definition_id.to_string(),
+            orientation,
+            source_effect_level,
+            is_first,
+        ));
+
+        if self.resolve_on_play_effects_with_source(
+            player_id,
+            actor_id,
+            definition_id,
+            false,
+            source_effect_level,
+        ) {
+            return true;
+        }
+
+        self.try_fire_pending_ally_play(resume_context)
+    }
+
+    fn try_fire_pending_ally_play(&mut self, resume_context: &str) -> bool {
+        if self.pending_decision.is_some() {
+            return false;
+        }
+        let Some((pid, inst_id, def_id, ori, src_lv, is_first)) = self.pending_ally_play.take() else {
+            return false;
+        };
+        self.trigger_on_ally_play(&pid, &inst_id, &def_id, ori, src_lv, is_first, resume_context)
+    }
+
+    fn try_fire_pending_hint_trigger(&mut self, player_id: &str, after_hint_level: Option<i32>) -> bool {
+        if self.pending_decision.is_some() {
+            return false;
+        }
+        if let Some((pid, hlv, hcols)) = self.pending_hint_trigger.take() {
+            return self.trigger_on_hint_use_with_colors(&pid, hlv, &hcols);
+        }
+        if let Some(hlv) = after_hint_level {
+            return self.trigger_on_hint_use_with_colors(player_id, hlv, &[]);
+        }
+        false
+    }
+
+    fn is_action_target_still_valid(&self) -> bool {
+        let Some(ctx) = self.action_context.as_ref() else {
+            return false;
+        };
+        let target_id = ctx.get("targetId").and_then(|v| v.as_str()).unwrap_or("");
+        let def_pid = ctx.get("defenderPlayerId").and_then(|v| v.as_str()).unwrap_or("");
+        let Some(def_ps) = self.players.get(def_pid) else {
+            return false;
+        };
+        if def_ps.r#case.as_ref().map(|c| c.instance_id == target_id).unwrap_or(false) {
+            return true;
+        }
+        def_ps.field.iter().any(|c| c.instance_id == target_id)
+    }
+
+    fn clause_usage_key(instance_id: &str, clause: &str) -> String {
+        format!("{}::{}", instance_id, clause)
+    }
+
+    fn can_use_clause_this_turn(&self, instance_id: &str, clause: &str) -> bool {
+        let Some(limit) = clause_turn_limit(clause) else {
+            return true;
+        };
+        let key = Self::clause_usage_key(instance_id, clause);
+        let used = self.turn_clause_usage.get(&key).copied().unwrap_or(0);
+        used < limit
+    }
+
+    fn mark_clause_used_this_turn(&mut self, instance_id: &str, clause: &str) {
+        if clause_turn_limit(clause).is_some() {
+            let key = Self::clause_usage_key(instance_id, clause);
+            *self.turn_clause_usage.entry(key).or_insert(0) += 1;
+        }
     }
 
     // ─── Unified Effect Execution Helpers ────────────────────────────────────

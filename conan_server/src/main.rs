@@ -2739,5 +2739,392 @@ mod tests {
         assert!(pd_guard2["options"]["cutinCardIds"].as_array().unwrap().is_empty());
         assert!(pd_guard2["options"]["disguiseOptions"].as_array().unwrap().is_empty());
     }
+
+    #[test]
+    fn test_b05005_next_hint_blue_trigger_and_independent_turn1_declare() {
+        let mut catalog = load_test_catalog();
+        // Ensure a known non-blue opponent character (AP 8000) and a non-blue card in hand exist
+        let b05005_lv = catalog.get("B05005").unwrap().level;
+        assert!(b05005_lv == 9);
+        catalog.definitions.insert(
+            "TEST_NONBLUE_8000".to_string(),
+            models::CardDefinition {
+                definition_id: "TEST_NONBLUE_8000".to_string(),
+                canonical_id: "TEST_NONBLUE_8000".to_string(),
+                card_type: models::CardType::CHARACTER,
+                colors: vec!["緑".to_string()],
+                level: 7,
+                ap: 8000,
+                lp: 1,
+                names: vec!["テスト緑8000".to_string()],
+                description: String::new(),
+                traits: vec![],
+                case_levels: None,
+                main_thumb: None,
+                main_path: None,
+            },
+        );
+        catalog.definitions.insert(
+            "TEST_NONBLUE_LOW".to_string(),
+            models::CardDefinition {
+                definition_id: "TEST_NONBLUE_LOW".to_string(),
+                canonical_id: "TEST_NONBLUE_LOW".to_string(),
+                card_type: models::CardType::CHARACTER,
+                colors: vec!["青".to_string()], // Blue only for playing via Blue case, separate test for non-blue below
+                level: 2,
+                ap: 2000,
+                lp: 1,
+                names: vec!["テスト青2".to_string()],
+                description: String::new(),
+                traits: vec![],
+                case_levels: None,
+                main_thumb: None,
+                main_path: None,
+            },
+        );
+        // Check color matching directly: green hint must NOT match B05005's 【青】のカードを使用したとき
+        let b05005_desc = catalog.get("B05005").unwrap().description.clone();
+        let hint_clauses = effects::extract_clauses(&b05005_desc, effects::TriggerKind::OnHintUse, models::CardType::CHARACTER);
+        assert_eq!(hint_clauses.len(), 1);
+        assert!(!effects::check_hint_use_match(&hint_clauses[0], &["緑".to_string()]));
+        assert!(effects::check_hint_use_match(&hint_clauses[0], &["青".to_string()]));
+
+        let mut engine = MatchEngine::new(catalog);
+        engine.turn = 4;
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        ps1.r#case = Some(test_inst("p1_case", "B01002", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        ps1.partner = Some(test_inst("p1_partner", "B01001", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+        ps1.field.push(test_inst("p1_b05005", "B05005", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        for i in 0..5 {
+            ps1.file.push(test_inst(&format!("f1_{}", i), "B01021", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+        }
+        ps1.hand.push(test_inst("h_blue_1", "TEST_NONBLUE_LOW", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        ps1.hand.push(test_inst("h_blue_2", "TEST_NONBLUE_LOW", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+
+        ps2.field.push(test_inst("opp_g8000", "TEST_NONBLUE_8000", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        ps2.deck.push(test_inst("opp_dtop", "TEST_NONBLUE_LOW", "p2", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        // 1. ネクストヒントでFILEから手札に加え、【青】カード(TEST_NONBLUE_LOW)を使用
+        engine.prompt_main_action("p1");
+        let pd1 = engine.pending_decision.as_ref().unwrap().clone();
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd1["decisionId"],
+            "revision": engine.revision,
+            "value": {"type": "HINT_TAKE"}
+        }));
+        let pd_hint = engine.pending_decision.as_ref().unwrap().clone();
+        assert_eq!(pd_hint["kind"], "hintPlay");
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd_hint["decisionId"],
+            "revision": engine.revision,
+            "value": {"cardId": "h_blue_1"}
+        }));
+
+        // 2. B05005の【パートナー青】【ターン1】が誘発し、AP8000以下の非青キャラ(opp_g8000)もデッキボトム対象として選べる！
+        let pd_ts = engine.pending_decision.as_ref().expect("B05005 OnHintUse targetSelect must open");
+        assert_eq!(pd_ts["kind"], "targetSelect");
+        assert_eq!(pd_ts["options"]["effectType"], "BOTTOM_DECK");
+        let candidates = pd_ts["options"]["candidates"].as_array().unwrap();
+        assert!(candidates.iter().any(|c| c["instanceId"] == "opp_g8000"));
+        let ts_id = pd_ts["decisionId"].as_str().unwrap().to_string();
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": ts_id,
+            "revision": engine.revision,
+            "value": {"targetId": "opp_g8000", "actorId": "p1_b05005", "effectType": "BOTTOM_DECK"}
+        }));
+
+        let ps2_after = engine.players.get("p2").unwrap();
+        assert!(ps2_after.field.is_empty());
+        assert_eq!(ps2_after.deck[0].instance_id, "opp_g8000");
+
+        // 3. 同じターン内でも B05005 の【宣言】【ターン1】はまだ未使用であるため、DECLARE候補に残る（共有バグが直っていること）
+        let pd_main2 = engine.pending_decision.as_ref().unwrap();
+        let actions2 = pd_main2["options"]["actions"].as_array().unwrap();
+        let decl_opt = actions2.iter().find(|a| a["type"] == "DECLARE").expect("DECLARE action must still be available on B05005");
+        let decl_actors = decl_opt["actors"].as_array().unwrap();
+        assert!(decl_actors.iter().any(|a| a["actorId"] == "p1_b05005"));
+
+        // 4. 同じターンにもう一度青ヒント使用を呼び出しても【ターン1】により再発動しない
+        assert!(!engine.trigger_on_hint_use_with_colors("p1", 2, &["青".to_string()]));
+    }
+
+    #[test]
+    fn test_passive_aura_ap_and_partner_lp_effects() {
+        let mut catalog = load_test_catalog();
+        catalog.definitions.insert(
+            "TEST_TAKAGI_GREEN".to_string(),
+            models::CardDefinition {
+                definition_id: "TEST_TAKAGI_GREEN".to_string(),
+                canonical_id: "TEST_TAKAGI_GREEN".to_string(),
+                card_type: models::CardType::CHARACTER,
+                colors: vec!["黄".to_string()],
+                level: 4,
+                ap: 4000,
+                lp: 1,
+                names: vec!["高木渉".to_string()],
+                description: String::new(),
+                traits: vec!["警察".to_string(), "警視庁".to_string()],
+                case_levels: None,
+                main_thumb: None,
+                main_path: None,
+            },
+        );
+
+        let mut engine = MatchEngine::new(catalog);
+        engine.turn = 4;
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        let ps2 = engine::PlayerState::new("p2".to_string());
+        // 緑パートナー D02001
+        ps1.partner = Some(test_inst("p1_p", "D02001", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+        // B01038 (自分ターン中、このキャラ以外の【緑】キャラAP+1000)
+        // B01032 (緑 Lv3 base AP=3000)
+        // B01027 (緑 Lv7 base LP=0, 【パートナー緑】LP+1)
+        // B02012 (自分ターン中、自分の現場にいるレベル5以下の【青】キャラをAP+1000, 自身Lv7 base AP=6000)
+        // B01011 (青 Lv4 base AP=2000)
+        ps1.field.push(test_inst("c_b01038", "B01038", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        ps1.field.push(test_inst("c_b01032", "B01032", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        ps1.field.push(test_inst("c_b01027", "B01027", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        ps1.field.push(test_inst("c_b02012", "B02012", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        ps1.field.push(test_inst("c_b01011", "B01011", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        ps1.deck.push(test_inst("p1_d1", "B01021", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        {
+            let ps1_ref = engine.players.get("p1").unwrap();
+            let c38 = &ps1_ref.field[0];
+            let c32 = &ps1_ref.field[1];
+            let c27 = &ps1_ref.field[2];
+            let c2012 = &ps1_ref.field[3];
+            let c11 = &ps1_ref.field[4];
+
+            let b01038_base = engine.catalog.get("B01038").unwrap().ap;
+            assert_eq!(engine.get_effective_ap("p1", c38), b01038_base); // 「このキャラ以外の」なので自身は増えない
+            assert_eq!(engine.get_effective_ap("p1", c32), 4000); // 3000 + B01038(+1000)
+            assert_eq!(engine.get_effective_ap("p1", c27), 6000); // 5000 + B01038(+1000)
+            assert_eq!(engine.get_effective_ap("p1", c2012), 6000); // Lv7なのでB02012のLv5以下バフは対象外
+            assert_eq!(engine.get_effective_ap("p1", c11), 3000); // Lv4青: 2000 + B02012(+1000)
+
+            assert_eq!(engine.get_effective_lp("p1", c27), 1); // 【パートナー緑】LP+1 (base 0 -> 1)
+        }
+
+        // B01027 で DEDUCE を実行すると LP 1 分の証拠を獲得する
+        engine.prompt_main_action("p1");
+        let pd1 = engine.pending_decision.as_ref().unwrap().clone();
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd1["decisionId"],
+            "revision": engine.revision,
+            "value": {"type": "DEDUCE", "actorId": "c_b01027"}
+        }));
+        assert_eq!(engine.players.get("p1").unwrap().evidence.len(), 1);
+
+        // 相手ターンになると【自分ターン中】オーラが消える
+        engine.turn_player_id = "p2".to_string();
+        let ps1_ref = engine.players.get("p1").unwrap();
+        assert_eq!(engine.get_effective_ap("p1", &ps1_ref.field[1]), 3000);
+        assert_eq!(engine.get_effective_ap("p1", &ps1_ref.field[4]), 2000);
+
+        // パートナーエリア有効能力 (B08062: すべてが佐藤美和子/高木渉なら全味方AP+1000)
+        engine.turn_player_id = "p1".to_string();
+        {
+            let ps1_mut = engine.players.get_mut("p1").unwrap();
+            ps1_mut.partner = Some(test_inst("p1_b08062", "B08062", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+            ps1_mut.field = vec![test_inst("c_takagi", "TEST_TAKAGI_GREEN", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE)];
+        }
+        let ps1_ref2 = engine.players.get("p1").unwrap();
+        assert_eq!(engine.get_effective_ap("p1", &ps1_ref2.field[0]), 5000); // 4000 + B08062 in Partner(+1000)
+    }
+
+    #[test]
+    fn test_on_action_variants_char_case_and_deduce() {
+        let catalog = load_test_catalog();
+        let mut engine = MatchEngine::new(catalog);
+        engine.turn = 4;
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        // 赤パートナー B01060
+        ps1.partner = Some(test_inst("p1_p", "B01060", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+        ps2.r#case = Some(test_inst("p2_case", "B01002", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        ps2.evidence.push(test_inst("p2_ev1", "B01021", "p2", models::Zone::EVIDENCE, models::CardOrientation::ACTIVE));
+        ps2.field.push(test_inst("opp_sleep", "B01021", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP)); // Lv3 < Lv7
+        ps2.field.push(test_inst("opp_guard", "B01021", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE)); // ACTIVEなのでガード権あり
+        ps1.deck.push(test_inst("d1", "B01021", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+        // B01032: 【ターン1】このキャラがアクション［キャラ］したときAP+1000
+        // B01062: 【パートナー赤】【ターン1】自分の現場にいるキャラがアクション［事件］したときLv7以下リムーブ ＋ 【宣言】【ターン1】別枠
+        ps1.field.push(test_inst("c_b01032", "B01032", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        ps1.field.push(test_inst("c_b01062", "B01062", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        // 1. B01032 が相手キャラ (opp_sleep) にアクション［キャラ］ -> B01032 APが +1000 される (3000 -> 4000)
+        //    B01062 の アクション［事件］トリガーは発動しない
+        engine.prompt_main_action("p1");
+        let pd1 = engine.pending_decision.as_ref().unwrap().clone();
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd1["decisionId"],
+            "revision": engine.revision,
+            "value": {"type": "ACTION", "actorId": "c_b01032", "targetId": "opp_sleep"}
+        }));
+        let pd_guard = engine.pending_decision.as_ref().unwrap().clone();
+        assert_eq!(pd_guard["kind"], "guard");
+        assert_eq!(engine.players.get("p1").unwrap().field[0].temp_ap_bonus, 1000);
+
+        // ガード/カットインをパスして解決へ
+        for _ in 0..4 {
+            let pd = match engine.pending_decision.as_ref() {
+                Some(d) if d["kind"] == "guard" => d.clone(),
+                _ => break,
+            };
+            let pid = pd["playerId"].as_str().unwrap().to_string();
+            let _ = engine.submit_decision(&pid, &serde_json::json!({
+                "decisionId": pd["decisionId"],
+                "revision": engine.revision,
+                "value": {"pass": true}
+            }));
+        }
+
+        // 2. 今度は c_b01032 をアクティブに戻し、別のLv4青(B01011)を出してから相手事件へアクション［事件］
+        {
+            let ps1_m = engine.players.get_mut("p1").unwrap();
+            ps1_m.field.push(test_inst("c_atk_case", "B01011", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+            ps1_m.field.last_mut().unwrap().entered_turn = 1;
+            let ps2_m = engine.players.get_mut("p2").unwrap();
+            ps2_m.field.push(test_inst("opp_lv3", "B01021", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        }
+        engine.prompt_main_action("p1");
+        let pd2 = engine.pending_decision.as_ref().unwrap().clone();
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd2["decisionId"],
+            "revision": engine.revision,
+            "value": {"type": "ACTION", "actorId": "c_atk_case", "targetId": "p2_case"}
+        }));
+
+        // B01062 の【パートナー赤】【ターン1】が誘発し、targetSelect (REMOVE) が開く！
+        let pd_ts = engine.pending_decision.as_ref().expect("B01062 OnAction(Case) must prompt targetSelect");
+        assert_eq!(pd_ts["kind"], "targetSelect");
+        assert_eq!(pd_ts["options"]["effectType"], "REMOVE");
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd_ts["decisionId"],
+            "revision": engine.revision,
+            "value": {"targetId": "opp_lv3", "actorId": "c_b01062", "effectType": "REMOVE"}
+        }));
+
+        // opp_lv3 はリムーブされ、そのまま事件アタックのカットイン/ガード確認へ進む
+        assert!(engine.players.get("p2").unwrap().field.iter().all(|c| c.instance_id != "opp_lv3"));
+        assert_eq!(engine.pending_decision.as_ref().unwrap()["kind"], "guard");
+    }
+
+    #[test]
+    fn test_on_ally_play_triggers_b11003_and_d02005() {
+        let catalog = load_test_catalog();
+        let mut engine = MatchEngine::new(catalog);
+        engine.turn = 4;
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        ps1.partner = Some(test_inst("p1_p", "B01001", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+        ps1.r#case = Some(test_inst("p1_case", "B01002", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        for i in 0..5 {
+            ps1.file.push(test_inst(&format!("f{}", i), "B01021", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+        }
+        // B11003: 【パートナー青】【自分ターン中】【ターン1】レベル4の〚特徴［少年探偵団］〛のキャラが自分の現場に登場したとき、AP8000以下のキャラを1枚まで選び、リムーブする。
+        ps1.field.push(test_inst("c_b11003", "B11003", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        ps1.hand.push(test_inst("h_b01011", "B01011", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE)); // Lv4 青 少年探偵団
+        ps2.field.push(test_inst("opp_target", "B01021", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        engine.prompt_main_action("p1");
+        let pd1 = engine.pending_decision.as_ref().unwrap().clone();
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd1["decisionId"],
+            "revision": engine.revision,
+            "value": {"type": "HAND_PLAY", "cardId": "h_b01011"}
+        }));
+
+        // B11003 の登場時ウォッチャー効果が発火し targetSelect (REMOVE) になる
+        let pd_ts = engine.pending_decision.as_ref().expect("B11003 OnAllyPlay must prompt targetSelect");
+        assert_eq!(pd_ts["kind"], "targetSelect", "logs: {:?}", engine.logs);
+        assert_eq!(pd_ts["options"]["effectType"], "REMOVE");
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd_ts["decisionId"],
+            "revision": engine.revision,
+            "value": {"targetId": "opp_target", "actorId": "c_b11003", "effectType": "REMOVE"}
+        }));
+        assert!(engine.players.get("p2").unwrap().field.is_empty());
+        assert_eq!(engine.players.get("p2").unwrap().remove.len(), 1);
+
+        // 後半: D02005 自身が登場したときの「このキャラか〚カード名［服部平次］〛が自分の現場に登場したとき、キャラを1枚まで選び、スリープさせる。」も実戦フローで発火する
+        {
+            engine.catalog.definitions.insert(
+                "TEST_CASE_GREEN".to_string(),
+                models::CardDefinition {
+                    definition_id: "TEST_CASE_GREEN".to_string(),
+                    canonical_id: "TEST_CASE_GREEN".to_string(),
+                    card_type: models::CardType::CASE,
+                    colors: vec!["緑".to_string()],
+                    level: 0,
+                    ap: 0,
+                    lp: 0,
+                    names: vec!["テスト緑事件".to_string()],
+                    description: String::new(),
+                    traits: vec![],
+                    case_levels: None,
+                    main_thumb: None,
+                    main_path: None,
+                },
+            );
+            let d02005_lv = engine.catalog.get("D02005").unwrap().level;
+            let ps1_m = engine.players.get_mut("p1").unwrap();
+            ps1_m.normal_hand_played_this_turn = false;
+            for i in 0..d02005_lv {
+                if (ps1_m.file.len() as i32) < i {
+                    ps1_m.file.push(test_inst(&format!("f_ext_{}", i), "B01021", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+                }
+            }
+            ps1_m.hand.push(test_inst("h_d02005", "D02005", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+            ps1_m.r#case = Some(test_inst("p1_case_g", "TEST_CASE_GREEN", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+            engine.players.get_mut("p2").unwrap().field.push(test_inst("opp_act", "B01021", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        }
+        engine.prompt_main_action("p1");
+        let pd2 = engine.pending_decision.as_ref().unwrap().clone();
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd2["decisionId"],
+            "revision": engine.revision,
+            "value": {"type": "HAND_PLAY", "cardId": "h_d02005"}
+        }));
+        let pd_ts2 = engine.pending_decision.as_ref().expect("D02005 self play must prompt SLEEP targetSelect");
+        assert_eq!(pd_ts2["kind"], "targetSelect");
+        assert_eq!(pd_ts2["options"]["effectType"], "SLEEP");
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd_ts2["decisionId"],
+            "revision": engine.revision,
+            "value": {"targetId": "opp_act", "actorId": "h_d02005", "effectType": "SLEEP"}
+        }));
+        assert_eq!(engine.players.get("p2").unwrap().field[0].orientation, models::CardOrientation::SLEEP);
+    }
 }
 

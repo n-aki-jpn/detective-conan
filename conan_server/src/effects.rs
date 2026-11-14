@@ -17,6 +17,7 @@ pub enum TriggerKind {
     OnContact,
     OnContactWin,
     OnHintUse,
+    OnAllyPlay,
     Passive,
 }
 
@@ -285,7 +286,16 @@ fn line_matches_trigger(line: &str, trigger: TriggerKind, card_type: CardType) -
                 || clean.contains("相手のターン終了時")
         }
         TriggerKind::OnAction => {
-            clean.contains("アクションしたとき") || clean.contains("推理かアクションしたとき")
+            !clean.starts_with("このイベントがセットされている")
+                && !clean.contains("アクション［事件］によって証拠を得たとき")
+                && !clean.contains("アクションによって証拠を得たとき")
+                && !clean.contains("ガードされたとき")
+                && !clean.contains("ガードしたとき")
+                && (clean.contains("アクションしたとき")
+                    || clean.contains("アクション［キャラ］したとき")
+                    || clean.contains("アクション［事件］したとき")
+                    || clean.contains("推理したとき")
+                    || clean.contains("推理かアクションしたとき"))
         }
         TriggerKind::OnContact => {
             clean.contains("コンタクトしたとき") || clean.contains("コンタクトされたとき")
@@ -294,17 +304,28 @@ fn line_matches_trigger(line: &str, trigger: TriggerKind, card_type: CardType) -
             clean.contains("コンタクトで勝利したとき")
                 || clean.contains("コンタクトによってリムーブされたとき")
         }
-        TriggerKind::OnHintUse => clean.contains("ネクストヒントで手札を使用したとき"),
+        TriggerKind::OnHintUse => {
+            clean.contains("ネクストヒントで") && clean.contains("を使用したとき")
+        }
+        TriggerKind::OnAllyPlay => {
+            !line.contains("【登場時】")
+                && !line.contains("【現場リムーブ時】")
+                && !clean.starts_with("このイベントがセットされている")
+                && (line.contains("【疾風】") || clean.contains("登場したとき"))
+        }
         TriggerKind::Passive => {
             !line.contains("【登場時】")
                 && !line.contains("【宣言】")
                 && !line.contains("【カットイン】")
                 && !line.contains("【ヒラメキ】")
+                && !line.contains("【変装】")
                 && !line.contains("【変装時】")
                 && !line.contains("【現場リムーブ時】")
-                && !clean.contains("アクションしたとき")
-                && !clean.contains("コンタクトしたとき")
-                && !clean.contains("コンタクトされたとき")
+                && !line.contains("【疾風】")
+                && !clean.starts_with("このイベントがセットされている")
+                && !clean.contains("とき、")
+                && !clean.contains("したとき")
+                && !clean.contains("されたとき")
                 && !clean.contains("ターン終了時、")
                 && !clean.contains("自分のターン終了時")
                 && !clean.contains("相手のターン終了時")
@@ -577,7 +598,7 @@ fn extract_field_presence_condition(clean: &str) -> Option<&str> {
     let end = tail
         .find("がいる場合")
         .or_else(|| tail.find("がいるなら"))
-        .or_else(|| tail.find("が登場した"))
+        .or_else(|| tail.find("が登場した場合"))
         ?;
     Some(&tail[..end])
 }
@@ -648,10 +669,25 @@ pub fn parse_effect_steps(
     let clean = strip_parens(clause);
 
     // `：` がある場合、コスト側を除いた右辺だけを効果本体とする
-    let after_colon = if let Some(idx) = clean.find('：') {
+    let after_colon_raw = if let Some(idx) = clean.find('：') {
         &clean[idx + '：'.len_utf8()..]
     } else {
         strip_leading_tags(&clean)
+    };
+    // トリガー文言（「〜したとき、」）が先頭にある場合、効果対象のフィルタ解析を汚染しないよう除去する
+    let after_colon = if !clean.contains('：') {
+        let first_sent = after_colon_raw.split('。').next().unwrap_or(after_colon_raw);
+        if let Some(tok_idx) = first_sent.find("とき、") {
+            if !first_sent[..tok_idx].contains('「') {
+                after_colon_raw[tok_idx + "とき、".len()..].trim_start()
+            } else {
+                after_colon_raw
+            }
+        } else {
+            after_colon_raw
+        }
+    } else {
+        after_colon_raw
     };
 
     // 「〜してもよい。そうした場合、〜」の前提コスト部を解析（任意手札リムーブはプレイヤー選択に委ねる）
@@ -1157,11 +1193,31 @@ pub fn parse_branches_from_phrase(phrase: &str, default_card_type: CardType) -> 
     }
 
     let mut branches = Vec::new();
+    let mut last_was_name = global_base.name_req.is_some() || global_base.exclude_name.is_some();
+    let mut last_was_trait = global_base.trait_req.is_some() || global_base.exclude_trait.is_some();
     for (idx, part) in or_parts.iter().enumerate() {
         let mut b = parse_single_branch(part, trailing_types.clone(), global_keyword.clone());
+        if b.name_req.is_some() || b.exclude_name.is_some() {
+            last_was_name = true;
+            last_was_trait = false;
+        } else if b.trait_req.is_some() || b.exclude_trait.is_some() {
+            last_was_trait = true;
+            last_was_name = false;
+        } else if let Some(short) = extract_bracketed_value(part, "〚［", "］") {
+            if last_was_name {
+                b.name_req = Some(short.to_string());
+            } else if last_was_trait {
+                b.trait_req = Some(short.to_string());
+            } else {
+                b.name_req = Some(short.to_string());
+            }
+        }
         // 先頭にだけ書かれた「レベル5以下の」や末尾の「【青】の」を他のブランチにも継承
         if idx > 0 && b.max_level.is_none() {
             b.max_level = branches.first().and_then(|f: &TargetBranch| f.max_level);
+        }
+        if idx > 0 && b.min_level.is_none() {
+            b.min_level = branches.first().and_then(|f: &TargetBranch| f.min_level);
         }
         if global_base.max_level_from_file {
             b.max_level_from_file = true;
@@ -1277,6 +1333,12 @@ fn parse_single_branch(
     b.max_level_from_file = part.contains("FILEエリアの枚数以下");
     b.min_level = extract_number_before(part, "レベル", "以上")
         .or_else(|| extract_number_before(part, "コスト", "以上"));
+    if b.max_level.is_none() && b.min_level.is_none() {
+        if let Some(exact_lv) = extract_number_before(part, "レベル", "の") {
+            b.max_level = Some(exact_lv);
+            b.min_level = Some(exact_lv);
+        }
+    }
     b.max_ap = extract_number_before(part, "AP", "以下");
     b.min_ap = extract_number_before(part, "AP", "以上");
     b.max_lp = extract_number_before(part, "LP", "以下");
@@ -1539,12 +1601,530 @@ pub fn parse_immediate_ops(sentence: &str) -> Vec<ImmediateOp> {
     ops
 }
 
-/// パッシブ（常時/自分ターン中/相手ターン中）のAP補正を計算する
+/// アクション系トリガー種別
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ActionEventKind {
+    Deduce,
+    AttackChar,
+    AttackCase,
+}
+
+/// パッシブ効果（自己バフ・全体オーラ・LP修正）評価コンテキスト
+pub struct PassiveEvalContext<'a> {
+    pub source_instance_id: &'a str,
+    #[allow(dead_code)]
+    pub source_def: &'a CardDefinition,
+    pub source_in_partner_area: bool,
+    pub source_cond: &'a PlayerCondInfo<'a>,
+    pub target_instance_id: &'a str,
+    pub target_def: &'a CardDefinition,
+    pub target_base_ap: i32,
+    pub target_is_friendly_to_source: bool,
+    pub opp_field_cards: &'a [(&'a CardInstance, &'a CardDefinition)],
+    pub self_hand_count: usize,
+    pub self_faceup_evidence_count: usize,
+}
+
+/// `【ターン1】` / `【ターン2】` などのターン回数制限を返す
+pub fn clause_turn_limit(clause: &str) -> Option<usize> {
+    for tag in extract_bracket_tags(clause) {
+        if let Some(rest) = tag.strip_prefix("ターン") {
+            if let Ok(n) = rest.parse::<usize>() {
+                return Some(n);
+            }
+        }
+    }
+    None
+}
+
+/// パートナーエリアでも宣言・発動・有効になる能力か
+pub fn allows_partner_area(clause: &str) -> bool {
+    clause.contains("パートナーエリアでも")
+}
+
+/// ネクストヒント使用トリガー条件（例: `【青】のカードを使用したとき`）に一致するか判定する
+pub fn check_hint_use_match(clause: &str, hint_colors: &[String]) -> bool {
+    let clean = strip_parens(clause);
+    let body = strip_leading_tags(&clean);
+    let trig = body.split("とき、").next().unwrap_or(body);
+    let trig_with_toki = format!("{}とき", trig);
+    if !trig_with_toki.contains("ネクストヒントで") || !trig_with_toki.contains("を使用したとき") {
+        return false;
+    }
+    let req_colors = extract_color_filters(trig);
+    if !req_colors.is_empty() {
+        return hint_colors
+            .iter()
+            .any(|hc| req_colors.iter().any(|rc| rc == hc));
+    }
+    true
+}
+
+/// アクション・推理時トリガー条件に一致するか判定する
+#[allow(clippy::too_many_arguments)]
+pub fn check_action_trigger_match(
+    clause: &str,
+    kind: ActionEventKind,
+    owner_is_acting: bool,
+    self_instance_id: &str,
+    actor_instance_id: &str,
+    actor_def: &CardDefinition,
+    actor_ap: i32,
+    target_instance_id: Option<&str>,
+    target_def: Option<&CardDefinition>,
+    target_ap: Option<i32>,
+) -> bool {
+    let clean = strip_parens(clause);
+    let body = strip_leading_tags(&clean);
+    let Some((trig, _)) = body.split_once("とき、") else {
+        return false;
+    };
+    let trig_with_toki = format!("{}とき", trig);
+
+    let kind_ok = if trig_with_toki.contains("アクション［事件］したとき") {
+        kind == ActionEventKind::AttackCase
+    } else if trig_with_toki.contains("アクション［キャラ］したとき") {
+        kind == ActionEventKind::AttackChar
+    } else if trig_with_toki.contains("推理したとき") {
+        kind == ActionEventKind::Deduce
+    } else if trig_with_toki.contains("推理かアクションしたとき") {
+        true
+    } else if trig_with_toki.contains("アクションしたとき") {
+        matches!(kind, ActionEventKind::AttackChar | ActionEventKind::AttackCase)
+    } else {
+        false
+    };
+    if !kind_ok {
+        return false;
+    }
+
+    if let Some(diff) = extract_number_before(trig, "APが", "以上低い") {
+        if kind != ActionEventKind::AttackChar {
+            return false;
+        }
+        let Some(tap) = target_ap else {
+            return false;
+        };
+        if tap > actor_ap - diff {
+            return false;
+        }
+    }
+
+    if trig.starts_with("相手の現場にいる") || trig.contains("相手の現場にいるキャラが") {
+        if owner_is_acting {
+            return false;
+        }
+        if trig.contains("このキャラを指定して") {
+            return kind == ActionEventKind::AttackChar
+                && target_instance_id == Some(self_instance_id);
+        }
+        if let Some(spec_idx) = trig.find("を指定して") {
+            if kind != ActionEventKind::AttackChar {
+                return false;
+            }
+            let (Some(tdef), Some(tap)) = (target_def, target_ap) else {
+                return false;
+            };
+            let phrase_slice = if let Some(s) = trig[..spec_idx].find("自分の現場にいる") {
+                &trig[s + "自分の現場にいる".len()..spec_idx]
+            } else {
+                &trig[..spec_idx]
+            };
+            let branches = parse_branches_from_phrase(phrase_slice, CardType::CHARACTER);
+            return branches.iter().any(|b| branch_matches(tdef, tap, b));
+        }
+        return true;
+    }
+
+    if !owner_is_acting {
+        return false;
+    }
+
+    if trig.starts_with("このキャラが") || trig.starts_with("このキャラの") {
+        return actor_instance_id == self_instance_id;
+    }
+
+    if let Some(pos) = trig.find("自分の現場にいる") {
+        let rest = &trig[pos + "自分の現場にいる".len()..];
+        let cut = ["がアクション", "が推理", "が、"]
+            .iter()
+            .filter_map(|pat| rest.find(pat))
+            .min()
+            .unwrap_or(rest.len());
+        let actor_phrase = rest[..cut].trim();
+        let branches = parse_branches_from_phrase(actor_phrase, CardType::CHARACTER);
+        return branches.iter().any(|b| branch_matches(actor_def, actor_ap, b));
+    }
+
+    actor_instance_id == self_instance_id
+}
+
+/// キャラ登場トリガー（`【疾風】`・味方/相手登場時）に一致するか判定する
+#[allow(clippy::too_many_arguments)]
+pub fn check_ally_play_match(
+    clause: &str,
+    owner_is_playing: bool,
+    self_instance_id: &str,
+    played_instance_id: &str,
+    played_def: &CardDefinition,
+    played_ap: i32,
+    played_orientation: CardOrientation,
+    played_by_effect_level: Option<i32>,
+    is_first_play_this_turn: bool,
+) -> bool {
+    if clause.contains("【疾風】") {
+        return owner_is_playing
+            && is_first_play_this_turn
+            && self_instance_id == played_instance_id;
+    }
+
+    let clean = strip_parens(clause);
+    let body = strip_leading_tags(&clean);
+    let Some(idx) = body.find("登場したとき") else {
+        return false;
+    };
+    let trig = body[..idx]
+        .trim()
+        .trim_end_matches(['が', 'に', 'で'])
+        .trim();
+
+    if trig.contains("能力や効果によって") && played_by_effect_level.is_none() {
+        return false;
+    }
+
+    let opp_play = trig.contains("相手の現場に");
+    if opp_play {
+        if owner_is_playing {
+            return false;
+        }
+    } else if !owner_is_playing {
+        return false;
+    }
+
+    if trig.contains("スリープ状態で") && played_orientation != CardOrientation::SLEEP {
+        return false;
+    }
+    if trig.contains("このキャラ以外の") && self_instance_id == played_instance_id {
+        return false;
+    }
+
+    if trig.contains("元の能力を持たないキャラ") {
+        let has_other_ability = played_def
+            .description
+            .lines()
+            .map(|l| l.trim())
+            .filter(|l| !l.is_empty())
+            .any(|l| !l.contains("【カットイン】") && !l.contains("【ヒラメキ】"));
+        if has_other_ability {
+            return false;
+        }
+    }
+
+    if trig == "このキャラ" || trig == "このキャラがスリープ状態で" {
+        return self_instance_id == played_instance_id;
+    }
+    if trig.starts_with("このキャラか") && self_instance_id == played_instance_id {
+        return true;
+    }
+
+    let subj = trig
+        .replace("自分の現場に", "")
+        .replace("相手の現場に", "")
+        .replace("このキャラ以外の", "")
+        .replace("このキャラか", "")
+        .replace("能力や効果によって", "");
+    let subj = subj.trim();
+
+    if subj.contains("【疾風】を持つ") && !played_def.description.contains("【疾風】") {
+        return false;
+    }
+
+    let branches = parse_branches_from_phrase(subj, CardType::CHARACTER);
+    branches.iter().any(|b| branch_matches(played_def, played_ap, b))
+}
+
+fn check_passive_extra_conditions(body: &str, pctx: &PassiveEvalContext) -> bool {
+    let cond_part = if let Some((before, _)) = body.split_once("場合、") {
+        before
+    } else {
+        return true;
+    };
+
+    if let Some(req_opp) = extract_number_before(cond_part, "相手の現場にキャラが", "枚以上") {
+        if (pctx.opp_field_cards.len() as i32) < req_opp {
+            return false;
+        }
+    }
+    if cond_part.contains("自分の現場にこのキャラ以外のキャラがいない") {
+        if pctx
+            .source_cond
+            .field_cards
+            .iter()
+            .any(|(inst, _)| inst.instance_id != pctx.source_instance_id)
+        {
+            return false;
+        }
+    }
+    if let Some(max_h) = extract_number_before(cond_part, "自分の手札が", "枚以下") {
+        if (pctx.self_hand_count as i32) > max_h {
+            return false;
+        }
+    }
+    if let Some(max_ev) = extract_number_before(cond_part, "自分の証拠が", "つ以下") {
+        if (pctx.source_cond.self_evidence_count as i32) > max_ev {
+            return false;
+        }
+    }
+    if let Some(sum_ev) = extract_number_before(cond_part, "お互いの証拠が合わせて", "つ以上") {
+        let total = pctx.source_cond.self_evidence_count + pctx.source_cond.opp_evidence_count;
+        if (total as i32) < sum_ev {
+            return false;
+        }
+    }
+    if cond_part.contains("自分の事件が【青】以外の色を持つ") {
+        let has_non_blue = pctx
+            .source_cond
+            .case_def
+            .map(|c| c.colors.iter().any(|col| col != "青"))
+            .unwrap_or(false);
+        if !has_non_blue {
+            return false;
+        }
+    }
+    if let Some(start) = cond_part.find("自分の現場にいるすべてのキャラが") {
+        let phrase = &cond_part[start + "自分の現場にいるすべてのキャラが".len()..];
+        let branches = parse_branches_from_phrase(phrase, CardType::CHARACTER);
+        if pctx.source_cond.field_cards.is_empty()
+            || !pctx.source_cond.field_cards.iter().all(|(inst, def)| {
+                branches
+                    .iter()
+                    .any(|b| branch_matches(def, def.ap + inst.temp_ap_bonus, b))
+            })
+        {
+            return false;
+        }
+    } else if let Some(start) = cond_part.find("自分か相手の現場に") {
+        let rest = &cond_part[start + "自分か相手の現場に".len()..];
+        let end = rest.find("がいる").unwrap_or(rest.len());
+        let branches = parse_branches_from_phrase(&rest[..end], CardType::CHARACTER);
+        let in_self = pctx.source_cond.field_cards.iter().any(|(inst, def)| {
+            branches
+                .iter()
+                .any(|b| branch_matches(def, def.ap + inst.temp_ap_bonus, b))
+        });
+        let in_opp = pctx.opp_field_cards.iter().any(|(inst, def)| {
+            branches
+                .iter()
+                .any(|b| branch_matches(def, def.ap + inst.temp_ap_bonus, b))
+        });
+        if !in_self && !in_opp {
+            return false;
+        }
+    } else if let Some(start) = cond_part.find("自分の現場に") {
+        let rest = &cond_part[start + "自分の現場に".len()..];
+        if let Some(req_cnt) = extract_number_before(rest, "が", "枚以上") {
+            let exclude_self = rest.contains("このキャラ以外の");
+            let phrase = rest
+                .split("がいる")
+                .next()
+                .unwrap_or(rest)
+                .replace("このキャラ以外の", "");
+            let branches = parse_branches_from_phrase(&phrase, CardType::CHARACTER);
+            let cnt = pctx
+                .source_cond
+                .field_cards
+                .iter()
+                .filter(|(inst, def)| {
+                    if exclude_self && inst.instance_id == pctx.source_instance_id {
+                        return false;
+                    }
+                    branches
+                        .iter()
+                        .any(|b| branch_matches(def, def.ap + inst.temp_ap_bonus, b))
+                })
+                .count();
+            if (cnt as i32) < req_cnt {
+                return false;
+            }
+        }
+    }
+
+    true
+}
+
+fn compute_passive_multiplier(body: &str, pctx: &PassiveEvalContext) -> Option<i32> {
+    let Some((scale_part, _)) = body.split_once("につき、") else {
+        return Some(1);
+    };
+    if scale_part.contains("自分の表向きの証拠1つ") {
+        return Some(pctx.self_faceup_evidence_count as i32);
+    }
+    if scale_part.contains("相手の現場にいるキャラ1枚") {
+        return Some(pctx.opp_field_cards.len() as i32);
+    }
+    if let Some(start) = scale_part.find("自分の現場にいる") {
+        let rest = &scale_part[start + "自分の現場にいる".len()..];
+        let exclude_self = rest.contains("このキャラ以外の");
+        let phrase = rest.replace("このキャラ以外の", "").replace("1枚", "");
+        let branches = parse_branches_from_phrase(&phrase, CardType::CHARACTER);
+        let cnt = pctx
+            .source_cond
+            .field_cards
+            .iter()
+            .filter(|(inst, def)| {
+                if exclude_self && inst.instance_id == pctx.source_instance_id {
+                    return false;
+                }
+                branches
+                    .iter()
+                    .any(|b| branch_matches(def, def.ap + inst.temp_ap_bonus, b))
+            })
+            .count();
+        return Some(cnt as i32);
+    }
+    None
+}
+
+fn extract_passive_effect_part(body: &str) -> &str {
+    if let Some((_, after)) = body.split_once("場合、") {
+        after
+    } else if let Some((_, after)) = body.split_once("につき、") {
+        after
+    } else {
+        body
+    }
+}
+
+/// パッシブ（自己バフ・味方/相手オーラ）のAP補正を対象カードごとに計算する
+pub fn compute_passive_ap_for_target(clause: &str, pctx: &PassiveEvalContext) -> i32 {
+    if pctx.source_in_partner_area && !allows_partner_area(clause) {
+        return 0;
+    }
+    if clause.contains("カードがセットされている")
+        || clause.contains("セットされているカード")
+        || clause.contains("下に重なっているカード")
+    {
+        return 0;
+    }
+    let clean = strip_parens(clause);
+    if clean.contains("元の能力を無効") || clean.contains("選ばれない") || clean.contains("ミスリード") {
+        return 0;
+    }
+
+    let delta = if let Some(b) = parse_signed_ap(&clean, true) {
+        b
+    } else if let Some(d) = parse_signed_ap(&clean, false) {
+        -d
+    } else {
+        return 0;
+    };
+
+    if check_clause_conditions(clause, pctx.source_cond).is_err() {
+        return 0;
+    }
+    let body = strip_leading_tags(&clean);
+    if !check_passive_extra_conditions(body, pctx) {
+        return 0;
+    }
+    let Some(mult) = compute_passive_multiplier(body, pctx) else {
+        return 0;
+    };
+    if mult == 0 {
+        return 0;
+    }
+
+    let eff = extract_passive_effect_part(body);
+    if eff.contains("相手の現場にいる") {
+        if pctx.target_is_friendly_to_source {
+            return 0;
+        }
+        let s = eff.find("相手の現場にいる").unwrap() + "相手の現場にいる".len();
+        let end = eff[s..].find("をAP").map(|i| s + i).unwrap_or(eff.len());
+        let phrase = eff[s..end].trim();
+        if phrase != "キャラ" && phrase != "すべてのキャラ" {
+            let branches = parse_branches_from_phrase(phrase, CardType::CHARACTER);
+            if !branches
+                .iter()
+                .any(|b| branch_matches(pctx.target_def, pctx.target_base_ap, b))
+            {
+                return 0;
+            }
+        }
+        return delta * mult;
+    }
+
+    if let Some(idx) = eff.find("自分の現場にいる") {
+        if !pctx.target_is_friendly_to_source {
+            return 0;
+        }
+        let s = idx + "自分の現場にいる".len();
+        let end = eff[s..].find("をAP").map(|i| s + i).unwrap_or(eff.len());
+        let raw_phrase = &eff[s..end];
+        if raw_phrase.contains("このキャラ以外の")
+            && pctx.target_instance_id == pctx.source_instance_id
+        {
+            return 0;
+        }
+        let phrase = raw_phrase.replace("このキャラ以外の", "").trim().to_string();
+        if phrase != "キャラ" && phrase != "すべてのキャラ" && !phrase.is_empty() {
+            let branches = parse_branches_from_phrase(&phrase, CardType::CHARACTER);
+            if !branches
+                .iter()
+                .any(|b| branch_matches(pctx.target_def, pctx.target_base_ap, b))
+            {
+                return 0;
+            }
+        }
+        return delta * mult;
+    }
+
+    // 自己限定パッシブ（例: `AP＋1000`, `このキャラをAP＋2000する`）
+    if !pctx.target_is_friendly_to_source || pctx.target_instance_id != pctx.source_instance_id {
+        return 0;
+    }
+    delta * mult
+}
+
+/// パッシブ（自己）のLP補正を計算する
+pub fn compute_passive_lp_bonus(clause: &str, pctx: &PassiveEvalContext) -> i32 {
+    if pctx.source_in_partner_area && !allows_partner_area(clause) {
+        return 0;
+    }
+    if pctx.target_instance_id != pctx.source_instance_id || !pctx.target_is_friendly_to_source {
+        return 0;
+    }
+    let clean = strip_parens(clause);
+    if clean.contains("元の能力を無効") || clean.contains("ミスリード") {
+        return 0;
+    }
+    let delta = if let Some(b) = parse_signed_lp(&clean, true) {
+        b
+    } else if let Some(d) = parse_signed_lp(&clean, false) {
+        -d
+    } else {
+        return 0;
+    };
+
+    if check_clause_conditions(clause, pctx.source_cond).is_err() {
+        return 0;
+    }
+    let body = strip_leading_tags(&clean);
+    if !check_passive_extra_conditions(body, pctx) {
+        return 0;
+    }
+    delta
+}
+
+/// パッシブ（常時/自分ターン中/相手ターン中）のAP補正を計算する（自己バフ専用）
+#[allow(dead_code)]
 pub fn compute_passive_ap_bonus(clause: &str, ctx: &PlayerCondInfo) -> i32 {
     if check_clause_conditions(clause, ctx).is_err() {
         return 0;
     }
     let clean = strip_parens(clause);
+    if clean.contains("このキャラ以外の") || clean.contains("相手の現場にいる") {
+        return 0;
+    }
     if let Some(buff) = parse_signed_ap(&clean, true) {
         return buff;
     }
@@ -1604,6 +2184,20 @@ pub fn parse_signed_ap(text: &str, positive: bool) -> Option<i32> {
     for m in markers {
         if let Some(val) = extract_number_before(text, m, "") {
             return Some(if positive { val } else { val });
+        }
+    }
+    None
+}
+
+pub fn parse_signed_lp(text: &str, positive: bool) -> Option<i32> {
+    let markers: &[&str] = if positive {
+        &["LP＋", "LP+"]
+    } else {
+        &["LP－", "LP-", "LPー"]
+    };
+    for m in markers {
+        if let Some(val) = extract_number_before(text, m, "") {
+            return Some(val);
         }
     }
     None

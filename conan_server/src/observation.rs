@@ -27,7 +27,8 @@ pub fn build_player_observation(engine: &MatchEngine, viewing_player_id: &str) -
         let level = c_def.map(|d| d.level).unwrap_or(0);
         let base_ap = c_def.map(|d| d.ap).unwrap_or(0);
         let effective_ap = engine.get_effective_ap(&c.owner_id, c);
-        let lp = c_def.map(|d| d.lp).unwrap_or(0);
+        let base_lp = c_def.map(|d| d.lp).unwrap_or(0);
+        let effective_lp = engine.get_effective_lp(&c.owner_id, c);
         let traits = c_def.map(|d| d.traits.clone()).unwrap_or_default();
         let card_type = c_def.map(|d| format!("{:?}", d.card_type)).unwrap_or_else(|| "CHARACTER".to_string());
         let main_thumb = c_def.and_then(|d| d.main_thumb.clone());
@@ -45,7 +46,8 @@ pub fn build_player_observation(engine: &MatchEngine, viewing_player_id: &str) -
             "baseAp": base_ap,
             "hasRush": c.has_rush,
             "usedDeclareThisTurn": c.used_declare_this_turn,
-            "lp": lp,
+            "lp": effective_lp,
+            "baseLp": base_lp,
             "cardType": card_type,
             "orientation": orientation_str,
             "enteredTurn": c.entered_turn,
