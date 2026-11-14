@@ -1568,8 +1568,8 @@ mod tests {
         let mut ps1 = engine::PlayerState::new("p1".to_string());
         let ps2 = engine::PlayerState::new("p2".to_string());
 
-        // Fill p1 field to max 5 chars and mark normal_hand_played_this_turn = true
-        ps1.normal_hand_played_this_turn = true;
+        // Fill p1 field to max 5 chars (cannot play char, but event is still playable once per turn)
+        ps1.normal_hand_played_this_turn = false;
         for i in 0..5 {
             ps1.field.push(models::CardInstance {
                 instance_id: format!("p1_f{}", i),

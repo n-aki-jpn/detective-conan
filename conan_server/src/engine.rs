@@ -621,19 +621,20 @@ impl MatchEngine {
         // 1. End turn
         actions.push(json!({"type": "END_TURN"}));
 
-        // 2. Hand Play (キャラは1ターン1回・現場5枚未満、イベントはいつでも使用可能)
+        // 2. Hand Play (キャラ・イベント合わせて通常手札使用は1ターン1回、キャラは現場5枚未満)
         {
-            let can_play_char = !ps.normal_hand_played_this_turn && !ps.hint_played_this_turn && ps.field.len() < 5;
+            let can_normal_play = !ps.normal_hand_played_this_turn && !ps.hint_played_this_turn;
+            let can_play_char = can_normal_play && ps.field.len() < 5;
             let mut playable_cards = vec![];
-            for c in &ps.hand {
-                if let Some(c_def) = self.catalog.get(&c.definition_id) {
-                    let card_colors = normalize_color_set(&c_def.colors);
-                    let color_ok = card_colors.is_empty() || case_colors.is_empty() || card_colors.is_subset(&case_colors);
-                    if c_def.level <= effective_file && color_ok {
-                        if c_def.card_type == CardType::EVENT {
-                            playable_cards.push(c.instance_id.clone());
-                        } else if can_play_char {
-                            playable_cards.push(c.instance_id.clone());
+            if can_normal_play {
+                for c in &ps.hand {
+                    if let Some(c_def) = self.catalog.get(&c.definition_id) {
+                        let card_colors = normalize_color_set(&c_def.colors);
+                        let color_ok = card_colors.is_empty() || case_colors.is_empty() || card_colors.is_subset(&case_colors);
+                        if c_def.level <= effective_file && color_ok {
+                            if c_def.card_type == CardType::EVENT || can_play_char {
+                                playable_cards.push(c.instance_id.clone());
+                            }
                         }
                     }
                 }
@@ -885,6 +886,7 @@ impl MatchEngine {
                             is_event = true;
                             card.zone = Zone::REMOVE;
                             ps.remove.push(card);
+                            ps.normal_hand_played_this_turn = true;
                         } else {
                             card.zone = Zone::FIELD;
                             card.orientation = CardOrientation::ACTIVE;
@@ -1887,6 +1889,7 @@ impl MatchEngine {
                             is_event = true;
                             card.zone = Zone::REMOVE;
                             ps.remove.push(card);
+                            ps.normal_hand_played_this_turn = true;
                         } else {
                             card.zone = Zone::FIELD;
                             card.orientation = CardOrientation::ACTIVE;
