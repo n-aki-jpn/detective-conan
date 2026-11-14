@@ -1466,14 +1466,14 @@
 
         <div id="battle-deck-bar"
           style="display:none; flex-wrap:wrap; align-items:center; gap:6px; padding:6px 10px; background:rgba(15,23,42,0.85); border-bottom:1px solid var(--border-color); font-size:0.75rem;">
-          <label style="display:flex; align-items:center; gap:4px; flex:1; min-width:150px;">
+          <label id="battle-p1-deck-label" style="display:flex; align-items:center; gap:4px; flex:1; min-width:150px;">
             <span style="color:#38bdf8; font-weight:bold; white-space:nowrap;">自分デッキ:</span>
             <select id="battle-p1-deck" onchange="onBattleDeckSelectionChanged()"
               style="flex:1; min-width:0; background:#0f172a; color:white; border:1px solid #475569; padding:4px 6px; border-radius:4px; font-size:0.75rem;">
               <option value="">(現在の使用中デッキ)</option>
             </select>
           </label>
-          <label style="display:flex; align-items:center; gap:4px; flex:1; min-width:150px;">
+          <label id="battle-p2-deck-label" style="display:flex; align-items:center; gap:4px; flex:1; min-width:150px;">
             <span style="color:#f87171; font-weight:bold; white-space:nowrap;">相手/CPU:</span>
             <select id="battle-p2-deck" onchange="onBattleDeckSelectionChanged()"
               style="flex:1; min-width:0; background:#0f172a; color:white; border:1px solid #475569; padding:4px 6px; border-radius:4px; font-size:0.75rem;">
@@ -2190,6 +2190,13 @@
       if (!bar) return;
       const shouldOpen = (typeof forceOpen === 'boolean') ? forceOpen : (bar.style.display === 'none' || !bar.style.display);
       bar.style.display = shouldOpen ? 'flex' : 'none';
+      if (shouldOpen) {
+        const isOnlinePvp = currentRoomId !== 'default' && !(lastObs && lastObs.isCpu);
+        const p2Label = document.getElementById('battle-p2-deck-label');
+        if (p2Label) {
+          p2Label.style.display = isOnlinePvp ? 'none' : 'flex';
+        }
+      }
       if (btn) {
         btn.style.borderColor = shouldOpen ? 'var(--accent)' : '';
         btn.style.color = shouldOpen ? 'var(--accent)' : '';
@@ -2292,24 +2299,32 @@
     }
 
     async function resetMatch() {
+      const wasCpu = !!(lastObs && lastObs.isCpu);
+      const isOnlinePvp = currentRoomId !== 'default' && !wasCpu;
       selectedMulliganIds.clear();
       lastRevision = -1;
       lastDecisionId = null;
       lastLogCount = 0;
       lastObs = null;
       if (typeof syncBgm === 'function') syncBgm();
-      const isOnlinePvp = currentRoomId !== 'default' && !(lastObs && lastObs.isCpu);
       const p1DeckId = document.getElementById('battle-p1-deck')?.value || null;
       const p2DeckId = document.getElementById('battle-p2-deck')?.value || null;
       const localDecks = typeof getStoredDecks === 'function' ? getStoredDecks() : [];
       const p1Local = p1DeckId ? localDecks.find(d => d.deckId === p1DeckId) : null;
       const p2Local = p2DeckId ? localDecks.find(d => d.deckId === p2DeckId) : null;
       const payload = { roomId: currentRoomId };
-      if (!isOnlinePvp || currentViewingPlayer === 'player1') {
+      if (isOnlinePvp) {
+        // オンライン対戦ルームでは「自分デッキ」欄の選択値を自分のプレイヤー側にのみ適用
+        if (currentViewingPlayer === 'player1') {
+          payload.p1DeckId = p1Local ? undefined : (p1DeckId || undefined);
+          payload.p1Deck = p1Local || undefined;
+        } else if (currentViewingPlayer === 'player2') {
+          payload.p2DeckId = p1Local ? undefined : (p1DeckId || undefined);
+          payload.p2Deck = p1Local || undefined;
+        }
+      } else {
         payload.p1DeckId = p1Local ? undefined : (p1DeckId || undefined);
         payload.p1Deck = p1Local || undefined;
-      }
-      if (!isOnlinePvp || currentViewingPlayer === 'player2') {
         payload.p2DeckId = p2Local ? undefined : (p2DeckId || undefined);
         payload.p2Deck = p2Local || undefined;
       }
