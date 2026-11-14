@@ -85,7 +85,8 @@ cargo build --release --manifest-path conan_server/Cargo.toml
 
 ## 注意事項・実装ルール
 
-- **ログ自動追記**: GAS Webhook スクリプト（`scripts/gas_log_webhook.gs`）を追加し、サーバー側で対戦ログ・マッチ結果を Google スプレッドシートへ自動送信できるようにしました。環境変数 `GAS_LOG_WEBHOOK_URL` にデプロイした Web アプリの URL を設定してください。
+- **ログ自動追記**: GAS Webhook スクリプト（`scripts/gas_log_webhook.gs`）を追加し、サーバー側で対戦ログ・マッチ結果を試合終了時に Google スプレッドシートへ自動送信できるようにしました。環境変数 `GAS_LOG_WEBHOOK_URL` にデプロイした Web アプリの URL を設定してください。
+- **オンライン対戦ルームのUI制限**: オンライン対人戦ルーム（`currentRoomId` が `'default'` や `localStorage` の `conan_solo_room_id` ではなく、かつ `isCpu` が偽の場合）では、相手の手札閲覧を防ぐため視点切り替えドロップダウン（`#player-select`）と相手デッキ選択（`#battle-p2-deck-label`）を非表示にし、代わりに自分のプレイヤーを示すバッジ（`#online-player-badge`：`あなた: P1` / `あなた: P2`）を表示します。ソロ部屋・CPU対戦では従来通り両方表示されます。
 
 1. **パス依存関係**:
    - サーバープロセスはプロジェクトルートをカレントディレクトリとして起動することを前提としています。
