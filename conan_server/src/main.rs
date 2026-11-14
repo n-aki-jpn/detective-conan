@@ -4724,5 +4724,142 @@ mod tests {
             assert_eq!(p1_after.remove.len(), 5, "PR265 must mill exact level (5) cards from deck");
         }
     }
+
+    #[test]
+    fn test_self_ability_remove_revive_sleep_vodka_and_cross_cards() {
+        let catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();
+        let vodka_id = catalog.definitions.keys().find(|k| k.starts_with("B11085")).cloned().expect("B11085 must exist in cards.json");
+        let black_partner_id = catalog.definitions.values()
+            .find(|d| d.card_type == models::CardType::PARTNER && d.colors.iter().any(|c| c.contains("黒")))
+            .map(|d| d.definition_id.clone())
+            .expect("black partner must exist");
+
+        let mut engine = engine::MatchEngine::new(catalog);
+        engine.turn = 1;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.partner = Some(models::CardInstance {
+            instance_id: "p1_partner".to_string(),
+            definition_id: black_partner_id,
+            owner_id: "p1".to_string(),
+            zone: models::Zone::PARTNER,
+            orientation: models::CardOrientation::ACTIVE,
+            ..Default::default()
+        });
+        ps1.field.push(models::CardInstance {
+            instance_id: "vodka_1".to_string(),
+            definition_id: vodka_id.clone(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::FIELD,
+            orientation: models::CardOrientation::ACTIVE,
+            ..Default::default()
+        });
+        ps1.field.push(models::CardInstance {
+            instance_id: "vodka_2".to_string(),
+            definition_id: vodka_id.clone(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::FIELD,
+            orientation: models::CardOrientation::SLEEP,
+            ..Default::default()
+        });
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+
+        // 1) アクションしていない vodka_1 が自分の効果でリムーブされても復活しない
+        {
+            let ps = engine.players.get_mut("p1").unwrap();
+            let pos = ps.field.iter().position(|c| c.instance_id == "vodka_1").unwrap();
+            let mut c = ps.field.remove(pos);
+            c.zone = models::Zone::REMOVE;
+            ps.remove.push(c);
+        }
+        engine.trigger_on_remove_char("p1", "vodka_1", &vodka_id, true);
+        assert!(engine.players.get("p1").unwrap().remove.iter().any(|c| c.instance_id == "vodka_1"));
+        assert!(!engine.players.get("p1").unwrap().field.iter().any(|c| c.instance_id == "vodka_1"));
+
+        // 2) アクションしていた vodka_2 が自分の効果でリムーブされたらスリープ状態で現場に登場する
+        engine.acted_this_turn_ids.insert("vodka_2".to_string());
+        {
+            let ps = engine.players.get_mut("p1").unwrap();
+            let pos = ps.field.iter().position(|c| c.instance_id == "vodka_2").unwrap();
+            let mut c = ps.field.remove(pos);
+            c.zone = models::Zone::REMOVE;
+            ps.remove.push(c);
+        }
+        engine.trigger_on_remove_char("p1", "vodka_2", &vodka_id, true);
+        let v2_field = engine.players.get("p1").unwrap().field.iter().find(|c| c.instance_id == "vodka_2");
+        assert!(v2_field.is_some(), "vodka_2 must revive to field when acted this turn");
+        assert_eq!(v2_field.unwrap().orientation, models::CardOrientation::SLEEP);
+
+        // 3) 相手の効果でリムーブされた場合は復活しない
+        {
+            let ps = engine.players.get_mut("p1").unwrap();
+            let pos = ps.field.iter().position(|c| c.instance_id == "vodka_2").unwrap();
+            let mut c = ps.field.remove(pos);
+            c.zone = models::Zone::REMOVE;
+            ps.remove.push(c);
+        }
+        engine.trigger_on_remove_char("p1", "vodka_2", &vodka_id, false);
+        assert!(!engine.players.get("p1").unwrap().field.iter().any(|c| c.instance_id == "vodka_2"));
+    }
+
+    #[test]
+    fn test_b11082_gin_vermouth_declare_stun_and_grant_on_remove_draw() {
+        let catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();
+        let gv_id = catalog.definitions.keys().find(|k| k.starts_with("B11082")).cloned().expect("B11082 must exist");
+        let gv_def = catalog.definitions.get(&gv_id).unwrap().clone();
+        let declare_clauses = effects::extract_clauses(&gv_def.description, effects::TriggerKind::Declare, gv_def.card_type);
+        assert!(!declare_clauses.is_empty(), "B11082 must have Declare clause");
+        let plan = effects::parse_effect_steps(&declare_clauses[0], None, gv_def.card_type);
+        assert!(plan.immediate_before.is_empty(), "Must not draw immediately without cost");
+        assert!(plan.target_step.is_some());
+        assert_eq!(plan.target_step.as_ref().unwrap().action, effects::TargetAction::StunAndGrantOnRemoveDraw);
+
+        let mut engine = engine::MatchEngine::new(catalog);
+        engine.turn = 1;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.field.push(models::CardInstance {
+            instance_id: "blk_lv6".to_string(),
+            definition_id: "B11085".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::FIELD,
+            orientation: models::CardOrientation::ACTIVE,
+            ..Default::default()
+        });
+        ps1.deck.push(models::CardInstance {
+            instance_id: "d1".to_string(),
+            definition_id: "B11085".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::DECK,
+            ..Default::default()
+        });
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+
+        // 効果適用をシミュレート
+        engine.execute_clause_plan("p1", "gv_1", "ジン＆ベルモット", Some(9), &plan, "MAIN", None);
+        let pd = engine.pending_decision.clone().expect("Must prompt target selection");
+        assert_eq!(pd["kind"], "targetSelect");
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd["decisionId"],
+            "revision": engine.revision,
+            "value": {"targetId": "blk_lv6"}
+        }));
+
+        // 対象がスタンし、付与されていること
+        let target = engine.players.get("p1").unwrap().field.iter().find(|c| c.instance_id == "blk_lv6").unwrap();
+        assert_eq!(target.orientation, models::CardOrientation::STUN);
+        assert!(engine.granted_on_remove_draw_until_opp_end.contains_key("blk_lv6"));
+
+        // 現場からリムーブされたら1枚引くこと
+        let hand_before = engine.players.get("p1").unwrap().hand.len();
+        engine.trigger_on_remove_char("p1", "blk_lv6", "B11085", false);
+        assert_eq!(engine.players.get("p1").unwrap().hand.len(), hand_before + 1);
+    }
 }
 

@@ -75,6 +75,7 @@ pub enum TargetAction {
     GrantContactForceAttack,
     GrantBulletOnCaseAttackDiscard,
     RemoveSetCards(usize),
+    StunAndGrantOnRemoveDraw,
 }
 
 impl TargetAction {
@@ -113,6 +114,7 @@ impl TargetAction {
             TargetAction::GrantContactForceAttack => "GRANT_CONTACT_FORCE_ATTACK",
             TargetAction::GrantBulletOnCaseAttackDiscard => "GRANT_BULLET_ON_CASE_DISCARD",
             TargetAction::RemoveSetCards(_) => "REMOVE_SET_CARDS",
+            TargetAction::StunAndGrantOnRemoveDraw => "STUN_AND_GRANT_ON_REMOVE_DRAW",
         }
     }
 
@@ -143,6 +145,7 @@ impl TargetAction {
                 | TargetAction::GrantContactForceAttack
                 | TargetAction::GrantBulletOnCaseAttackDiscard
                 | TargetAction::RemoveSetCards(_)
+                | TargetAction::StunAndGrantOnRemoveDraw
         )
     }
 }
@@ -385,6 +388,7 @@ pub enum ImmediateOp {
     },
     ConditionalLpRemoveOpp,
     EventModeChoice(EventModeChoice),
+    ReviveSelfFromRemove { sleep: bool },
 }
 
 /// 対象選択ステップ
@@ -532,7 +536,10 @@ fn line_matches_trigger(line: &str, trigger: TriggerKind, card_type: CardType) -
         TriggerKind::Hirameki => line.trim_start().starts_with("【ヒラメキ】"),
         TriggerKind::DisguiseCond => line.contains("【変装】"),
         TriggerKind::OnDisguise => line.contains("【変装時】"),
-        TriggerKind::OnRemove => line.contains("【現場リムーブ時】"),
+        TriggerKind::OnRemove => {
+            line.contains("【現場リムーブ時】")
+                || clean.contains("自分の現場にいるこのキャラが自分の能力や効果によってリムーブされたとき")
+        }
         TriggerKind::OnTurnEnd => {
             // 「ターン終了時まで〜」という継続期間表記はトリガーではない
             clean.contains("ターン終了時、")
@@ -1499,6 +1506,29 @@ pub fn parse_effect_steps(
     let mut plan = ParsedClausePlan::default();
     let clean = strip_parens(clause);
 
+    // B11082 ジン＆ベルモット: コストで現場のLv7以下黒をスタンさせ、「【現場リムーブ時】カードを1枚引く。」を付与
+    if clean.contains("コストによってスタンさせたキャラに、相手のターン終了時まで「【現場リムーブ時】カードを1枚引く。」を与える") {
+        let mut filter = TargetFilter::default();
+        filter.owner = OwnerScope::SelfOnly;
+        filter.zone = TargetZone::Field;
+        filter.count = 1;
+        filter.orientations = vec![CardOrientation::ACTIVE, CardOrientation::SLEEP];
+        let mut br = TargetBranch::default();
+        br.max_level = Some(7);
+        br.colors = vec!["黒".to_string()];
+        filter.branches = vec![br];
+        plan.target_step = Some(TargetStep {
+            filter,
+            action: TargetAction::StunAndGrantOnRemoveDraw,
+            bonuses: vec![],
+            follow_up: vec![],
+            conditional_follow_up: None,
+            optional: false,
+            then_abort_if_skipped: false,
+        });
+        return plan;
+    }
+
     // `：` がある場合、コスト側を除いた右辺だけを効果本体とする
     let after_colon_raw = if let Some(idx) = clean.find('：') {
         &clean[idx + '：'.len_utf8()..]
@@ -1665,6 +1695,12 @@ pub fn parse_effect_steps(
         if sentence == "このキャラをスリープ状態で登場させる" {
             plan.immediate_before
                 .push(ImmediateOp::MoveSelfFromEvidenceToFieldSleep);
+            continue;
+        }
+        // リムーブエリアから自身を登場させる（ウォッカ等）
+        if sentence.contains("このキャラをリムーブエリアからスリープ状態で登場") {
+            plan.immediate_before
+                .push(ImmediateOp::ReviveSelfFromRemove { sleep: true });
             continue;
         }
         // 事件解決勝利

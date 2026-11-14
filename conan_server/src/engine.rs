@@ -107,6 +107,8 @@ pub struct MatchEngine {
     pub turn_event_blocked_players: HashSet<String>,
     pub refreshed_players: HashSet<String>,
     pub self_entered_field_players_this_turn: HashSet<String>,
+    pub acted_this_turn_ids: HashSet<String>,
+    pub granted_on_remove_draw_until_opp_end: HashMap<String, String>,
     pub played_by_effect_events: bool,
     pub last_deployed_count: usize,
     pub last_removed_black_cutin_count: usize,
@@ -172,6 +174,8 @@ impl MatchEngine {
             turn_event_blocked_players: HashSet::new(),
             refreshed_players: HashSet::new(),
             self_entered_field_players_this_turn: HashSet::new(),
+            acted_this_turn_ids: HashSet::new(),
+            granted_on_remove_draw_until_opp_end: HashMap::new(),
             played_by_effect_events: false,
             last_deployed_count: 0,
             last_removed_black_cutin_count: 0,
@@ -1190,6 +1194,7 @@ impl MatchEngine {
             is_first_player = ps.is_first_player;
         }
 
+        self.acted_this_turn_ids.clear();
         self.log(format!("━━━━━━━━━━━━━━━━━━━━"));
         self.log(format!("【ターン {}】{} のターン開始", turn, turn_player_id));
 
@@ -1953,6 +1958,7 @@ impl MatchEngine {
                 }));
 
                 // アクション時トリガーの解決
+                self.acted_this_turn_ids.insert(actor_id.clone());
                 let action_kind = if is_case_target {
                     ActionEventKind::AttackCase
                 } else {
@@ -2344,7 +2350,7 @@ impl MatchEngine {
                         let is_opp_eff = pid != player_id;
                         if let Some((rem_def, removed_sets)) = self.move_field_char_to_remove(&pid, tid, false, is_opp_eff) {
                             self.log(format!("💥 [{}] の効果で [{}] をリムーブしました！", actor_name, target_name));
-                            self.trigger_on_remove(&pid, &rem_def);
+                            self.trigger_on_remove_char(&pid, tid, &rem_def, !is_opp_eff);
                             for (sid, sdid) in removed_sets {
                                 self.trigger_set_card_on_remove(&pid, &sid, &sdid);
                             }
@@ -2658,6 +2664,19 @@ impl MatchEngine {
                 }
                 if attached > 0 {
                     self.log(format!("🔧 [{}] の効果で [{}] に山札の上から{}枚裏向きでセットしました", actor_name, target_name, attached));
+                }
+            }
+            "STUN_AND_GRANT_ON_REMOVE_DRAW" => {
+                if let Some(ps) = self.players.get_mut(player_id) {
+                    if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == tid) {
+                        c.orientation = CardOrientation::STUN;
+                        self.granted_on_remove_draw_until_opp_end
+                            .insert(tid.to_string(), player_id.to_string());
+                        self.log(format!(
+                            "💫 [{}] の効果で [{}] をスタンさせ、「【現場リムーブ時】カードを1枚引く。」を与えました！",
+                            actor_name, target_name
+                        ));
+                    }
                 }
             }
             "REMOVE_SET_CARDS" => {
@@ -5438,6 +5457,17 @@ impl MatchEngine {
 
     /// 現場リムーブ時トリガーを解決する
     pub fn trigger_on_remove(&mut self, owner_id: &str, definition_id: &str) {
+        self.trigger_on_remove_char(owner_id, "", definition_id, false);
+    }
+
+    /// 現場リムーブ時トリガーを解決する（インスタンスID・自分の能力/効果によるリムーブかを指定）
+    pub fn trigger_on_remove_char(
+        &mut self,
+        owner_id: &str,
+        instance_id: &str,
+        definition_id: &str,
+        by_own_ability: bool,
+    ) {
         let Some(def) = self.catalog.get(definition_id).cloned() else {
             return;
         };
@@ -5448,17 +5478,29 @@ impl MatchEngine {
         let card_name = self.card_name_by_def(definition_id);
 
         for clause in clauses {
+            if clause.contains("自分の能力や効果によってリムーブされたとき") && !by_own_ability {
+                continue;
+            }
+            if clause.contains("このターン中にこのキャラがアクションしていた場合")
+                && (instance_id.is_empty() || !self.acted_this_turn_ids.contains(instance_id))
+            {
+                continue;
+            }
             let ctx = self.build_cond_info(owner_id, None, CardOrientation::ACTIVE, None);
             if check_clause_conditions(&clause, &ctx).is_err() {
                 continue;
             }
             self.log(format!("💥 [{}] の【現場リムーブ時】能力が誘発しました！", card_name));
             let cost = parse_clause_cost(&clause);
-            if !self.pay_clause_cost(owner_id, "", &cost) {
+            if !self.pay_clause_cost(owner_id, instance_id, &cost) {
                 continue;
             }
             let plan = parse_effect_steps(&clause, None, def.card_type);
-            let _ = self.execute_clause_plan(owner_id, "", &card_name, Some(def.level), &plan, "MAIN", None);
+            let _ = self.execute_clause_plan(owner_id, instance_id, &card_name, Some(def.level), &plan, "MAIN", None);
+        }
+        if !instance_id.is_empty() && self.granted_on_remove_draw_until_opp_end.remove(instance_id).is_some() {
+            self.draw_cards(owner_id, 1);
+            self.log(format!("🎴 [{}] に付与された【現場リムーブ時】効果でカードを1枚引きました！", card_name));
         }
     }
 
@@ -6727,6 +6769,28 @@ impl MatchEngine {
                         self.log(format!("🔓 [{}] の効果で {} の裏向きの証拠を {} つ表向きにしました", actor_name, opp_id, count));
                     }
                 }
+                ImmediateOp::ReviveSelfFromRemove { sleep } => {
+                    let turn = self.turn;
+                    let mut revived = false;
+                    if let Some(ps) = self.players.get_mut(player_id) {
+                        if ps.field.len() < 5 {
+                            if let Some(pos) = ps.remove.iter().position(|c| c.instance_id == actor_id) {
+                                let mut card = ps.remove.remove(pos);
+                                card.zone = Zone::FIELD;
+                                card.orientation = if *sleep { CardOrientation::SLEEP } else { CardOrientation::ACTIVE };
+                                card.entered_turn = turn;
+                                card.face_up = true;
+                                ps.field.push(card);
+                                revived = true;
+                            }
+                        }
+                    }
+                    if revived {
+                        self.last_deployed_count = 1;
+                        let state_str = if *sleep { "スリープ状態で" } else { "" };
+                        self.log(format!("⚡ [{}] が自身の効果でリムーブエリアから{}現場に登場！", actor_name, state_str));
+                    }
+                }
                 ImmediateOp::MoveSelfFromEvidenceToFieldSleep => {
                     if let Some(eid) = evidence_source_inst_id {
                         let turn = self.turn;
@@ -7113,7 +7177,7 @@ impl MatchEngine {
                     for (oid, cid) in to_remove {
                         let is_opp_eff = oid != player_id;
                         if let Some((rdef, rsets)) = self.move_field_char_to_remove(&oid, &cid, false, is_opp_eff) {
-                            self.trigger_on_remove(&oid, &rdef);
+                            self.trigger_on_remove_char(&oid, &cid, &rdef, !is_opp_eff);
                             for (sid, sdid) in rsets {
                                 self.trigger_set_card_on_remove(&oid, &sid, &sdid);
                             }
@@ -7133,7 +7197,7 @@ impl MatchEngine {
                     for (oid, cid) in to_remove {
                         let is_opp_eff = oid != player_id;
                         if let Some((rdef, rsets)) = self.move_field_char_to_remove(&oid, &cid, false, is_opp_eff) {
-                            self.trigger_on_remove(&oid, &rdef);
+                            self.trigger_on_remove_char(&oid, &cid, &rdef, !is_opp_eff);
                             for (sid, sdid) in rsets {
                                 self.trigger_set_card_on_remove(&oid, &sid, &sdid);
                             }
@@ -7698,7 +7762,7 @@ impl MatchEngine {
         candidates
     }
 
-    fn execute_clause_plan(
+    pub fn execute_clause_plan(
         &mut self,
         player_id: &str,
         actor_id: &str,
@@ -8260,6 +8324,7 @@ impl MatchEngine {
                 TargetAction::ReviveSplitGonin => 3usize.min(candidates.len()).max(1),
                 TargetAction::ReviveSplitBakana => 2usize.min(candidates.len()).max(1),
                 TargetAction::RemoveSetCards(n) => n.min(candidates.len()).max(1),
+                TargetAction::StunAndGrantOnRemoveDraw => 1.min(candidates.len()),
                 _ => ts.filter.count.max(1).min(candidates.len()),
             }
         };
@@ -8743,5 +8808,6 @@ fn target_action_prompt_title(action: &TargetAction, filter: &TargetFilter) -> S
         TargetAction::GrantContactForceAttack => "コンタクト強制効果を与える相手キャラを選択してください".to_string(),
         TargetAction::GrantBulletOnCaseAttackDiscard => "事件攻撃時ブレット化能力を与える自分のキャラを選択してください".to_string(),
         TargetAction::RemoveSetCards(n) => format!("リムーブするセットカードを{}枚選択してください", n),
+        TargetAction::StunAndGrantOnRemoveDraw => "スタンさせて「【現場リムーブ時】カードを1枚引く。」を与えるキャラを1枚選択してください".to_string(),
     }
 }
