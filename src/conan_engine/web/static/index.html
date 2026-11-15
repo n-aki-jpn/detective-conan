@@ -2930,6 +2930,19 @@
         }
       }
 
+      if (!isSecret && card.setCards && card.setCards.length > 0) {
+        const setBox = document.createElement('div');
+        setBox.style.cssText = 'position:absolute; left:3px; right:3px; bottom:22px; background:rgba(15,23,42,0.9); border:1px solid rgba(56,189,248,0.65); border-radius:4px; padding:2px 4px; font-size:9px; line-height:1.2; color:#e0f2fe; pointer-events:none; z-index:4; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+        const summaryParts = card.setCards.map(sc => {
+          const faceTag = sc.faceUp === false ? '裏' : '表';
+          const label = (!sc.faceUp && !sc.name) ? '裏向き' : (sc.name || sc.definitionId || 'カード');
+          return `[${faceTag}]${label}`;
+        });
+        setBox.innerText = `🔧×${card.setCards.length} ${summaryParts.join(' / ')}`;
+        setBox.title = `セット中 (${card.setCards.length}枚): ${summaryParts.join(', ')}`;
+        el.appendChild(setBox);
+      }
+
       if (boardZoneInfo && window.latestObs) {
         const obs = window.latestObs;
         const mode = window.pendingBoardMode;
