@@ -5341,5 +5341,72 @@ mod tests {
             "createCardSlot must not reference undefined variable isSecret"
         );
     }
+
+    #[test]
+    fn test_index_html_js_syntax_and_smoke() {
+        let html = std::fs::read_to_string("../src/conan_engine/web/static/index.html")
+            .expect("index.html must be readable");
+        let script_start = html.rfind("<script>").expect("<script> tag must exist") + "<script>".len();
+        let script_end = html[script_start..].find("</script>").expect("</script> tag must exist") + script_start;
+        let js_code = &html[script_start..script_end];
+
+        let tmp_dir = std::env::temp_dir();
+        let js_path = tmp_dir.join("conan_index_check.js");
+        std::fs::write(&js_path, js_code).expect("failed to write temp js");
+
+        // 1. 構文チェック (node --check)
+        let check_out = std::process::Command::new("node")
+            .arg("--check")
+            .arg(&js_path)
+            .output()
+            .expect("node must be available");
+        assert!(
+            check_out.status.success(),
+            "index.html JS syntax error:\n{}",
+            String::from_utf8_lossy(&check_out.stderr)
+        );
+
+        // 2. モックDOM上でスクリプトを読み込み、createCardSlot / createCardEl をスモークテスト
+        let smoke_js = format!(
+            r#"
+const makeEl = () => new Proxy({{
+  style: {{}}, classList: {{ add(){{}}, remove(){{}}, contains(){{ return false; }} }},
+  dataset: {{}}, children: [], appendChild(c){{ this.children.push(c); return c; }},
+  addEventListener(){{}}, querySelector(){{ return makeEl(); }}, querySelectorAll(){{ return []; }},
+  setAttribute(){{}}, getAttribute(){{ return ''; }}
+}}, {{ get(t, p) {{ return p in t ? t[p] : ''; }} }});
+global.window = global;
+global.addEventListener = () => {{}};
+global.setInterval = () => 0;
+global.setTimeout = () => 0;
+global.location = {{ search: '', href: 'http://localhost:8000/' }};
+global.localStorage = {{ getItem(){{ return null; }}, setItem(){{}}, removeItem(){{}} }};
+global.document = {{
+  getElementById: () => makeEl(),
+  createElement: () => makeEl(),
+  querySelector: () => makeEl(),
+  querySelectorAll: () => [],
+  addEventListener: () => {{}}
+}};
+global.fetch = async () => ({{ ok: true, json: async () => ({{}}) }});
+global.Audio = function() {{ return {{ play: async () => {{}}, pause: () => {{}} }}; }};
+{js}
+createCardSlot('slot_1', {{ instanceId: 'c1', definitionId: 'B01001', name: '江戸川コナン', cardType: 'CHARACTER', level: 1, ap: 1000, lp: 1, orientation: 'ACTIVE', zone: 'FIELD' }}, {{ isMine: true, zone: 'FIELD' }});
+createCardEl(null, true, false, null);
+"#,
+            js = js_code
+        );
+        let smoke_path = tmp_dir.join("conan_index_smoke.js");
+        std::fs::write(&smoke_path, smoke_js).expect("failed to write smoke js");
+        let smoke_out = std::process::Command::new("node")
+            .arg(&smoke_path)
+            .output()
+            .expect("node smoke run failed");
+        assert!(
+            smoke_out.status.success(),
+            "index.html JS runtime smoke error:\n{}",
+            String::from_utf8_lossy(&smoke_out.stderr)
+        );
+    }
 }
 
