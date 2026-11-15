@@ -2598,8 +2598,9 @@
           }
           const dedAct = actions.find(a => a.type === 'DEDUCE' && (a.actorIds || []).includes(cid));
           if (dedAct) {
+            const lpVal = Number(card.lp ?? 0);
             cmds.push({
-              label: '🔎 推理する（証拠+1）',
+              label: `🔎 推理する（証拠+${lpVal}）`,
               onClick: () => submitDecision({ type: 'DEDUCE', actorId: cid })
             });
           }
