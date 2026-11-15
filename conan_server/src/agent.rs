@@ -62,10 +62,25 @@ impl CpuWeights {
 
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CpuDifficulty {
+    Easy,
+    Normal,
+    Hard,
+}
+
+impl Default for CpuDifficulty {
+    fn default() -> Self {
+        Self::Hard
+    }
+}
+
 #[derive(Debug)]
 pub struct RandomAgent {
     pub player_id: String,
     pub weights: CpuWeights,
+    pub difficulty: CpuDifficulty,
     last_turn: AtomicI32,
     hints_used_this_turn: AtomicUsize,
     last_hint_skipped: AtomicBool,
@@ -76,6 +91,7 @@ impl Clone for RandomAgent {
         Self {
             player_id: self.player_id.clone(),
             weights: self.weights.clone(),
+            difficulty: self.difficulty,
             last_turn: AtomicI32::new(self.last_turn.load(Ordering::Relaxed)),
             hints_used_this_turn: AtomicUsize::new(self.hints_used_this_turn.load(Ordering::Relaxed)),
             last_hint_skipped: AtomicBool::new(self.last_hint_skipped.load(Ordering::Relaxed)),
@@ -88,6 +104,18 @@ impl RandomAgent {
         Self {
             player_id: player_id.to_string(),
             weights: CpuWeights::load_or_default("data/cpu_weights.json"),
+            difficulty: CpuDifficulty::Hard,
+            last_turn: AtomicI32::new(-1),
+            hints_used_this_turn: AtomicUsize::new(0),
+            last_hint_skipped: AtomicBool::new(false),
+        }
+    }
+
+    pub fn with_difficulty(player_id: &str, difficulty: CpuDifficulty) -> Self {
+        Self {
+            player_id: player_id.to_string(),
+            weights: CpuWeights::load_or_default("data/cpu_weights.json"),
+            difficulty,
             last_turn: AtomicI32::new(-1),
             hints_used_this_turn: AtomicUsize::new(0),
             last_hint_skipped: AtomicBool::new(false),
@@ -98,6 +126,7 @@ impl RandomAgent {
         Self {
             player_id: player_id.to_string(),
             weights,
+            difficulty: CpuDifficulty::Hard,
             last_turn: AtomicI32::new(-1),
             hints_used_this_turn: AtomicUsize::new(0),
             last_hint_skipped: AtomicBool::new(false),
@@ -115,6 +144,9 @@ impl RandomAgent {
 
     /// 盤面の公開情報と自分の手札を参照して戦略的に意思決定を行う
     pub fn choose_action_with_engine(&self, engine: &MatchEngine, decision: &Value) -> Value {
+        if self.difficulty == CpuDifficulty::Easy {
+            return self.choose_action(decision);
+        }
         self.reset_turn_state_if_needed(engine.turn);
         let kind = decision.get("kind").and_then(|v| v.as_str()).unwrap_or("");
         let opts = decision.get("options").cloned().unwrap_or(json!({}));
@@ -174,7 +206,11 @@ impl RandomAgent {
                 // ただし既にFILEが8枚以上ある場合は、パートナーで推理（証拠+1）した方が得なためASSISTを後回しにする
                 let eff_file = my_ps.effective_file_count();
                 if find_act("ASSIST").is_some() {
-                    let should_assist_first = !(eff_file >= 8 && find_act("DEDUCE").is_some());
+                    let should_assist_first = if self.difficulty == CpuDifficulty::Hard {
+                        !(eff_file >= 8 && find_act("DEDUCE").is_some())
+                    } else {
+                        my_ps.case_phase != CasePhase::RESOLUTION && eff_file >= 6
+                    };
                     if should_assist_first {
                         return json!({"value": {"type": "ASSIST"}});
                     }
@@ -273,8 +309,8 @@ impl RandomAgent {
                     }
                 }
 
-                // 6. パートナーやLP2キャラの推理（DEDUCE）と、アタッカーの攻撃（ACTION）の振り分け
-                // 攻撃できないパートナーやLP2キャラは推理を優先し、高APアタッカーは除去・事件攻撃を優先する
+                // 6. パートナーやLP2キャラの推理（DEDUCE）と、アタッカーの攻撃（ACTION）の振り分け (Hardのみ)
+                if self.difficulty == CpuDifficulty::Hard {
                 if let Some(ded_act) = find_act("DEDUCE") {
                     if let Some(actor_ids) = ded_act.get("actorIds").and_then(|v| v.as_array()) {
                         let mut best_priority_deducer: Option<(&str, i32, i32, i32)> = None;
@@ -310,6 +346,7 @@ impl RandomAgent {
                             return json!({"value": {"type": "DEDUCE", "actorId": aid}});
                         }
                     }
+                }
                 }
 
                 // 7. 攻撃 (ACTION): 有利トレード（確実に相手を倒せる）または事件攻撃を評価
@@ -515,7 +552,7 @@ impl RandomAgent {
                                     if best_win_guard.map(|(_, b_ap)| g_ap < b_ap).unwrap_or(true) {
                                         best_win_guard = Some((gid, g_ap));
                                     }
-                                } else if g_ap == attacker_ap && g_lp <= 1 {
+                                } else if self.difficulty == CpuDifficulty::Hard && g_ap == attacker_ap && g_lp <= 1 {
                                     // 相打ちで相手アタッカーを道連れにできる（LP2主力は温存）
                                     if best_trade_guard.map(|(_, t_ap)| g_ap < t_ap).unwrap_or(true) {
                                         best_trade_guard = Some((gid, g_ap));

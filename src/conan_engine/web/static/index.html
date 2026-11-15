@@ -1454,6 +1454,12 @@
               <input type="checkbox" id="cpu-toggle" onchange="toggleCpu(this.checked)" checked>
               <span>CPU</span>
             </label>
+            <select id="cpu-difficulty-select" onchange="changeCpuDifficulty(this.value)"
+              style="background:#0f172a; color:white; border:1px solid #475569; padding:3px 6px; border-radius:4px; font-size:0.72rem;">
+              <option value="easy">よわい</option>
+              <option value="normal">ふつう</option>
+              <option value="hard" selected>つよい</option>
+            </select>
             <button id="btn-toggle-deck-bar" class="btn btn-secondary" onclick="toggleBattleDeckBar()"
               style="padding:3px 8px; font-size:0.72rem; min-height:24px;">⚙️ デッキ設定</button>
           </div>
@@ -2216,10 +2222,24 @@
     }
 
     async function toggleCpu(isCpu) {
+      const diffEl = document.getElementById('cpu-difficulty-select');
+      const difficulty = diffEl ? diffEl.value : 'hard';
       await fetch('/api/set_cpu', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isCpu: isCpu, roomId: currentRoomId })
+        body: JSON.stringify({ isCpu: isCpu, roomId: currentRoomId, difficulty })
+      });
+      fetchState();
+    }
+
+    async function changeCpuDifficulty(difficulty) {
+      const toggleEl = document.getElementById('cpu-toggle');
+      const isCpu = toggleEl ? toggleEl.checked : true;
+      if (!isCpu) return;
+      await fetch('/api/set_cpu', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isCpu: true, roomId: currentRoomId, difficulty })
       });
       fetchState();
     }
@@ -3085,6 +3105,13 @@
       renderLogs(obs.logs);
       if (document.getElementById('cpu-toggle')) {
         document.getElementById('cpu-toggle').checked = !!obs.p2IsCpu;
+      }
+      if (document.getElementById('cpu-difficulty-select')) {
+        const diffSel = document.getElementById('cpu-difficulty-select');
+        diffSel.style.display = obs.p2IsCpu ? 'inline-block' : 'none';
+        if (obs.cpuDifficulty) {
+          diffSel.value = obs.cpuDifficulty;
+        }
       }
       const roomTag = obs.roomId && obs.roomId !== 'default'
         ? (obs.roomId.startsWith('solo_') ? '' : `[部屋:${obs.roomId}] `)

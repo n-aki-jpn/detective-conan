@@ -351,6 +351,7 @@ struct SetCpuRequest {
     is_cpu: bool,
     #[serde(rename = "roomId")]
     room_id: Option<String>,
+    difficulty: Option<agent::CpuDifficulty>,
 }
 
 #[derive(Deserialize)]
@@ -427,6 +428,7 @@ async fn handle_state(
 
     let mut obs = build_player_observation(&room.engine, &player_id);
     obs["p2IsCpu"] = json!(room.p2_is_cpu);
+    obs["cpuDifficulty"] = json!(room.cpu_agent.as_ref().map(|a| a.difficulty).unwrap_or_default());
     obs["roomId"] = json!(room.room_id);
     obs["p1Connected"] = json!(room.p1_connected);
     obs["p2Connected"] = json!(room.p2_connected);
@@ -640,9 +642,11 @@ async fn handle_set_cpu(
     let mut mgr = state.lock().unwrap();
     let room_id = body.room_id.unwrap_or_else(|| "default".to_string());
     if let Some(room) = mgr.rooms.get_mut(&room_id) {
+        let prev_diff = room.cpu_agent.as_ref().map(|a| a.difficulty).unwrap_or_default();
+        let diff = body.difficulty.unwrap_or(prev_diff);
         room.p2_is_cpu = body.is_cpu;
         room.cpu_agent = if body.is_cpu {
-            Some(RandomAgent::new("player2"))
+            Some(RandomAgent::with_difficulty("player2", diff))
         } else {
             None
         };
