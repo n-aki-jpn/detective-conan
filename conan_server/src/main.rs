@@ -5604,6 +5604,71 @@ mod tests {
     }
 
     #[test]
+    fn test_b03006_rush_with_set_cards() {
+        let catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();
+        let mut engine = engine::MatchEngine::new(catalog.clone());
+        engine.turn = 8;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut sd = models::CardInstance {
+            instance_id: "sd_1".to_string(),
+            definition_id: "B03006".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::FIELD,
+            orientation: models::CardOrientation::ACTIVE,
+            face_up: true,
+            entered_turn: 8,
+            ..Default::default()
+        };
+        for i in 0..5 {
+            let sc = models::CardInstance {
+                instance_id: format!("sc_{}", i),
+                definition_id: "B01001".to_string(),
+                owner_id: "p1".to_string(),
+                zone: models::Zone::FIELD,
+                face_up: true,
+                ..Default::default()
+            };
+            sd.set_cards.push(sc);
+        }
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.field.push(sd);
+        engine.players.insert("p1".to_string(), ps1);
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        ps2.field.push(models::CardInstance {
+            instance_id: "p2_char".to_string(),
+            definition_id: "B01001".to_string(),
+            owner_id: "p2".to_string(),
+            zone: models::Zone::FIELD,
+            orientation: models::CardOrientation::SLEEP,
+            face_up: true,
+            ..Default::default()
+        });
+        engine.players.insert("p2".to_string(), ps2);
+        engine.prompt_main_action("p1");
+
+        let ps1_ref = &engine.players["p1"];
+        let (has_rush, rush_target) = engine.effective_rush(&ps1_ref.field[0]);
+        assert!(has_rush, "B03006に5枚セットされている場合は突撃が有効になること (rush_target={:?})", rush_target);
+        let obs = build_player_observation(&engine, "p1");
+        let actions = obs["pendingDecision"]["options"]["actions"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        let action_opt = actions.iter().find(|o| o["type"].as_str() == Some("ACTION"));
+        let actors = action_opt
+            .and_then(|o| o["actorIds"].as_array())
+            .cloned()
+            .unwrap_or_default();
+        assert!(
+            actors.iter().any(|a| a.as_str() == Some("sd_1")),
+            "sd_1がACTIONのactorIdsに含まれること: {:?}",
+            actors
+        );
+    }
+
+    #[test]
     fn test_index_html_no_undefined_is_secret_in_card_slot() {
         let html = std::fs::read_to_string("../src/conan_engine/web/static/index.html")
             .expect("index.html must be readable");
