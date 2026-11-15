@@ -6933,9 +6933,8 @@ impl MatchEngine {
                     }
                 }
                 ImmediateOp::BlockHintThisTurn => {
-                    let opp_id = self.opponent_id_of(player_id);
-                    self.turn_hint_blocked_players.insert(opp_id.clone());
-                    self.log(format!("🚫 [{}] の効果: このターン中、{} は【ネクストヒント】を使用できません", actor_name, opp_id));
+                    self.turn_hint_blocked_players.insert(player_id.to_string());
+                    self.log(format!("🚫 [{}] の効果: このターン中、{} は【ネクストヒント】を使用できません", actor_name, player_id));
                 }
                 ImmediateOp::BlockOppCutinThisTurn => {
                     let opp_id = self.opponent_id_of(player_id);
