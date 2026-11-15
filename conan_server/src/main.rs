@@ -5368,6 +5368,58 @@ mod tests {
     }
 
     #[test]
+    fn test_b11007_ayumi_on_enter_rush() {
+        let catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();
+        let mut engine = engine::MatchEngine::new(catalog.clone());
+        engine.turn = 2;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        for i in 0..5 {
+            ps1.file.push(models::CardInstance {
+                instance_id: format!("f_{}", i),
+                definition_id: "B01002".to_string(),
+                owner_id: "p1".to_string(),
+                zone: models::Zone::FILE,
+                ..Default::default()
+            });
+        }
+        ps1.field.push(models::CardInstance {
+            instance_id: "ayumi_1".to_string(),
+            definition_id: "B11007".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::FIELD,
+            orientation: models::CardOrientation::ACTIVE,
+            entered_turn: 2,
+            ..Default::default()
+        });
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+
+        let b11007 = catalog.get("B11007").unwrap();
+        let clauses = effects::extract_clauses(&b11007.description, effects::TriggerKind::OnPlay, b11007.card_type);
+        assert!(!clauses.is_empty(), "B11007 must have OnPlay clause: {}", b11007.description);
+
+        engine.resolve_character_enter_field_with_source(
+            "p1",
+            "ayumi_1",
+            "B11007",
+            models::CardOrientation::ACTIVE,
+            None,
+            "main",
+        );
+
+        let ayumi = engine.players["p1"].field.iter().find(|c| c.instance_id == "ayumi_1")
+            .expect("ayumi_1 must be on field");
+        assert!(
+            ayumi.has_rush,
+            "FILE5条件を満たして登場したB11007吉田歩美はhas_rush=trueになること (logs: {:?})",
+            engine.logs
+        );
+    }
+
+    #[test]
     fn test_index_html_no_undefined_is_secret_in_card_slot() {
         let html = std::fs::read_to_string("../src/conan_engine/web/static/index.html")
             .expect("index.html must be readable");

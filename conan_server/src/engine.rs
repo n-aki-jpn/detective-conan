@@ -6408,7 +6408,7 @@ impl MatchEngine {
         false
     }
 
-    fn resolve_character_enter_field_with_source(
+    pub fn resolve_character_enter_field_with_source(
         &mut self,
         player_id: &str,
         actor_id: &str,
