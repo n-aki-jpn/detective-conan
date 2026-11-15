@@ -395,6 +395,7 @@ pub enum ImmediateOp {
     ConditionalLpRemoveOpp,
     EventModeChoice(EventModeChoice),
     ReviveSelfFromRemove { sleep: bool },
+    PlaySelfFromHand { sleep: bool },
 }
 
 /// 対象選択ステップ
@@ -1746,6 +1747,30 @@ pub fn parse_effect_steps(
         if sentence.contains("このキャラをリムーブエリアからスリープ状態で登場") {
             plan.immediate_before
                 .push(ImmediateOp::ReviveSelfFromRemove { sleep: true });
+            continue;
+        }
+        // 手札から自身を登場させる（B06103 ジン等）
+        if sentence.contains("手札からこのキャラをスリープ状態で登場")
+            || sentence.contains("このキャラを手札からスリープ状態で登場")
+        {
+            if let Some(comma_idx) = sentence.find("、手札からこのキャラをスリープ状態で登場")
+                .or_else(|| sentence.find("、このキャラを手札からスリープ状態で登場"))
+            {
+                let prefix = sentence[..comma_idx].trim();
+                let normalized_prefix = if prefix.ends_with("リムーブし") {
+                    format!("{}選び、リムーブする", &prefix[..prefix.len() - "リムーブし".len()])
+                } else {
+                    prefix.to_string()
+                };
+                if let Some(mut step) = parse_target_step(&normalized_prefix, dynamic_level, source_card_type) {
+                    step.follow_up.push(ImmediateOp::PlaySelfFromHand { sleep: true });
+                    plan.target_step = Some(step);
+                    seen_target_or_search = true;
+                    continue;
+                }
+            }
+            let op = ImmediateOp::PlaySelfFromHand { sleep: true };
+            push_op_or_extra(&mut plan, seen_target_or_search, op);
             continue;
         }
         // 事件解決勝利

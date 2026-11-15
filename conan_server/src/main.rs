@@ -5327,6 +5327,29 @@ mod tests {
             "手札のB06103ジンがDECLAREのactorsに含まれること: {:?}",
             actors
         );
+
+        // 実際にDECLAREを実行し、現場の黒キャラをリムーブした後にgin_h自身がスリープ状態で登場することを確認
+        let dec_id = obs["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": dec_id,
+            "revision": engine.revision,
+            "value": { "type": "DECLARE", "actorId": "gin_h" }
+        })).unwrap();
+
+        let obs2 = build_player_observation(&engine, "p1");
+        assert_eq!(obs2["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+        let ts_id = obs2["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": ts_id,
+            "revision": engine.revision,
+            "value": { "targetId": "blk_1" }
+        })).unwrap();
+
+        let ps1_after = &engine.players["p1"];
+        assert!(ps1_after.remove.iter().any(|c| c.instance_id == "blk_1"), "blk_1がリムーブされていること");
+        let gin_on_field = ps1_after.field.iter().find(|c| c.instance_id == "gin_h")
+            .expect("gin_hが現場に登場していること");
+        assert_eq!(gin_on_field.orientation, models::CardOrientation::SLEEP, "gin_hがスリープ状態で登場していること");
     }
 
     #[test]

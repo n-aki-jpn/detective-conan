@@ -7098,6 +7098,28 @@ impl MatchEngine {
                         self.log(format!("⚡ [{}] が自身の効果でリムーブエリアから{}現場に登場！", actor_name, state_str));
                     }
                 }
+                ImmediateOp::PlaySelfFromHand { sleep } => {
+                    let turn = self.turn;
+                    let mut played = false;
+                    if let Some(ps) = self.players.get_mut(player_id) {
+                        if ps.field.len() < 5 {
+                            if let Some(pos) = ps.hand.iter().position(|c| c.instance_id == actor_id) {
+                                let mut card = ps.hand.remove(pos);
+                                card.zone = Zone::FIELD;
+                                card.orientation = if *sleep { CardOrientation::SLEEP } else { CardOrientation::ACTIVE };
+                                card.entered_turn = turn;
+                                card.face_up = true;
+                                ps.field.push(card);
+                                played = true;
+                            }
+                        }
+                    }
+                    if played {
+                        self.last_deployed_count = 1;
+                        let state_str = if *sleep { "スリープ状態で" } else { "" };
+                        self.log(format!("⚡ [{}] が自身の効果で手札から{}現場に登場！", actor_name, state_str));
+                    }
+                }
                 ImmediateOp::MoveSelfFromEvidenceToFieldSleep => {
                     if let Some(eid) = evidence_source_inst_id {
                         let turn = self.turn;
