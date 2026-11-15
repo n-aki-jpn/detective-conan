@@ -3145,10 +3145,11 @@
       }
 
       // Counters
+      const formatFileDisplay = (p) => p.partnerInFile ? `${p.fileCount} (${p.rawFileCount ?? (p.fileCount - 1)}+🤝)` : `${p.fileCount}`;
       document.getElementById('me-id').innerText = `${me.playerId} ${me.isFirstPlayer ? '[先攻]' : '[後攻]'}`;
       document.getElementById('me-deck').innerText = me.deckCount;
       document.getElementById('me-hand-count').innerText = me.handCount;
-      document.getElementById('me-file').innerText = me.fileCount;
+      document.getElementById('me-file').innerText = formatFileDisplay(me);
       document.getElementById('me-evidence').innerText = me.evidenceCount;
       document.getElementById('me-remove').innerText = me.removeCount;
       document.getElementById('me-case-phase').innerText = me.casePhase === 'RESOLUTION' ? '解決編' : '事件編';
@@ -3158,7 +3159,7 @@
       document.getElementById('opp-id').innerText = `${opp.playerId} ${opp.isFirstPlayer ? '[先攻]' : '[後攻]'}`;
       document.getElementById('opp-deck').innerText = opp.deckCount;
       document.getElementById('opp-hand-count').innerText = opp.handCount;
-      document.getElementById('opp-file').innerText = opp.fileCount;
+      document.getElementById('opp-file').innerText = formatFileDisplay(opp);
       document.getElementById('opp-evidence').innerText = opp.evidenceCount;
       document.getElementById('opp-remove').innerText = opp.removeCount;
       document.getElementById('opp-case-phase').innerText = opp.casePhase === 'RESOLUTION' ? '解決編' : '事件編';

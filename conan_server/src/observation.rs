@@ -106,6 +106,8 @@ pub fn build_player_observation(engine: &MatchEngine, viewing_player_id: &str) -
             "isFirstPlayer": ps.is_first_player,
             "casePhase": case_phase_str,
             "fileCount": ps.effective_file_count(),
+            "rawFileCount": ps.file.len(),
+            "partnerInFile": ps.effective_file_count() > ps.file.len(),
             "deckCount": ps.deck.len(),
             "evidenceCount": ps.evidence.len(),
             "removeCount": ps.remove.len(),
