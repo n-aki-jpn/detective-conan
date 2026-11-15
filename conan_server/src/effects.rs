@@ -551,8 +551,8 @@ fn line_matches_trigger(line: &str, trigger: TriggerKind, card_type: CardType) -
         TriggerKind::OnTurnEnd => {
             // 「ターン終了時まで〜」という継続期間表記はトリガーではない
             clean.contains("ターン終了時、")
-                || clean.contains("自分のターン終了時")
-                || clean.contains("相手のターン終了時")
+                || clean.contains("自分のターン終了時、")
+                || clean.contains("相手のターン終了時、")
         }
         TriggerKind::OnAction => {
             !clean.starts_with("このイベントがセットされている")
@@ -596,8 +596,8 @@ fn line_matches_trigger(line: &str, trigger: TriggerKind, card_type: CardType) -
                 && !clean.contains("したとき")
                 && !clean.contains("されたとき")
                 && !clean.contains("ターン終了時、")
-                && !clean.contains("自分のターン終了時")
-                && !clean.contains("相手のターン終了時")
+                && !clean.contains("自分のターン終了時、")
+                && !clean.contains("相手のターン終了時、")
         }
     }
 }
