@@ -316,6 +316,7 @@ pub struct ClauseCost {
     pub file_remove: usize,
     pub deck_mill: usize,
     pub sacrifice_self: bool,
+    pub self_to_deck_bottom: bool,
 }
 
 /// 即時処理オペレーション
@@ -1477,6 +1478,10 @@ pub fn parse_clause_cost(clause: &str) -> ClauseCost {
             || prefix.contains("このキャラをリムーブエリアに移")
             || prefix.contains("〚リムーブエリアに移す〛")
             || prefix.contains("〚リムーブエリアに移し");
+        cost.self_to_deck_bottom = prefix.contains("〚デッキの下に移す〛")
+            || prefix.contains("〚デッキの下に移し")
+            || prefix.contains("このキャラをデッキの下に移す")
+            || prefix.contains("このキャラをデッキの下に移し");
     } else if let Some(opt_idx) = clean.find("てもよい。そうした場合、") {
         let opt_prefix = &clean[..opt_idx];
         let seg = opt_prefix.rsplit('。').next().unwrap_or(opt_prefix);

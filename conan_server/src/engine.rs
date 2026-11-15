@@ -6580,6 +6580,15 @@ impl MatchEngine {
                     ps.remove.push(c);
                 }
             }
+            if cost.self_to_deck_bottom && !actor_id.is_empty() {
+                if let Some(idx) = ps.field.iter().position(|c| c.instance_id == actor_id) {
+                    let mut c = ps.field.remove(idx);
+                    c.zone = Zone::DECK;
+                    c.orientation = CardOrientation::ACTIVE;
+                    c.face_up = false;
+                    ps.deck.insert(0, c);
+                }
+            }
         }
 
         for _ in 0..cost.evidence_remove {
