@@ -153,17 +153,105 @@ fn send_logs_to_gas_webhook(rows: Vec<Value>) {
             if let Some(ref winner) = self.engine.winner_id {
                 self.match_logged = true;
                 let _ = std::fs::create_dir_all("logs");
+
                 let p1_ev = self.engine.players.get("player1").map(|p| p.evidence.len()).unwrap_or(0);
                 let p2_ev = self.engine.players.get("player2").map(|p| p.evidence.len()).unwrap_or(0);
+                let p1_file = self.engine.players.get("player1").map(|p| p.effective_file_count()).unwrap_or(0);
+                let p2_file = self.engine.players.get("player2").map(|p| p.effective_file_count()).unwrap_or(0);
+                let first_player = self.engine.player_order.first().cloned().unwrap_or_else(|| "player1".to_string());
+
+                // カード定義IDを「ID:カード名(Lv.X)」に変換するヘルパー
+                let fmt_def = |def_id: &str| -> String {
+                    if let Some(d) = self.engine.catalog.get(def_id) {
+                        let name = d.names.first().map(|s| s.as_str()).unwrap_or(def_id);
+                        format!("{}:{}(Lv.{})", def_id, name, d.level)
+                    } else {
+                        def_id.to_string()
+                    }
+                };
+
+                // 1. デッキレシピの集計サマリーを作成するヘルパー
+                let build_deck_analytics = |deck: &DeckDefinition| -> Value {
+                    let mut level_curve: HashMap<i32, i32> = HashMap::new();
+                    let mut cards_map = serde_json::Map::new();
+                    for item in &deck.main_deck {
+                        cards_map.insert(fmt_def(&item.definition_id), json!(item.count));
+                        if let Some(d) = self.engine.catalog.get(&item.definition_id) {
+                            *level_curve.entry(d.level).or_insert(0) += item.count;
+                        }
+                    }
+                    json!({
+                        "deckId": deck.deck_id,
+                        "partner": fmt_def(&deck.partner_id),
+                        "case": fmt_def(&deck.case_id),
+                        "cards": cards_map,
+                        "levelCurve": level_curve,
+                    })
+                };
+
+                // 2. 試合終了時の各ゾーン（手札残り＝腐った札、現場、リムーブ、証拠、FILE）を集計するヘルパー
+                let build_zone_analytics = |pid: &str, deck: &DeckDefinition| -> Value {
+                    let Some(ps) = self.engine.players.get(pid) else {
+                        return json!({});
+                    };
+                    let to_list = |cards: &[models::CardInstance]| -> Vec<String> {
+                        cards.iter().map(|c| fmt_def(&c.definition_id)).collect()
+                    };
+
+                    // デッキ内にあったカードのうち、山札(deck)に残らず一度でも引いた・絡んだカードを算出
+                    let mut remaining_deck_counts: HashMap<String, i32> = HashMap::new();
+                    for c in &ps.deck {
+                        *remaining_deck_counts.entry(c.definition_id.clone()).or_insert(0) += 1;
+                    }
+                    let mut seen_cards: Vec<String> = Vec::new();
+                    for item in &deck.main_deck {
+                        let rem = remaining_deck_counts.get(&item.definition_id).copied().unwrap_or(0);
+                        let drawn_count = (item.count - rem).max(0);
+                        for _ in 0..drawn_count {
+                            seen_cards.push(fmt_def(&item.definition_id));
+                        }
+                    }
+
+                    json!({
+                        "field": to_list(&ps.field),
+                        "endHand": to_list(&ps.hand),       // 最後まで使えず手札に残ったカード（事故要因の特定用）
+                        "remove": to_list(&ps.remove),      // 使用済みイベント・リムーブされたカード
+                        "evidence": to_list(&ps.evidence),
+                        "file": to_list(&ps.file),
+                        "seenCards": seen_cards,            // この試合中に山札から離れた（引いた/めくった）全カード
+                    })
+                };
+
+                let p2_deck_ref = self.p2_deck.as_ref().unwrap_or(&self.p1_deck);
+                let p1_deck_info = build_deck_analytics(&self.p1_deck);
+                let p2_deck_info = build_deck_analytics(p2_deck_ref);
+                let p1_zones = build_zone_analytics("player1", &self.p1_deck);
+                let p2_zones = build_zone_analytics("player2", p2_deck_ref);
+
+                let cpu_diff_str = if self.p2_is_cpu {
+                    format!("{:?}", self.cpu_agent.as_ref().map(|a| a.difficulty).unwrap_or_default()).to_lowercase()
+                } else {
+                    "none".to_string()
+                };
+
+                // ローカルの logs/matches.jsonl に完全な構造化データを出力
                 let rec = json!({
                     "timestamp": ts,
                     "roomId": self.room_id,
                     "p2IsCpu": self.p2_is_cpu,
+                    "cpuDifficulty": cpu_diff_str,
+                    "firstPlayer": first_player,
                     "winner": winner,
                     "finishReason": self.engine.finish_reason,
                     "turn": self.engine.turn,
                     "p1Evidence": p1_ev,
                     "p2Evidence": p2_ev,
+                    "p1File": p1_file,
+                    "p2File": p2_file,
+                    "p1Deck": p1_deck_info,
+                    "p2Deck": p2_deck_info,
+                    "p1Zones": p1_zones,
+                    "p2Zones": p2_zones,
                 });
                 if let Ok(mut f) = std::fs::OpenOptions::new()
                     .create(true)
@@ -187,8 +275,7 @@ fn send_logs_to_gas_webhook(rows: Vec<Value>) {
                         })
                     })
                     .collect();
-                let p1_file = self.engine.players.get("player1").map(|p| p.effective_file_count()).unwrap_or(0);
-                let p2_file = self.engine.players.get("player2").map(|p| p.effective_file_count()).unwrap_or(0);
+
                 let format_field = |pid: &str| -> String {
                     self.engine.players.get(pid).map(|ps| {
                         ps.field.iter().map(|c| {
@@ -196,22 +283,34 @@ fn send_logs_to_gas_webhook(rows: Vec<Value>) {
                             let name = def.and_then(|d| d.names.first()).map(|s| s.as_str()).unwrap_or(&c.definition_id);
                             let ap = self.engine.get_effective_ap(pid, c);
                             let lp = def.map(|d| d.lp).unwrap_or(1);
-                            format!("{}(AP:{},LP:{})", name, ap, lp)
+                            format!("{}:{}(AP:{},LP:{})", c.definition_id, name, ap, lp)
                         }).collect::<Vec<_>>().join(",")
                     }).unwrap_or_default()
                 };
-                let cpu_diff_str = if self.p2_is_cpu {
-                    format!("{:?}", self.cpu_agent.as_ref().map(|a| a.difficulty).unwrap_or_default()).to_lowercase()
-                } else {
-                    "none".to_string()
+
+                let format_hand = |pid: &str| -> String {
+                    self.engine.players.get(pid).map(|ps| {
+                        ps.hand.iter().map(|c| fmt_def(&c.definition_id)).collect::<Vec<_>>().join(",")
+                    }).unwrap_or_default()
                 };
+
+                let format_deck_compact = |deck: &DeckDefinition| -> String {
+                    let main_str = deck.main_deck.iter()
+                        .map(|item| format!("{}x{}", item.definition_id, item.count))
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    format!("P:{}/C:{}/M:[{}]", deck.partner_id, deck.case_id, main_str)
+                };
+
+                // 既存の MATCH 行に p1_hand, p2_hand, p1_deck, p2_deck を追加
                 webhook_rows.push(json!({
                     "timestamp": ts,
                     "roomId": self.room_id,
                     "type": "MATCH",
                     "message": format!(
-                        "winner={} reason={:?} turn={} p1_ev={} p2_ev={} p1_file={} p2_file={} cpu={} cpu_diff={} p1_field=[{}] p2_field=[{}]",
+                        "winner={} first={} reason={:?} turn={} p1_ev={} p2_ev={} p1_file={} p2_file={} cpu={} cpu_diff={} p1_field=[{}] p2_field=[{}] p1_hand=[{}] p2_hand=[{}] p1_deck={} p2_deck={}",
                         winner,
+                        first_player,
                         self.engine.finish_reason,
                         self.engine.turn,
                         p1_ev,
@@ -221,7 +320,11 @@ fn send_logs_to_gas_webhook(rows: Vec<Value>) {
                         self.p2_is_cpu,
                         cpu_diff_str,
                         format_field("player1"),
-                        format_field("player2")
+                        format_field("player2"),
+                        format_hand("player1"),
+                        format_hand("player2"),
+                        format_deck_compact(&self.p1_deck),
+                        format_deck_compact(p2_deck_ref)
                     ),
                 }));
                 Self::send_logs_to_gas_webhook(webhook_rows);
