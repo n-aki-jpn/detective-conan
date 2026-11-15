@@ -1111,14 +1111,18 @@
       50% { box-shadow: 0 0 0 3px #fca5a5, 0 0 20px rgba(239, 68, 68, 1); }
     }
     .card-attacking {
-      outline: 2.5px solid #f59e0b !important;
-      box-shadow: 0 0 14px rgba(245, 158, 11, 0.85) !important;
-      z-index: 4;
+      outline: 3px solid #f59e0b !important;
+      box-shadow: 0 0 18px rgba(245, 158, 11, 0.95) !important;
+      scale: 1.12;
+      transition: scale 0.2s ease;
+      z-index: 10;
     }
     .card-targeted {
-      outline: 2.5px solid #ef4444 !important;
+      outline: 3px solid #ef4444 !important;
       animation: contactPulse 1.1s infinite ease-in-out;
-      z-index: 4;
+      scale: 1.12;
+      transition: scale 0.2s ease;
+      z-index: 10;
     }
     .contact-role-badge {
       position: absolute;
