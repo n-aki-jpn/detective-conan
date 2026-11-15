@@ -5420,6 +5420,66 @@ mod tests {
     }
 
     #[test]
+    fn test_d08026_ao_no_kojo_declare() {
+        let catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();
+        let mut engine = engine::MatchEngine::new(catalog.clone());
+        engine.turn = 2;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        let mut cs = models::CardInstance {
+            instance_id: "case_1".to_string(),
+            definition_id: "D08026".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::CASE,
+            ..Default::default()
+        };
+        cs.orientation = models::CardOrientation::ACTIVE;
+        ps1.r#case = Some(cs);
+        ps1.case_phase = models::CasePhase::RESOLUTION;
+        ps1.evidence.push(models::CardInstance {
+            instance_id: "ev_1".to_string(),
+            definition_id: "B01002".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::EVIDENCE,
+            face_up: false,
+            ..Default::default()
+        });
+        ps1.field.push(models::CardInstance {
+            instance_id: "haibara_1".to_string(),
+            definition_id: "B01016".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::FIELD,
+            ..Default::default()
+        });
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+        engine.prompt_main_action("p1");
+
+        let obs = build_player_observation(&engine, "p1");
+        let dec_id = obs["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": dec_id,
+            "revision": engine.revision,
+            "value": { "type": "DECLARE", "actorId": "case_1" }
+        })).unwrap();
+
+        let d08026 = catalog.get("D08026").unwrap();
+        let clauses = effects::extract_clauses(&d08026.description, effects::TriggerKind::Declare, d08026.card_type);
+        let plan = effects::parse_effect_steps(&clauses[0], None, d08026.card_type);
+
+        let obs2 = build_player_observation(&engine, "p1");
+        assert_eq!(
+            obs2["pendingDecision"]["kind"].as_str(),
+            Some("targetSelect"),
+            "D08026青の古城探索事件の宣言後に少年探偵団キャラの対象選択が出ること (plan: {:?}, logs: {:?})",
+            plan,
+            engine.logs
+        );
+    }
+
+    #[test]
     fn test_index_html_no_undefined_is_secret_in_card_slot() {
         let html = std::fs::read_to_string("../src/conan_engine/web/static/index.html")
             .expect("index.html must be readable");

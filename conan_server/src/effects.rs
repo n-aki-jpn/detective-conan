@@ -2968,7 +2968,7 @@ fn parse_target_action(text: &str) -> Option<TargetAction> {
     if text.contains("使用する") && text.contains("イベント") {
         return Some(TargetAction::PlayEventFromHand);
     }
-    if text.contains("表向きにする") || text.contains("表向きにし") {
+    if (text.contains("表向きにする") || text.contains("表向きにし")) && !text.contains("表向きにした") {
         return Some(TargetAction::FlipEvidenceFaceUp);
     }
     if text.contains("裏向きにする") || text.contains("裏向きにし") {
