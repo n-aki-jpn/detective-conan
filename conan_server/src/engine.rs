@@ -6808,7 +6808,7 @@ impl MatchEngine {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn execute_immediate_ops_with_continuation(
+    pub fn execute_immediate_ops_with_continuation(
         &mut self,
         player_id: &str,
         actor_id: &str,
