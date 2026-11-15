@@ -5350,6 +5350,21 @@ mod tests {
         let gin_on_field = ps1_after.field.iter().find(|c| c.instance_id == "gin_h")
             .expect("gin_hが現場に登場していること");
         assert_eq!(gin_on_field.orientation, models::CardOrientation::SLEEP, "gin_hがスリープ状態で登場していること");
+
+        // 場に出た後のgin_hは「この能力はこのカードが手札にあり」の宣言対象にならないこと
+        let obs3 = build_player_observation(&engine, "p1");
+        let declare_after = obs3["pendingDecision"]["options"]["actions"]
+            .as_array()
+            .and_then(|arr| arr.iter().find(|a| a["type"] == "DECLARE"));
+        let actors_after: Vec<&str> = declare_after
+            .and_then(|d| d["actors"].as_array())
+            .map(|arr| arr.iter().filter_map(|a| a["actorId"].as_str()).collect())
+            .unwrap_or_default();
+        assert!(
+            !actors_after.contains(&"gin_h"),
+            "場に出た後のgin_hはDECLAREのactorsに含まれないこと: {:?}",
+            actors_after
+        );
     }
 
     #[test]

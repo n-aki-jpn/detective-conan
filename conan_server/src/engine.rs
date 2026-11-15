@@ -1588,7 +1588,7 @@ impl MatchEngine {
         }
 
         // 8. Declare (宣言効果)
-        let can_declare_clause = |actor_id: &str, actor_ori: CardOrientation, used_turn: bool, in_partner_area: bool, def: &crate::models::CardDefinition| -> bool {
+        let can_declare_clause = |actor_id: &str, actor_ori: CardOrientation, used_turn: bool, in_partner_area: bool, in_hand: bool, def: &crate::models::CardDefinition| -> bool {
             let clauses = extract_clauses(&def.description, TriggerKind::Declare, def.card_type);
             if clauses.is_empty() {
                 return false;
@@ -1596,6 +1596,9 @@ impl MatchEngine {
             let ctx = self.build_cond_info(player_id, Some(actor_id), actor_ori, None);
             let single_clause_legacy_used = used_turn && clauses.len() == 1;
             clauses.iter().any(|clause| {
+                if !in_hand && clause.contains("この能力はこのカードが手札にあり") {
+                    return false;
+                }
                 if in_partner_area && def.card_type != CardType::PARTNER && !allows_partner_area(clause) {
                     return false;
                 }
@@ -1613,7 +1616,7 @@ impl MatchEngine {
         let mut declare_actors = vec![];
         for c in &ps.field {
             if let Some(c_def) = self.catalog.get(&c.definition_id) {
-                if can_declare_clause(&c.instance_id, c.orientation, c.used_declare_this_turn, false, c_def) {
+                if can_declare_clause(&c.instance_id, c.orientation, c.used_declare_this_turn, false, false, c_def) {
                     declare_actors.push(json!({
                         "actorId": c.instance_id.clone(),
                         "name": self.card_name_by_def(&c.definition_id),
@@ -1626,7 +1629,7 @@ impl MatchEngine {
                     continue;
                 }
                 if let Some(sc_def) = self.catalog.get(&sc.definition_id) {
-                    if can_declare_clause(&sc.instance_id, c.orientation, sc.used_declare_this_turn, false, sc_def) {
+                    if can_declare_clause(&sc.instance_id, c.orientation, sc.used_declare_this_turn, false, false, sc_def) {
                         declare_actors.push(json!({
                             "actorId": sc.instance_id.clone(),
                             "name": format!("🔧 {}", self.card_name_by_def(&sc.definition_id)),
@@ -1639,7 +1642,7 @@ impl MatchEngine {
         if let Some(ref p) = ps.partner {
             if p.zone == Zone::PARTNER {
                 if let Some(p_def) = self.catalog.get(&p.definition_id) {
-                    if can_declare_clause(&p.instance_id, p.orientation, p.used_declare_this_turn, true, p_def) {
+                    if can_declare_clause(&p.instance_id, p.orientation, p.used_declare_this_turn, true, false, p_def) {
                         declare_actors.push(json!({
                             "actorId": p.instance_id.clone(),
                             "name": self.card_name_by_def(&p.definition_id),
@@ -1651,7 +1654,7 @@ impl MatchEngine {
         }
         for ep in &ps.extra_partners {
             if let Some(ep_def) = self.catalog.get(&ep.definition_id) {
-                if can_declare_clause(&ep.instance_id, ep.orientation, ep.used_declare_this_turn, true, ep_def) {
+                if can_declare_clause(&ep.instance_id, ep.orientation, ep.used_declare_this_turn, true, false, ep_def) {
                     declare_actors.push(json!({
                         "actorId": ep.instance_id.clone(),
                         "name": self.card_name_by_def(&ep.definition_id),
@@ -1665,7 +1668,7 @@ impl MatchEngine {
                 if (h_def.card_type == CardType::EVENT
                     || (h_def.card_type == CardType::CHARACTER
                         && h_def.description.contains("この能力はこのカードが手札にあり")))
-                    && can_declare_clause(&hc.instance_id, hc.orientation, hc.used_declare_this_turn, false, h_def)
+                    && can_declare_clause(&hc.instance_id, hc.orientation, hc.used_declare_this_turn, false, true, h_def)
                 {
                     declare_actors.push(json!({
                         "actorId": hc.instance_id.clone(),
@@ -1677,7 +1680,7 @@ impl MatchEngine {
         }
         if let Some(ref cs) = ps.r#case {
             if let Some(c_def) = self.catalog.get(&cs.definition_id) {
-                if can_declare_clause(&cs.instance_id, cs.orientation, cs.used_declare_this_turn, false, c_def) {
+                if can_declare_clause(&cs.instance_id, cs.orientation, cs.used_declare_this_turn, false, false, c_def) {
                     declare_actors.push(json!({
                         "actorId": cs.instance_id.clone(),
                         "name": format!("📜 事件: {}", self.card_name_by_def(&cs.definition_id)),
