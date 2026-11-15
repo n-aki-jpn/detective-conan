@@ -1527,6 +1527,23 @@ impl MatchEngine {
         for c in &ps.field {
             let (has_rush, rush_target) = self.effective_rush(c);
             let can_act = c.orientation == CardOrientation::ACTIVE && (c.entered_turn != self.turn || has_rush);
+            if c.entered_turn == self.turn || !c.set_cards.is_empty() {
+                eprintln!(
+                    "[ACTION_CHECK] turn={} player={} card={}({}) ori={:?} entered={} set_cards={} has_rush={} rush_target={:?} can_act={} case_target={:?} opp_sleep_chars={}",
+                    self.turn,
+                    player_id,
+                    c.definition_id,
+                    c.instance_id,
+                    c.orientation,
+                    c.entered_turn,
+                    c.set_cards.len(),
+                    has_rush,
+                    rush_target,
+                    can_act,
+                    case_target_id,
+                    char_target_ids.len(),
+                );
+            }
             if !can_act {
                 continue;
             }
@@ -1593,6 +1610,11 @@ impl MatchEngine {
             if !valid_targets.is_empty() {
                 action_actors.push(c.instance_id.clone());
                 actor_target_map.insert(c.instance_id.clone(), valid_targets);
+            } else if c.entered_turn == self.turn || !c.set_cards.is_empty() {
+                eprintln!(
+                    "[ACTION_SKIP] turn={} player={} card={}({}) valid_targets is empty",
+                    self.turn, player_id, c.definition_id, c.instance_id
+                );
             }
         }
 
