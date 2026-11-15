@@ -1402,12 +1402,6 @@
         <button class="qty-btn" onclick="closeRoomModal()">✕</button>
       </div>
       <div class="modal-body" style="font-size:0.8rem; display:flex; flex-direction:column; gap:12px;">
-        <div style="background:#0f172a; padding:8px; border-radius:6px; border:1px solid var(--border-color);">
-          <div style="color:var(--text-muted); font-size:0.75rem;">現在の対戦情報:</div>
-          <div>ルームID: <b id="current-room-display" style="color:var(--accent); font-size:1rem;">default</b></div>
-          <div>あなたの視点: <b id="current-player-display" style="color:#34d399;">player1</b></div>
-        </div>
-
         <!-- Create Room -->
         <div style="display:flex; flex-direction:column; gap:6px;">
           <span style="font-weight:bold; color:var(--text);">1. 新しい部屋を作成 (ホスト側)</span>
@@ -1439,6 +1433,12 @@
               style="flex:1; background:#0f172a; color:white; border:1px solid var(--border-color); padding:8px; border-radius:6px; font-size:0.85rem; text-align:center;">
             <button class="btn" onclick="joinExistingRoom()" style="padding:8px 14px;">入室</button>
           </div>
+        </div>
+
+        <!-- Current Room Info -->
+        <div style="background:#0f172a; padding:6px 8px; border-radius:6px; border:1px solid var(--border-color); font-size:0.72rem; display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span>ルーム: <b id="current-room-display" style="color:var(--accent);">default</b></span>
+          <span>視点: <b id="current-player-display" style="color:#34d399;">player1</b></span>
         </div>
 
         <!-- Local reset -->
