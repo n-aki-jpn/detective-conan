@@ -1393,7 +1393,7 @@ impl MatchEngine {
         {
             let cond_ctx = self.build_cond_info(player_id, None, CardOrientation::ACTIVE, None);
             let can_normal_play = !ps.normal_hand_played_this_turn && !ps.hint_played_this_turn;
-            let can_play_char = can_normal_play && ps.field.len() < 5;
+            let can_play_char = can_normal_play;
             let event_blocked = self.turn_event_blocked_players.contains(player_id);
             let mut playable_cards = vec![];
             if can_normal_play {
@@ -1795,7 +1795,7 @@ impl MatchEngine {
                         if let Some(c_def) = self.catalog.get(&c.definition_id) {
                             let card_colors = normalize_color_set(&c_def.colors);
                             let color_ok = card_colors.is_empty() || case_colors.is_empty() || card_colors.is_subset(&case_colors);
-                            let slot_ok = c_def.card_type == CardType::EVENT || ps.field.len() < 5;
+                            let slot_ok = true;
                             let eff_lv = if c_def.card_type == CardType::EVENT {
                                 card_effective_level(c_def, &cond_ctx)
                             } else {
@@ -2598,7 +2598,7 @@ impl MatchEngine {
                     CardOrientation::ACTIVE
                 };
                 if let Some(ps) = self.players.get_mut(player_id) {
-                    if ps.field.len() < 5 {
+                    {
                         let src_vec = if effect_type == "PLAY_FROM_HAND" || target_zone == "HAND" {
                             &mut ps.hand
                         } else {
@@ -2620,6 +2620,18 @@ impl MatchEngine {
                             let ori_txt = if ori == CardOrientation::SLEEP { "（スリープ状態）" } else { "" };
                             self.log(format!("✨ [{}] の効果で{}から [{}] を{}登場させました！", actor_name, zone_txt, target_name, ori_txt));
                         }
+                    }
+                }
+            }
+            "FIELD_OVERFLOW_REMOVE" => {
+                if let Some(ps) = self.players.get_mut(player_id) {
+                    if let Some(idx) = ps.field.iter().position(|c| c.instance_id == tid) {
+                        let mut card = ps.field.remove(idx);
+                        card.zone = Zone::REMOVE;
+                        card.orientation = CardOrientation::ACTIVE;
+                        card.face_up = true;
+                        ps.remove.push(card);
+                        self.log(format!("📤 ルール処理: {} の現場上限(5体)超過により [{}] を場外(リムーブエリア)に移しました（効果リムーブではないため誘発なし）", player_id, target_name));
                     }
                 }
             }
@@ -3885,11 +3897,69 @@ impl MatchEngine {
         self.resume_after_decision(player_id, &resume_context);
     }
 
+    /// 現場のキャラが上限(5体)を超えている場合、場外(リムーブエリア)に移すキャラを1体選択させる（効果リムーブではない）
+    fn check_field_overflow(&mut self, player_id: &str, resume_context: &str) -> bool {
+        let overflow_pids: Vec<String> = self
+            .players
+            .iter()
+            .filter(|(_, ps)| ps.field.len() > 5)
+            .map(|(pid, _)| pid.clone())
+            .collect();
+        let target_pid = if overflow_pids.iter().any(|p| p == player_id) {
+            player_id.to_string()
+        } else if let Some(first) = overflow_pids.into_iter().next() {
+            first
+        } else {
+            return false;
+        };
+        let candidates: Vec<Value> = if let Some(ps) = self.players.get(&target_pid) {
+            ps.field
+                .iter()
+                .map(|c| {
+                    let def = self.catalog.get(&c.definition_id);
+                    json!({
+                        "instanceId": c.instance_id,
+                        "definitionId": c.definition_id,
+                        "name": self.card_name_by_def(&c.definition_id),
+                        "level": def.map(|d| d.level).unwrap_or(0),
+                        "ap": def.map(|d| d.ap).unwrap_or(0),
+                        "traits": def.map(|d| d.traits.clone()).unwrap_or_default(),
+                    })
+                })
+                .collect()
+        } else {
+            return false;
+        };
+        if candidates.is_empty() {
+            return false;
+        }
+        self.pending_decision = Some(json!({
+            "decisionId": format!("dec_{}", self.revision + 1),
+            "playerId": target_pid,
+            "kind": "targetSelect",
+            "options": {
+                "title": "場のキャラが上限(5体)を超えたため、場外に移すキャラを1体選択してください",
+                "actorId": "",
+                "actorName": "ルール処理",
+                "effectType": "FIELD_OVERFLOW_REMOVE",
+                "zone": "FIELD",
+                "maxCount": 1,
+                "optional": false,
+                "candidates": candidates,
+                "resumeContext": resume_context,
+            }
+        }));
+        true
+    }
+
     fn resume_after_decision(&mut self, decision_player_id: &str, resume_context: &str) {
         if self.drain_pending_clause_queue() {
             return;
         }
         if self.try_fire_pending_ally_play(resume_context) {
+            return;
+        }
+        if self.check_field_overflow(decision_player_id, resume_context) {
             return;
         }
         if resume_context == "MAIN" && self.try_fire_pending_hint_trigger(decision_player_id, None) {
@@ -4223,7 +4293,7 @@ impl MatchEngine {
                 if let Some(idx) = ps.hand.iter().position(|c| c.instance_id == card_id) {
                     let def_id_peek = ps.hand[idx].definition_id.clone();
                     let card_type = self.catalog.get(&def_id_peek).map(|d| d.card_type).unwrap_or(CardType::CHARACTER);
-                    if card_type == CardType::EVENT || ps.field.len() < 5 {
+                    if true {
                         let mut card = ps.hand.remove(idx);
                         played_def_id = Some(card.definition_id.clone());
                         played_inst_id = Some(card.instance_id.clone());
