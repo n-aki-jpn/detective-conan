@@ -1331,7 +1331,7 @@ fn check_bond(bond_name: &str, ctx: &PlayerCondInfo) -> bool {
 }
 
 fn extract_field_presence_condition(clean: &str) -> Option<&str> {
-    let start = clean.find("自分の現場に")? + "自分の現場に".len();
+    let start = clean.rfind("自分の現場に")? + "自分の現場に".len();
     let tail = &clean[start..];
     let end = tail
         .find("がいる場合")

@@ -1659,7 +1659,9 @@ impl MatchEngine {
         }
         for hc in &ps.hand {
             if let Some(h_def) = self.catalog.get(&hc.definition_id) {
-                if h_def.card_type == CardType::EVENT
+                if (h_def.card_type == CardType::EVENT
+                    || (h_def.card_type == CardType::CHARACTER
+                        && h_def.description.contains("この能力はこのカードが手札にあり")))
                     && can_declare_clause(&hc.instance_id, hc.orientation, hc.used_declare_this_turn, false, h_def)
                 {
                     declare_actors.push(json!({

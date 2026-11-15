@@ -5273,5 +5273,60 @@ mod tests {
         assert_eq!(deck["incident"][0], "B01002");
         assert_eq!(deck["other"].as_array().unwrap().len(), 3);
     }
+
+    #[test]
+    fn test_b06103_gin_hand_declare() {
+        let catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();
+        let mut engine = engine::MatchEngine::new(catalog.clone());
+        engine.turn = 2;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        let mut cs = models::CardInstance {
+            instance_id: "case1".to_string(),
+            definition_id: "B01002".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::CASE,
+            ..Default::default()
+        };
+        cs.orientation = models::CardOrientation::ACTIVE;
+        ps1.r#case = Some(cs);
+        ps1.case_phase = models::CasePhase::RESOLUTION;
+
+        ps1.field.push(models::CardInstance {
+            instance_id: "blk_1".to_string(),
+            definition_id: "B11085".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::FIELD,
+            ..Default::default()
+        });
+        ps1.hand.push(models::CardInstance {
+            instance_id: "gin_h".to_string(),
+            definition_id: "B06103".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::HAND,
+            ..Default::default()
+        });
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+        engine.prompt_main_action("p1");
+
+        let b06103 = catalog.get("B06103").unwrap();
+        let clauses = effects::extract_clauses(&b06103.description, effects::TriggerKind::Declare, b06103.card_type);
+        assert!(!clauses.is_empty(), "B06103 must have Declare clause: {}", b06103.description);
+        let obs = build_player_observation(&engine, "p1");
+        let actions = obs["pendingDecision"]["options"]["actions"]
+            .as_array()
+            .expect("pendingDecision.options.actions must exist");
+        let declare_action = actions.iter().find(|a| a["type"] == "DECLARE")
+            .unwrap_or_else(|| panic!("DECLARE action must exist; clauses={:?}, actions={:?}", clauses, actions));
+        let actors = declare_action["actors"].as_array().expect("actors must exist");
+        assert!(
+            actors.iter().any(|a| a["actorId"].as_str() == Some("gin_h")),
+            "手札のB06103ジンがDECLAREのactorsに含まれること: {:?}",
+            actors
+        );
+    }
 }
 
