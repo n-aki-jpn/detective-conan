@@ -3385,11 +3385,8 @@ impl MatchEngine {
             }
         }
 
-        // 登場させたキャラの登場時効果（複数体対応：2体目以降の登場時はキュー経由か順次発火）
+        // 登場させたキャラの登場時効果（複数体対応：途中でUIを開いた場合は残りのキャラのOnPlayをキューに積む）
         for (didx, (dep_inst, dep_def, dep_ori)) in deployed_list.iter().enumerate() {
-            if didx + 1 < deployed_list.len() {
-                // 後続キャラは OnPlay キューイングしてもよいが、まず先頭を解決
-            }
             if self.resolve_character_enter_field_with_source(
                 player_id,
                 dep_inst,
@@ -3398,6 +3395,31 @@ impl MatchEngine {
                 source_level,
                 &resume_context,
             ) {
+                let mut rem_tasks: Vec<PendingClauseTask> = Vec::new();
+                for (rem_inst, rem_def, _) in &deployed_list[didx + 1..] {
+                    if let Some(def) = self.catalog.get(rem_def).cloned() {
+                        let on_play_clauses = extract_clauses(&def.description, TriggerKind::OnPlay, def.card_type);
+                        let rem_name = self.card_name_by_def(rem_def);
+                        for cl in on_play_clauses {
+                            rem_tasks.push(PendingClauseTask {
+                                player_id: player_id.to_string(),
+                                actor_id: rem_inst.clone(),
+                                actor_name: rem_name.clone(),
+                                source_level,
+                                card_type: def.card_type,
+                                clause: cl,
+                                resume_context: resume_context.clone(),
+                                evidence_source_inst_id: None,
+                                post_target_ops: vec![],
+                                plan: None,
+                            });
+                        }
+                    }
+                }
+                if !rem_tasks.is_empty() {
+                    rem_tasks.extend(std::mem::take(&mut self.pending_clause_queue));
+                    self.pending_clause_queue = rem_tasks;
+                }
                 return;
             }
         }
