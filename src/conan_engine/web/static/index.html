@@ -4328,9 +4328,15 @@
       return total + targetDelta;
     }
 
+    function isUnlimitedDeckCard(defId) {
+      const card = catalogData.find(c => c.definitionId === defId);
+      return Boolean(card && card.description && card.description.includes('デッキに何枚でも入れることができる'));
+    }
+
     function changeCardQty(defId, delta) {
       const cur = deckQtyMap[defId] || 0;
-      if (delta > 0) {
+      const unlimited = isUnlimitedDeckCard(defId);
+      if (delta > 0 && !unlimited) {
         const canonTotal = getCanonicalTotal(defId, 0);
         if (canonTotal >= 3) {
           const card = catalogData.find(c => c.definitionId === defId);
@@ -4340,7 +4346,7 @@
         }
       }
 
-      const next = Math.max(0, Math.min(3, cur + delta));
+      const next = unlimited ? Math.max(0, cur + delta) : Math.max(0, Math.min(3, cur + delta));
       if (next === 0) {
         delete deckQtyMap[defId];
       } else {
@@ -4384,7 +4390,7 @@
           }
           const canonId = getCanonicalId(defId);
           canonicalCounts[canonId] = (canonicalCounts[canonId] || 0) + cnt;
-          if (canonicalCounts[canonId] > 3) {
+          if (!isUnlimitedDeckCard(defId) && canonicalCounts[canonId] > 3) {
             hasOverLimit = true;
             overLimitMsg = `同一カードID(${canonId})が4枚以上あります`;
           }

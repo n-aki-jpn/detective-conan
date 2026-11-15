@@ -801,21 +801,24 @@ async fn handle_save_deck(
         ).into_response();
     }
 
-    // Validate maximum 3 copies per canonical ID (card_id)
+    // Validate maximum 3 copies per canonical ID (card_id), unless the card text allows unlimited copies
     let mut canonical_counts: HashMap<String, i32> = HashMap::new();
     for item in &body.main_deck {
-        let canonical_id = mgr_read
-            .catalog
-            .get(&item.definition_id)
+        let card_def = mgr_read.catalog.get(&item.definition_id);
+        let is_unlimited = card_def
+            .map(|d| d.description.contains("デッキに何枚でも入れることができる"))
+            .unwrap_or(false);
+        if is_unlimited {
+            continue;
+        }
+        let canonical_id = card_def
             .map(|d| d.canonical_id.clone())
             .unwrap_or_else(|| item.definition_id.clone());
 
         let count = canonical_counts.entry(canonical_id.clone()).or_insert(0);
         *count += item.count;
         if *count > 3 {
-            let card_title = mgr_read
-                .catalog
-                .get(&item.definition_id)
+            let card_title = card_def
                 .and_then(|d| d.names.first())
                 .cloned()
                 .unwrap_or_else(|| item.definition_id.clone());
@@ -1368,8 +1371,14 @@ mod tests {
         let validate_deck_counts = |items: &[DeckCardItem]| -> Result<(), String> {
             let mut canonical_counts: HashMap<String, i32> = HashMap::new();
             for item in items {
-                let canonical_id = catalog
-                    .get(&item.definition_id)
+                let card_def = catalog.get(&item.definition_id);
+                let is_unlimited = card_def
+                    .map(|d| d.description.contains("デッキに何枚でも入れることができる"))
+                    .unwrap_or(false);
+                if is_unlimited {
+                    continue;
+                }
+                let canonical_id = card_def
                     .map(|d| d.canonical_id.clone())
                     .unwrap_or_else(|| item.definition_id.clone());
 
@@ -1388,6 +1397,14 @@ mod tests {
             DeckCardItem { definition_id: "B01005P".to_string(), count: 2 },
         ];
         assert!(validate_deck_counts(&invalid_items).is_err());
+
+        // 0627 (犯人) allows unlimited copies -> 10 copies should succeed
+        if let Some(hannin_def) = catalog.definitions.values().find(|d| d.canonical_id == "0627") {
+            let unlimited_items = vec![
+                DeckCardItem { definition_id: hannin_def.definition_id.clone(), count: 10 },
+            ];
+            assert!(validate_deck_counts(&unlimited_items).is_ok());
+        }
 
         // 2 + 1 = 3 (Same canonical ID) -> should succeed
         let valid_items = vec![
