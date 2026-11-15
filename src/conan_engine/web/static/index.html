@@ -3623,7 +3623,20 @@
             btn.innerHTML = `
               <span style="font-weight:bold; display:flex; align-items:center; gap:4px;">${zoneBadge}${sideLabel} ${cand.name}${stateLabel}</span>
               <span style="font-size:0.68rem; opacity:0.85;">Lv.${cand.level} / AP ${cand.ap}${traitsStr}</span>
+              <span class="split-role-tag" data-id="${cand.instanceId}" style="font-size:0.7rem; font-weight:bold; color:#fde047; margin-top:2px;"></span>
             `;
+
+            const updateSplitRoleTags = () => {
+              const effType = pd.options.effectType;
+              if (effType !== 'REVIVE_SPLIT_GONIN' && effType !== 'REVIVE_SPLIT_BAKANA') return;
+              const labels = effType === 'REVIVE_SPLIT_GONIN'
+                ? ['1枚目: 登場', '2枚目: スリープ登場', '3枚目: 手札']
+                : ['1枚目: 登場', '2枚目: スリープ登場'];
+              wrap.querySelectorAll('.split-role-tag').forEach(el => {
+                const i = selectedIds.indexOf(el.dataset.id);
+                el.innerText = i >= 0 ? `✓ ${labels[i] || `${i + 1}枚目`}` : '';
+              });
+            };
 
             btn.onclick = () => {
               if (maxSelect > 1) {
@@ -3634,6 +3647,7 @@
                   selectedIds.push(cand.instanceId);
                 }
                 btn.style.cssText = renderCandStyle(selectedIds.includes(cand.instanceId));
+                updateSplitRoleTags();
                 btnConfirm.innerText = `決定（${selectedIds.length}/${maxSelect}枚）`;
                 if (!pd.options.optional && !anyCount) {
                   btnConfirm.disabled = selectedIds.length !== maxSelect;
