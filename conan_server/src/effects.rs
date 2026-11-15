@@ -69,6 +69,7 @@ pub enum TargetAction {
     FlipEvidenceFaceDown,
     MoveEvidenceToHand,
     PlaceHandCardAsEvidenceFaceDown,
+    TurnIntoOwnerFaceUpEvidence,
     PlayEventFromHand,
     DeckTopFromRemove,
     CopyNameFromOtherSelfChar,
@@ -109,6 +110,7 @@ impl TargetAction {
             TargetAction::FlipEvidenceFaceDown => "FLIP_EVIDENCE_FACE_DOWN",
             TargetAction::MoveEvidenceToHand => "MOVE_EVIDENCE_TO_HAND",
             TargetAction::PlaceHandCardAsEvidenceFaceDown => "PLACE_HAND_AS_EVIDENCE",
+            TargetAction::TurnIntoOwnerFaceUpEvidence => "TURN_INTO_FACE_UP_EVIDENCE",
             TargetAction::PlayEventFromHand => "PLAY_EVENT_FROM_HAND",
             TargetAction::DeckTopFromRemove => "DECK_TOP_FROM_REMOVE",
             TargetAction::CopyNameFromOtherSelfChar => "COPY_NAME_FROM_OTHER_CHAR",
@@ -1796,10 +1798,12 @@ pub fn parse_effect_steps(
             }
         }
 
-        if plan.deck_search.as_ref().is_some_and(|ds| ds.post_add_discard > 0)
-            && sentence.starts_with("カードを手札に加えた場合、手札を")
-            && sentence.ends_with("枚リムーブする")
-        {
+        if plan.deck_search.as_ref().is_some_and(|ds| {
+            (ds.post_add_discard > 0
+                && sentence.starts_with("カードを手札に加えた場合、手札を")
+                && sentence.ends_with("枚リムーブする"))
+                || ds.post_clauses.iter().any(|pc| pc.trim_end_matches('。') == sentence.trim_end_matches('。'))
+        }) {
             continue;
         }
 
@@ -2483,9 +2487,12 @@ fn extract_deck_search_scope(effect_body: &str) -> &str {
         if let Some(dot_rel) = after_rem.find('。') {
             let after_dot_idx = rem_idx + dot_rel + '。'.len_utf8();
             end_idx = after_dot_idx;
-            // 直後の文が「カードを手札に加えた場合、手札をN枚リムーブする。」ならそれも範囲に含める
+            // 直後の文が「〜手札に加えた場合、」「〜登場させた場合、」ならそれも範囲に含める
             let tail = rest_from_look[after_dot_idx..].trim_start();
-            if tail.starts_with("カードを手札に加えた場合、手札を") {
+            if tail.starts_with("カードを手札に加えた場合、手札を")
+                || tail.contains("手札に加えた場合、")
+                || tail.contains("登場させた場合、")
+            {
                 if let Some(dot2) = tail.find('。') {
                     let offset = rest_from_look.len() - tail.len();
                     end_idx = offset + dot2 + '。'.len_utf8();
@@ -2597,12 +2604,17 @@ fn parse_deck_search_step(
     filter.count = count.max(1);
     filter.up_to = true;
 
-    let post_add_discard = text
-        .split('。')
-        .map(str::trim)
-        .find(|s| s.starts_with("カードを手札に加えた場合、手札を") && s.ends_with("枚リムーブする"))
-        .map(|s| extract_count_around(s, "手札を", "枚リムーブ"))
-        .unwrap_or(0);
+    let mut post_add_discard = 0;
+    let mut post_clauses = Vec::new();
+    for s in text.split('。').map(str::trim).filter(|s| !s.is_empty()) {
+        if s.starts_with("カードを手札に加えた場合、手札を") && s.ends_with("枚リムーブする") {
+            post_add_discard = extract_count_around(s, "手札を", "枚リムーブ");
+        } else if (s.contains("手札に加えた場合、") || s.contains("登場させた場合、"))
+            && !s.contains("デッキのカードを上から")
+        {
+            post_clauses.push(format!("{}。", s));
+        }
+    }
     let remainder_to_remove = text.contains("残りをリムーブ");
     let shuffle_remainder = text.contains("シャッフル");
     let record_removed_levels = remainder_to_remove;
@@ -2617,7 +2629,7 @@ fn parse_deck_search_step(
         pick_count: count.max(1),
         shuffle_remainder,
         record_removed_levels,
-        post_clauses: Vec::new(),
+        post_clauses,
     }
 }
 
@@ -2909,6 +2921,11 @@ fn extract_bonuses_from_action(text: &str) -> Vec<TargetBonus> {
 
 fn parse_target_action(text: &str) -> Option<TargetAction> {
     // 「相手はそのカードを〜証拠として得る」と「手札から裏向きで証拠として得る」を区別
+    if text.contains("相手はそのカードを表向きのまま証拠として得る")
+        || text.contains("持ち主はそのカードを表向きで証拠として得る")
+    {
+        return Some(TargetAction::TurnIntoOwnerFaceUpEvidence);
+    }
     if text.contains("証拠として得る") && !text.contains("相手はそのカード") && !text.contains("持ち主はそのカード") {
         return Some(TargetAction::PlaceHandCardAsEvidenceFaceDown);
     }

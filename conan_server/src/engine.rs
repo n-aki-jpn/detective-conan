@@ -2881,11 +2881,54 @@ impl MatchEngine {
                     }
                 }
             }
-            "GRANT_CONTACT_FORCE_ATTACK" => {
-                if let Some(ps) = self.players.get_mut(&opp_id) {
-                    if let Some(_c) = ps.field.iter().find(|c| c.instance_id == tid) {
-                        self.log(format!("⚔️ [{}] に次の自分のターン開始時アクション誘導を付与しました", target_name));
+            "TURN_INTO_FACE_UP_EVIDENCE" => {
+                let mut moved = false;
+                for pid in [opp_id.as_str(), player_id] {
+                    if let Some(ps) = self.players.get_mut(pid) {
+                        if let Some(pos) = ps.field.iter().position(|c| c.instance_id == tid) {
+                            let mut card = ps.field.remove(pos);
+                            card.zone = Zone::EVIDENCE;
+                            card.face_up = true;
+                            card.orientation = CardOrientation::ACTIVE;
+                            ps.evidence.push(card);
+                            self.log(format!("📌 [{}] の効果で [{}] を持ち主の表向き証拠にしました", actor_name, target_name));
+                            moved = true;
+                            break;
+                        }
+                        for fc in &mut ps.field {
+                            if let Some(spos) = fc.set_cards.iter().position(|sc| sc.instance_id == tid) {
+                                let mut sc = fc.set_cards.remove(spos);
+                                sc.zone = Zone::EVIDENCE;
+                                sc.face_up = true;
+                                ps.evidence.push(sc);
+                                self.log(format!("📌 [{}] の効果でセットカード [{}] を持ち主の表向き証拠にしました", actor_name, target_name));
+                                moved = true;
+                                break;
+                            }
+                        }
+                        if moved {
+                            break;
+                        }
                     }
+                }
+            }
+            "GRANT_CONTACT_FORCE_ATTACK" => {
+                let can_contact = self.players.get(player_id).map(|ps| ps.field.iter().any(|c| c.instance_id == actor_id)).unwrap_or(false)
+                    && self.players.get(&opp_id).map(|ps| ps.field.iter().any(|c| c.instance_id == tid)).unwrap_or(false);
+                if can_contact {
+                    self.log(format!("⚔️ [{}] の効果で [{}] とのコンタクト（バトル）が発生！", actor_name, target_name));
+                    self.action_context = Some(json!({
+                        "attackerPlayerId": player_id,
+                        "defenderPlayerId": opp_id,
+                        "actorId": actor_id,
+                        "targetId": tid,
+                        "attackerPass": false,
+                        "defenderPass": false,
+                        "cutinUsed": false,
+                        "isForcedContact": true
+                    }));
+                    self.trigger_on_contact(player_id, actor_id, &opp_id, tid);
+                    self.proceed_to_action_resolution(None);
                 }
             }
             _ => {
@@ -8318,7 +8361,13 @@ impl MatchEngine {
                     v
                 }
             }
-            TargetAction::ApDebuff(v) => -v,
+            TargetAction::ApDebuff(v) => {
+                if ts.scale_by_cost_flipped_evidence {
+                    -v * (self.last_cost_flipped_evidence_count.max(1) as i32)
+                } else {
+                    -v
+                }
+            }
             _ => 0,
         };
         let level_delta = match ts.action {
@@ -8892,6 +8941,7 @@ fn target_action_prompt_title(action: &TargetAction, filter: &TargetFilter) -> S
         TargetAction::FlipEvidenceFaceDown => "裏向きにする証拠を選択してください".to_string(),
         TargetAction::MoveEvidenceToHand => "手札に加える証拠を選択してください".to_string(),
         TargetAction::PlaceHandCardAsEvidenceFaceDown => "裏向きで証拠として置く手札を選択してください".to_string(),
+        TargetAction::TurnIntoOwnerFaceUpEvidence => "表向きの証拠として送るカードを選択してください".to_string(),
         TargetAction::DeckTopFromRemove => "デッキの上に移すリムーブエリアのカードを選択してください".to_string(),
         TargetAction::CopyNameFromOtherSelfChar => "名前をコピーする自分の現場の別キャラを選択してください".to_string(),
         TargetAction::GrantContactForceAttack => "コンタクト強制効果を与える相手キャラを選択してください".to_string(),
