@@ -99,6 +99,8 @@ pub struct MatchEngine {
     pub winner_id: Option<String>,
     pub finish_reason: Option<String>,
     pub action_context: Option<Value>,
+    /// コンタクト中のみ有効なAPバフ（カットイン等）。コンタクト終了時にクリアされる
+    pub contact_ap_buffs: HashMap<String, i32>,
     pub turn_clause_usage: HashMap<String, usize>,
     pub turn_field_plays_by_player: HashMap<String, usize>,
     pub turn_disguise_blocked_players: HashSet<String>,
@@ -169,6 +171,7 @@ impl MatchEngine {
             winner_id: None,
             finish_reason: None,
             action_context: None,
+            contact_ap_buffs: HashMap::new(),
             turn_clause_usage: HashMap::new(),
             turn_field_plays_by_player: HashMap::new(),
             turn_disguise_blocked_players: HashSet::new(),
@@ -2008,6 +2011,7 @@ impl MatchEngine {
                 let target_name = self.card_name_by_inst(&target_id);
                 self.log(format!("⚔️ {} の [{}] が {} の [{}] に攻撃を仕掛けました！", player_id, actor_name, opp_pid, target_name));
 
+                self.contact_ap_buffs.clear();
                 self.action_context = Some(json!({
                     "actorId": actor_id,
                     "targetId": target_id,
@@ -2029,6 +2033,7 @@ impl MatchEngine {
 
                 if !self.is_action_target_still_valid() {
                     self.action_context = None;
+                self.contact_ap_buffs.clear();
                     self.log("⚠️ 指定されていた対象が現場を離れたためアクションを終了します");
                     self.prompt_main_action(player_id);
                     return;
@@ -2990,7 +2995,8 @@ impl MatchEngine {
                     && self.players.get(&opp_id).map(|ps| ps.field.iter().any(|c| c.instance_id == tid)).unwrap_or(false);
                 if can_contact {
                     self.log(format!("⚔️ [{}] の効果で [{}] とのコンタクト（バトル）が発生！", actor_name, target_name));
-                    self.action_context = Some(json!({
+                    self.contact_ap_buffs.clear();
+                self.action_context = Some(json!({
                         "attackerPlayerId": player_id,
                         "defenderPlayerId": opp_id,
                         "actorId": actor_id,
@@ -4074,6 +4080,7 @@ impl MatchEngine {
                     .unwrap_or(&self.turn_player_id)
                     .to_string();
                 self.action_context = None;
+                self.contact_ap_buffs.clear();
                 self.log("⚠️ コンタクト中のキャラが現場を離れたためコンタクトを終了します");
                 self.prompt_main_action(&att_pid);
                 return;
@@ -4108,6 +4115,7 @@ impl MatchEngine {
                 self.prompt_guard_or_cutin(def_pid);
             } else {
                 self.action_context = None;
+                self.contact_ap_buffs.clear();
                 self.log("⚠️ 指定されていた対象が現場を離れたためアクションを終了します");
                 self.prompt_main_action(&self.turn_player_id.clone());
             }
@@ -4304,6 +4312,7 @@ impl MatchEngine {
                 .unwrap_or(&self.turn_player_id)
                 .to_string();
             self.action_context = None;
+                self.contact_ap_buffs.clear();
             self.log("⚠️ コンタクト中のキャラが現場を離れたためコンタクトを終了します");
             self.prompt_main_action(&att_pid);
             return;
@@ -4539,6 +4548,7 @@ impl MatchEngine {
                     }
                     if self.is_contact_aborted() {
                         self.action_context = None;
+                self.contact_ap_buffs.clear();
                         self.log("⚠️ コンタクト中のキャラが現場を離れたためコンタクトを終了します");
                         self.prompt_main_action(&attacker_pid);
                         return;
@@ -4609,6 +4619,7 @@ impl MatchEngine {
                     }
                     if self.is_contact_aborted() {
                         self.action_context = None;
+                self.contact_ap_buffs.clear();
                         self.log("⚠️ コンタクト中のキャラが現場を離れたためコンタクトを終了します");
                         self.prompt_main_action(&attacker_pid);
                         return;
@@ -4694,6 +4705,7 @@ impl MatchEngine {
                 .unwrap_or(&self.turn_player_id)
                 .to_string();
             self.action_context = None;
+                self.contact_ap_buffs.clear();
             self.log("⚠️ コンタクト中のキャラが現場を離れたためコンタクトを終了します");
             if !self.drain_pending_clause_queue() {
                 self.prompt_main_action(&att_pid);
@@ -4831,6 +4843,8 @@ impl MatchEngine {
             }
         }
 
+        // コンタクト終了：カットイン等によるコンタクト中のAP増減はここで切れる
+        self.contact_ap_buffs.clear();
         if !self.drain_pending_clause_queue() {
             self.prompt_main_action(&attacker_pid);
         }
@@ -4967,7 +4981,7 @@ impl MatchEngine {
         if let Some(cid) = self.get_contact_char_id_for_player(player_id) {
             if let Some(ps) = self.players.get_mut(player_id) {
                 if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == cid) {
-                    c.temp_ap_bonus += amt;
+                    *self.contact_ap_buffs.entry(c.instance_id.clone()).or_insert(0) += amt;
                     let target_name = self
                         .catalog
                         .get(&c.definition_id)
@@ -5445,11 +5459,12 @@ impl MatchEngine {
     }
 
     pub fn get_effective_ap_with_contact(&self, owner_id: &str, card: &CardInstance, in_contact: bool) -> i32 {
+        let contact_bonus = self.contact_ap_buffs.get(&card.instance_id).copied().unwrap_or(0);
         let Some(target_def) = self.catalog.get(&card.definition_id) else {
-            return card.base_ap_override.unwrap_or(0) + card.temp_ap_bonus;
+            return card.base_ap_override.unwrap_or(0) + card.temp_ap_bonus + contact_bonus;
         };
         let base_ap = card.base_ap_override.unwrap_or(target_def.ap);
-        let mut total = base_ap + card.temp_ap_bonus;
+        let mut total = base_ap + card.temp_ap_bonus + contact_bonus;
 
         if card.zone != Zone::FIELD {
             return total;
@@ -5480,7 +5495,7 @@ impl MatchEngine {
             total += 1000;
         }
 
-        let target_base_ap = base_ap + card.temp_ap_bonus;
+        let target_base_ap = base_ap + card.temp_ap_bonus + contact_bonus;
         for src_pid in &self.player_order {
             let Some(src_ps) = self.players.get(src_pid) else {
                 continue;
@@ -5579,7 +5594,7 @@ impl MatchEngine {
             source_cond: &src_cond,
             target_instance_id: &card.instance_id,
             target_def,
-            target_base_ap: target_def.ap + card.temp_ap_bonus,
+            target_base_ap: target_def.ap + card.temp_ap_bonus + self.contact_ap_buffs.get(&card.instance_id).copied().unwrap_or(0),
             target_is_friendly_to_source: true,
             opp_field_cards: &opp_field_cards,
             self_hand_count: ps.hand.len(),
@@ -7052,7 +7067,14 @@ impl MatchEngine {
                                     .and_then(|cid| ps.field.iter().position(|c| c.instance_id == cid))
                             });
                         if let Some(pos) = target_pos {
-                            ps.field[pos].temp_ap_bonus += *amt;
+                            let actor_on_field = ps.field[pos].instance_id == actor_id;
+                            if actor_on_field {
+                                ps.field[pos].temp_ap_bonus += *amt;
+                            } else {
+                                // 手札から使用したカットイン等：コンタクト終了時まで有効
+                                let inst = ps.field[pos].instance_id.clone();
+                                *self.contact_ap_buffs.entry(inst).or_insert(0) += *amt;
+                            }
                             let target_name = self
                                 .catalog
                                 .get(&ps.field[pos].definition_id)
@@ -7688,7 +7710,7 @@ impl MatchEngine {
                         if let Some(cid) = self.get_contact_char_id_for_player(player_id) {
                             if let Some(ps) = self.players.get_mut(player_id) {
                                 if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == cid) {
-                                    c.temp_ap_bonus += buff;
+                                    *self.contact_ap_buffs.entry(c.instance_id.clone()).or_insert(0) += buff;
                                     self.log(format!("⚡ [{}] の効果でコンタクト中キャラのAP +{}", actor_name, buff));
                                 }
                             }
@@ -7701,7 +7723,7 @@ impl MatchEngine {
                         if let Some(cid) = self.get_contact_char_id_for_player(player_id) {
                             if let Some(ps) = self.players.get_mut(player_id) {
                                 if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == cid) {
-                                    c.temp_ap_bonus += buff;
+                                    *self.contact_ap_buffs.entry(c.instance_id.clone()).or_insert(0) += buff;
                                     self.log(format!("⚡ [{}] の効果でコンタクト中キャラのAP +{}", actor_name, buff));
                                 }
                             }

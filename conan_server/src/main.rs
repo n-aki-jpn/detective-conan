@@ -4377,7 +4377,8 @@ mod tests {
             }));
 
             let p1_atk = engine.players.get("p1").unwrap().field.iter().find(|c| c.instance_id == "p1_atk").unwrap();
-            assert_eq!(p1_atk.temp_ap_bonus, 3000, "B02007 self-turn cutin must grant +3000 AP to contacting char");
+            assert_eq!(p1_atk.temp_ap_bonus, 0, "コンタクト終了後にカットインのAPバフは切れていること");
+            assert!(engine.contact_ap_buffs.is_empty());
             assert!(engine.players.get("p2").unwrap().remove.iter().any(|c| c.instance_id == "p2_def"), "6000+3000 > 7000 must win combat");
         }
 
@@ -4414,7 +4415,7 @@ mod tests {
                 "value": {"cutinCardId": "h_cut3000"}
             }));
             let p1_atk = engine.players.get("p1").unwrap().field.iter().find(|c| c.instance_id == "p1_atk").unwrap();
-            assert_eq!(p1_atk.temp_ap_bonus, 5000);
+            assert_eq!(p1_atk.temp_ap_bonus, 0);
         }
 
         // 3) B11015: 工藤新一 => +3000, non-工藤新一 => +1000
@@ -4450,7 +4451,7 @@ mod tests {
                 "value": {"cutinCardId": "h_b11015"}
             }));
             let p1_atk = engine.players.get("p1").unwrap().field.iter().find(|c| c.instance_id == "p1_atk").unwrap();
-            assert_eq!(p1_atk.temp_ap_bonus, expected_ap);
+            assert_eq!(p1_atk.temp_ap_bonus, 0, "expected contact AP {} must have expired", expected_ap);
         }
 
         // 4) B05040: optional discard hand scales AP by removed level (lv8 => +8000, skip => 0)
@@ -4499,7 +4500,7 @@ mod tests {
                 "value": answer_val
             }));
             let p1_atk = engine.players.get("p1").unwrap().field.iter().find(|c| c.instance_id == "p1_atk").unwrap();
-            assert_eq!(p1_atk.temp_ap_bonus, if do_discard { 8000 } else { 0 });
+            assert_eq!(p1_atk.temp_ap_bonus, 0, "コンタクト終了後にAPバフは切れていること (discard={})", do_discard);
         }
     }
 
