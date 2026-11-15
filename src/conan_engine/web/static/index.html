@@ -3426,21 +3426,12 @@
           });
         } else if (pd.kind === 'hintPlay') {
           decBox.dataset.hasOverlay = '0';
-          setDockCommand('💡 ネクストヒント', '#0284c7', '回収後、手札を登場させられます（青枠をタップでも可）', (wrap) => {
+          setDockCommand('💡 ネクストヒント', '#0284c7', '回収後、手札の青枠をタップして登場させられます', (wrap) => {
             const btnPass = document.createElement('button');
             btnPass.className = 'btn btn-secondary';
             btnPass.innerText = '⏭ スキップ';
             btnPass.onclick = () => submitDecision({ cardId: null });
             wrap.appendChild(btnPass);
-
-            (pd.options.playableCardIds || []).forEach(cid => {
-              const btn = document.createElement('button');
-              btn.className = 'btn';
-              const label = getCardLabel(cid, me.hand);
-              btn.innerText = `🃏 登場: ${label}`;
-              btn.onclick = () => submitDecision({ cardId: cid });
-              wrap.appendChild(btn);
-            });
           });
         } else if (pd.kind === 'modeSelect') {
           decBox.dataset.hasOverlay = '1';
