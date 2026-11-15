@@ -5524,6 +5524,86 @@ mod tests {
     }
 
     #[test]
+    fn test_b03116_vodka_revive_on_gin_remove() {
+        let catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();
+        let mut engine = engine::MatchEngine::new(catalog.clone());
+        engine.turn = 2;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.case_phase = models::CasePhase::RESOLUTION;
+        ps1.partner = Some(models::CardInstance {
+            instance_id: "p1_partner".to_string(),
+            definition_id: "B03107".to_string(), // 黒パートナー
+            owner_id: "p1".to_string(),
+            zone: models::Zone::PARTNER,
+            ..Default::default()
+        });
+        ps1.field.push(models::CardInstance {
+            instance_id: "vodka_1".to_string(),
+            definition_id: "B03116".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::FIELD,
+            ..Default::default()
+        });
+        ps1.hand.push(models::CardInstance {
+            instance_id: "gin_h".to_string(),
+            definition_id: "B06103".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::HAND,
+            ..Default::default()
+        });
+        ps1.deck.push(models::CardInstance {
+            instance_id: "d_1".to_string(),
+            definition_id: "B01002".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::DECK,
+            ..Default::default()
+        });
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+        engine.prompt_main_action("p1");
+
+        let obs = build_player_observation(&engine, "p1");
+        let dec_id = obs["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": dec_id,
+            "revision": engine.revision,
+            "value": { "type": "DECLARE", "actorId": "gin_h" }
+        })).unwrap();
+
+        let obs2 = build_player_observation(&engine, "p1");
+        let ts_id = obs2["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": ts_id,
+            "revision": engine.revision,
+            "value": { "targetId": "vodka_1" }
+        })).unwrap();
+
+        let obs3 = build_player_observation(&engine, "p1");
+        assert_eq!(obs3["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+        let rev_id = obs3["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": rev_id,
+            "revision": engine.revision,
+            "value": { "targetId": "vodka_1" }
+        })).unwrap();
+
+        let ps1_after = &engine.players["p1"];
+        assert!(
+            ps1_after.field.iter().any(|c| c.instance_id == "vodka_1"),
+            "B03116ウォッカがリムーブエリアから現場に復活していること (logs: {:?})",
+            engine.logs
+        );
+        assert!(
+            ps1_after.field.iter().any(|c| c.instance_id == "gin_h"),
+            "B06103ジンも手札から現場に登場していること (logs: {:?})",
+            engine.logs
+        );
+    }
+
+    #[test]
     fn test_index_html_no_undefined_is_secret_in_card_slot() {
         let html = std::fs::read_to_string("../src/conan_engine/web/static/index.html")
             .expect("index.html must be readable");

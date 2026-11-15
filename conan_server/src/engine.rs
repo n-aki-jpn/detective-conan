@@ -3373,6 +3373,27 @@ impl MatchEngine {
 
         // 条件付き追撃 & 後続即時処理
         if applied {
+            if self.pending_decision.is_some() {
+                if let Ok(follow_ops) = serde_json::from_value::<Vec<ImmediateOp>>(
+                    opts.get("followUpOps").cloned().unwrap_or_else(|| json!([])),
+                ) {
+                    if !follow_ops.is_empty() {
+                        self.pending_clause_queue.insert(0, PendingClauseTask {
+                            player_id: player_id.to_string(),
+                            actor_id: actor_id.clone(),
+                            actor_name: actor_name.clone(),
+                            source_level,
+                            card_type: CardType::CHARACTER,
+                            clause: String::new(),
+                            resume_context: resume_context.clone(),
+                            evidence_source_inst_id: None,
+                            post_target_ops: follow_ops,
+                            plan: Some(ParsedClausePlan::default()),
+                        });
+                    }
+                }
+                return;
+            }
             if let Ok(follow_ops) = serde_json::from_value::<Vec<ImmediateOp>>(
                 opts.get("followUpOps").cloned().unwrap_or_else(|| json!([])),
             ) {
