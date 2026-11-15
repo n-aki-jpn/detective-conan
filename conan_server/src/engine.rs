@@ -218,6 +218,11 @@ impl MatchEngine {
         None
     }
 
+    /// UIには出さず、ファイルログ（logs/all_rooms.log）にのみ記録するデバッグログ
+    pub fn debug_log(&mut self, msg: impl Into<String>) {
+        self.pending_file_logs.push(msg.into());
+    }
+
     pub fn log(&mut self, msg: impl Into<String>) {
         let msg_str = msg.into();
         self.pending_file_logs.push(msg_str.clone());
@@ -1526,13 +1531,14 @@ impl MatchEngine {
         }
 
         let mut action_actors = vec![];
+        let mut dbg_lines: Vec<String> = Vec::new();
         let mut actor_target_map: HashMap<String, Vec<String>> = HashMap::new();
         for c in &ps.field {
             let (has_rush, rush_target) = self.effective_rush(c);
             let can_act = c.orientation == CardOrientation::ACTIVE && (c.entered_turn != self.turn || has_rush);
             if c.entered_turn == self.turn || !c.set_cards.is_empty() {
-                eprintln!(
-                    "[ACTION_CHECK] turn={} player={} card={}({}) ori={:?} entered={} set_cards={} has_rush={} rush_target={:?} can_act={} case_target={:?} opp_sleep_chars={}",
+                dbg_lines.push(format!(
+                    "[DEBUG][ACTION_CHECK] turn={} player={} card={}({}) ori={:?} entered={} set_cards={} has_rush={} rush_target={:?} can_act={} case_target={:?} opp_sleep_chars={}",
                     self.turn,
                     player_id,
                     c.definition_id,
@@ -1545,7 +1551,7 @@ impl MatchEngine {
                     can_act,
                     case_target_id,
                     char_target_ids.len(),
-                );
+                ));
             }
             if !can_act {
                 continue;
@@ -1614,11 +1620,14 @@ impl MatchEngine {
                 action_actors.push(c.instance_id.clone());
                 actor_target_map.insert(c.instance_id.clone(), valid_targets);
             } else if c.entered_turn == self.turn || !c.set_cards.is_empty() {
-                eprintln!(
-                    "[ACTION_SKIP] turn={} player={} card={}({}) valid_targets is empty",
+                dbg_lines.push(format!(
+                    "[DEBUG][ACTION_SKIP] turn={} player={} card={}({}) valid_targets is empty",
                     self.turn, player_id, c.definition_id, c.instance_id
-                );
+                ));
             }
+        }
+        for l in dbg_lines {
+            self.pending_file_logs.push(l);
         }
 
         if !action_actors.is_empty() && !all_target_ids.is_empty() {
@@ -4844,6 +4853,10 @@ impl MatchEngine {
         }
 
         // コンタクト終了：カットイン等によるコンタクト中のAP増減はここで切れる
+        if !self.contact_ap_buffs.is_empty() {
+            let buffs = format!("{:?}", self.contact_ap_buffs);
+            self.debug_log(format!("[DEBUG][CONTACT_END] contact_ap_buffs expired: {}", buffs));
+        }
         self.contact_ap_buffs.clear();
         if !self.drain_pending_clause_queue() {
             self.prompt_main_action(&attacker_pid);
