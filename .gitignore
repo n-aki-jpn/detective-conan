@@ -37,3 +37,4 @@ desktop.ini
 scratch/
 scripts/test*.py
 scripts/test*.json
+data/custom_decks/
