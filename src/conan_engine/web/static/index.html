@@ -3470,6 +3470,20 @@
             btnPass.onclick = () => submitDecision({ cardId: null });
             wrap.appendChild(btnPass);
           });
+        } else if (pd.kind === 'triggerOrder') {
+          decBox.dataset.hasOverlay = '1';
+          if (isNewOverlayKey) window.decisionOverlayHidden = false;
+          const triggers = pd.options.triggers || [];
+          document.getElementById('decision-title').innerText = '⚡ 発動順の選択';
+          document.getElementById('decision-desc').innerText = pd.options.title || '先に発動する能力を選んでください';
+          triggers.forEach((tr) => {
+            const btn = document.createElement('button');
+            btn.className = 'btn';
+            btn.style.cssText = 'display:block; width:100%; text-align:left; margin-bottom:6px; background:rgba(30,41,59,0.95); border-color:#f59e0b; padding:8px 10px;';
+            btn.innerHTML = `<div style="font-weight:bold; color:#fbbf24;">▶ ${tr.actorName || 'キャラ'}</div><div style="font-size:0.75rem; opacity:0.9; margin-top:2px;">${tr.clause || ''}</div>`;
+            btn.onclick = () => submitDecision({ index: tr.index });
+            decActs.appendChild(btn);
+          });
         } else if (pd.kind === 'modeSelect') {
           decBox.dataset.hasOverlay = '1';
           if (isNewOverlayKey) window.decisionOverlayHidden = false;

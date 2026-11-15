@@ -1305,6 +1305,11 @@ impl RandomAgent {
                     }
                 })
             }
+            "triggerOrder" => {
+                json!({
+                    "value": { "index": 0 }
+                })
+            }
             "modeSelect" => {
                 let modes_len = opts.get("modes").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
                 let min_pick = opts.get("minPick").and_then(|v| v.as_u64()).unwrap_or(1) as usize;

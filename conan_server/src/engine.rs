@@ -126,6 +126,7 @@ pub struct MatchEngine {
     pub pending_hint_trigger: Option<(String, i32, Vec<String>)>,
     pub pending_ally_play: Option<(String, String, String, CardOrientation, Option<i32>, bool)>,
     pub pending_clause_queue: Vec<PendingClauseTask>,
+    pub pending_trigger_order_tasks: Vec<PendingClauseTask>,
     pub logs: Vec<String>,
     pub pending_file_logs: Vec<String>,
 }
@@ -194,6 +195,7 @@ impl MatchEngine {
             pending_hint_trigger: None,
             pending_ally_play: None,
             pending_clause_queue: vec![],
+            pending_trigger_order_tasks: vec![],
             logs: vec![],
             pending_file_logs: vec![],
         }
@@ -412,6 +414,7 @@ impl MatchEngine {
             "targetSelect" => self.handle_target_select_answer(player_id, &val, &dec),
             "deckSearch" => self.handle_deck_search_answer(player_id, &val, &dec),
             "modeSelect" => self.handle_mode_select_answer(player_id, &val, &dec),
+            "triggerOrder" => self.handle_trigger_order_answer(player_id, &val),
             _ => return Err(format!("Unknown decision kind: {}", kind)),
         }
 
@@ -3385,7 +3388,56 @@ impl MatchEngine {
             }
         }
 
-        // 登場させたキャラの登場時効果（複数体対応：途中でUIを開いた場合は残りのキャラのOnPlayをキューに積む）
+        // 登場させたキャラの登場時効果（複数体が同時にOnPlayを持つ場合は発動順をプレイヤーが選択）
+        if deployed_list.len() >= 2 {
+            let mut on_play_tasks: Vec<PendingClauseTask> = Vec::new();
+            for (dep_inst, dep_def, _) in &deployed_list {
+                if let Some(def) = self.catalog.get(dep_def).cloned() {
+                    let on_play_clauses = extract_clauses(&def.description, TriggerKind::OnPlay, def.card_type);
+                    let dep_name = self.card_name_by_def(dep_def);
+                    for cl in on_play_clauses {
+                        on_play_tasks.push(PendingClauseTask {
+                            player_id: player_id.to_string(),
+                            actor_id: dep_inst.clone(),
+                            actor_name: dep_name.clone(),
+                            source_level,
+                            card_type: def.card_type,
+                            clause: cl,
+                            resume_context: resume_context.clone(),
+                            evidence_source_inst_id: None,
+                            post_target_ops: vec![],
+                            plan: None,
+                        });
+                    }
+                }
+            }
+            if on_play_tasks.len() >= 2 {
+                let triggers_json: Vec<Value> = on_play_tasks
+                    .iter()
+                    .enumerate()
+                    .map(|(i, t)| {
+                        json!({
+                            "index": i,
+                            "actorId": t.actor_id,
+                            "actorName": t.actor_name,
+                            "clause": t.clause,
+                        })
+                    })
+                    .collect();
+                self.pending_trigger_order_tasks = on_play_tasks;
+                self.pending_decision = Some(json!({
+                    "decisionId": format!("dec_{}", self.revision + 1),
+                    "playerId": player_id,
+                    "kind": "triggerOrder",
+                    "options": {
+                        "title": "同時に誘発した【登場時】効果のうち、先に発動する能力を選んでください",
+                        "triggers": triggers_json,
+                    }
+                }));
+                return;
+            }
+        }
+
         for (didx, (dep_inst, dep_def, dep_ori)) in deployed_list.iter().enumerate() {
             if self.resolve_character_enter_field_with_source(
                 player_id,
@@ -3436,6 +3488,31 @@ impl MatchEngine {
             return;
         }
 
+        self.resume_after_decision(player_id, &resume_context);
+    }
+
+    /// 同時誘発した能力の発動順選択を処理する
+    fn handle_trigger_order_answer(&mut self, player_id: &str, val: &Value) {
+        let mut tasks = std::mem::take(&mut self.pending_trigger_order_tasks);
+        if tasks.is_empty() {
+            self.prompt_main_action(player_id);
+            return;
+        }
+        let idx = val
+            .get("index")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize)
+            .filter(|&i| i < tasks.len())
+            .unwrap_or(0);
+        let chosen = tasks.remove(idx);
+        let resume_context = chosen.resume_context.clone();
+        let mut ordered = vec![chosen];
+        ordered.extend(tasks);
+        ordered.extend(std::mem::take(&mut self.pending_clause_queue));
+        self.pending_clause_queue = ordered;
+        if self.drain_pending_clause_queue() {
+            return;
+        }
         self.resume_after_decision(player_id, &resume_context);
     }
 
