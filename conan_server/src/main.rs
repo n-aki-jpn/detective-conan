@@ -5869,5 +5869,263 @@ createCardEl(null, true, false, null);
             String::from_utf8_lossy(&smoke_out.stderr)
         );
     }
+
+    #[test]
+    fn test_b11093_gin_and_vermouth_mode_condition() {
+        let catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();
+        let make_card = |id: &str, def_id: &str, owner: &str, zone: models::Zone, ori: models::CardOrientation| {
+            models::CardInstance {
+                instance_id: id.to_string(),
+                definition_id: def_id.to_string(),
+                owner_id: owner.to_string(),
+                zone,
+                orientation: ori,
+                face_up: true,
+                ..Default::default()
+            }
+        };
+
+        let setup_engine = |field_defs: Vec<(&str, &str)>, partner_def: &str, extra_partner_defs: Vec<(&str, &str)>| {
+            let mut engine = engine::MatchEngine::new(catalog.clone());
+            engine.turn = 4;
+            engine.turn_player_id = "p1".to_string();
+            engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+            let mut ps1 = engine::PlayerState::new("p1".to_string());
+            ps1.case_phase = models::CasePhase::RESOLUTION;
+            ps1.partner = Some(make_card(
+                "p1_partner",
+                partner_def,
+                "p1",
+                models::Zone::PARTNER,
+                models::CardOrientation::ACTIVE,
+            ));
+            for (eid, edef) in extra_partner_defs {
+                ps1.extra_partners.push(make_card(
+                    eid,
+                    edef,
+                    "p1",
+                    models::Zone::PARTNER,
+                    models::CardOrientation::ACTIVE,
+                ));
+            }
+            for i in 0..8 {
+                ps1.file.push(make_card(
+                    &format!("f_{}", i),
+                    "B03107",
+                    "p1",
+                    models::Zone::FILE,
+                    models::CardOrientation::ACTIVE,
+                ));
+            }
+            for (fid, fdef) in field_defs {
+                ps1.field.push(make_card(
+                    fid,
+                    fdef,
+                    "p1",
+                    models::Zone::FIELD,
+                    models::CardOrientation::ACTIVE,
+                ));
+            }
+            ps1.hand.push(make_card(
+                "b11093_card",
+                "B11093",
+                "p1",
+                models::Zone::HAND,
+                models::CardOrientation::ACTIVE,
+            ));
+            for i in 0..4 {
+                ps1.deck.push(make_card(
+                    &format!("d_{}", i),
+                    "B06103",
+                    "p1",
+                    models::Zone::DECK,
+                    models::CardOrientation::ACTIVE,
+                ));
+            }
+
+            let mut ps2 = engine::PlayerState::new("p2".to_string());
+            ps2.field.push(make_card(
+                "opp_c1",
+                "B01005",
+                "p2",
+                models::Zone::FIELD,
+                models::CardOrientation::ACTIVE,
+            ));
+            ps2.field.push(make_card(
+                "opp_c2",
+                "B01005",
+                "p2",
+                models::Zone::FIELD,
+                models::CardOrientation::ACTIVE,
+            ));
+
+            engine.players.insert("p1".to_string(), ps1);
+            engine.players.insert("p2".to_string(), ps2);
+            engine.prompt_main_action("p1");
+            engine
+        };
+
+        let play_b11093 = |engine: &mut engine::MatchEngine| {
+            let obs = build_player_observation(engine, "p1");
+            let dec_id = obs["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+            engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": dec_id,
+                "revision": engine.revision,
+                "value": { "type": "HAND_PLAY", "cardId": "b11093_card" }
+            })).unwrap();
+        };
+
+        // 1. 現場・パートナーにジン＆ベルモットがいない（単体のジンとベルモットのみいる）場合は1つ選択になる
+        {
+            let mut engine = setup_engine(
+                vec![("gin_1", "B06103"), ("verm_1", "B10095")],
+                "B03107",
+                vec![],
+            );
+            play_b11093(&mut engine);
+            let obs = build_player_observation(&engine, "p1");
+            assert_eq!(
+                obs["pendingDecision"]["kind"].as_str(),
+                Some("modeSelect"),
+                "ジン＆ベルモット不在時は両発動せずmodeSelectになること (logs: {:?})",
+                engine.logs
+            );
+            assert_eq!(obs["pendingDecision"]["options"]["maxPick"].as_u64(), Some(1));
+            assert!(
+                !engine.logs.iter().any(|l| l.contains("選択肢をすべて上から順に行います")),
+                "条件未達時に全実行ログが出ないこと"
+            );
+        }
+
+        // 2. 現場にB11082（ジン＆ベルモット）がいる場合は両方上から順に実行される
+        {
+            let mut engine = setup_engine(
+                vec![("gv_field", "B11082")],
+                "B03107",
+                vec![],
+            );
+            play_b11093(&mut engine);
+            assert!(
+                engine.logs.iter().any(|l| l.contains("選択肢をすべて上から順に行います")),
+                "現場にB11082がいる場合は全実行ログが出ること (logs: {:?})",
+                engine.logs
+            );
+            // 1つ目のモード「キャラを1枚まで選び、スリープさせる。カードを1枚引く。」が開始される
+            let obs1 = build_player_observation(&engine, "p1");
+            assert_eq!(obs1["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+            assert_eq!(obs1["pendingDecision"]["options"]["effectType"].as_str(), Some("SLEEP"));
+            let dec1 = obs1["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+            engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": dec1,
+                "revision": engine.revision,
+                "value": { "targetId": "opp_c1" }
+            })).unwrap();
+
+            assert_eq!(engine.players["p1"].hand.len(), 1, "1つ目の選択肢で1枚ドローしていること");
+            // 続いて2つ目のモード「自分の現場にいる【黒】のキャラを1枚リムーブしてもよい〜」へ進む
+            let obs2 = build_player_observation(&engine, "p1");
+            assert_eq!(
+                obs2["pendingDecision"]["kind"].as_str(),
+                Some("targetSelect"),
+                "1つ目完了後に2つ目のモードへ遷移すること (logs: {:?})",
+                engine.logs
+            );
+            assert_eq!(obs2["pendingDecision"]["options"]["effectType"].as_str(), Some("REMOVE"));
+        }
+
+        // 3. パートナーエリア（extra_partners）にB11082（ジン＆ベルモット）がいる場合も両方実行される
+        {
+            let mut engine = setup_engine(
+                vec![("blk_1", "B11085")],
+                "B03107",
+                vec![("gv_partner", "B11082")],
+            );
+            play_b11093(&mut engine);
+            assert!(
+                engine.logs.iter().any(|l| l.contains("選択肢をすべて上から順に行います")),
+                "パートナーエリアにB11082がいる場合も全実行ログが出ること (logs: {:?})",
+                engine.logs
+            );
+            let obs = build_player_observation(&engine, "p1");
+            assert_eq!(obs["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+            assert_eq!(obs["pendingDecision"]["options"]["effectType"].as_str(), Some("SLEEP"));
+        }
+    }
+
+    #[test]
+    fn test_b05062_remove_count_combined_mode_condition() {
+        let catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();
+        let make_card = |id: &str, def_id: &str, owner: &str, zone: models::Zone| {
+            models::CardInstance {
+                instance_id: id.to_string(),
+                definition_id: def_id.to_string(),
+                owner_id: owner.to_string(),
+                zone,
+                orientation: models::CardOrientation::ACTIVE,
+                face_up: true,
+                ..Default::default()
+            }
+        };
+
+        let run_case = |remove_defs: Vec<&str>| {
+            let mut engine = engine::MatchEngine::new(catalog.clone());
+            engine.turn = 4;
+            engine.turn_player_id = "p1".to_string();
+            engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+            let mut ps1 = engine::PlayerState::new("p1".to_string());
+            ps1.case_phase = models::CasePhase::RESOLUTION;
+            for i in 0..8 {
+                ps1.file.push(make_card(&format!("f_{}", i), "B05043", "p1", models::Zone::FILE));
+            }
+            for (idx, did) in remove_defs.iter().enumerate() {
+                ps1.remove.push(make_card(&format!("rm_{}", idx), did, "p1", models::Zone::REMOVE));
+            }
+            ps1.hand.push(make_card("b05062_card", "B05062", "p1", models::Zone::HAND));
+            for i in 0..4 {
+                ps1.deck.push(make_card(&format!("d_{}", i), "B05046", "p1", models::Zone::DECK));
+            }
+
+            engine.players.insert("p1".to_string(), ps1);
+            engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+            engine.prompt_main_action("p1");
+
+            let obs = build_player_observation(&engine, "p1");
+            let dec_id = obs["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+            engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": dec_id,
+                "revision": engine.revision,
+                "value": { "type": "HAND_PLAY", "cardId": "b05062_card" }
+            })).unwrap();
+            engine
+        };
+
+        // 京極真1枚 + 鈴木財閥2枚 = 計3枚（+ 無関係2枚）では条件未達 -> modeSelect
+        let eng3 = run_case(vec!["B05051", "B05046", "B05054", "B01001", "B01005"]);
+        let obs3 = build_player_observation(&eng3, "p1");
+        assert_eq!(
+            obs3["pendingDecision"]["kind"].as_str(),
+            Some("modeSelect"),
+            "対象合計3枚の場合はmodeSelectになること (logs: {:?})",
+            eng3.logs
+        );
+
+        // 京極真1枚 + 鈴木財閥3枚 = 合わせて4枚 -> 条件達成で3つとも順次実行
+        let eng4 = run_case(vec!["B05051", "B05046", "B05054", "B05055"]);
+        assert!(
+            eng4.logs.iter().any(|l| l.contains("選択肢をすべて上から順に行います")),
+            "京極真+鈴木財閥が合わせて4枚の場合は全実行ログが出ること (logs: {:?})",
+            eng4.logs
+        );
+        let obs4 = build_player_observation(&eng4, "p1");
+        assert_eq!(
+            obs4["pendingDecision"]["kind"].as_str(),
+            Some("targetSelect"),
+            "1つ目の『カードを2枚引き、手札を1枚リムーブする』の手札リムーブ選択へ進むこと (logs: {:?})",
+            eng4.logs
+        );
+        assert_eq!(eng4.players["p1"].hand.len(), 2, "カードを2枚引いていること");
+    }
 }
 

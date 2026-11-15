@@ -687,12 +687,18 @@ fn extract_bracket_tags(text: &str) -> Vec<&str> {
 
 const COLORS: &[&str] = &["青", "緑", "白", "赤", "黄", "黒"];
 
+fn normalize_card_name(s: &str) -> String {
+    strip_parens(s).replace('&', "＆")
+}
+
 fn has_name_match(def: &CardDefinition, query: &str) -> bool {
-    let q = strip_parens(query);
+    let q = normalize_card_name(query);
+    let q_amp = query.replace('&', "＆");
     def.names.iter().any(|n| {
-        n == query
-            || strip_parens(n) == q
-            || n.contains(&format!("（{}）", query))
+        let n_amp = n.replace('&', "＆");
+        n_amp == q_amp
+            || normalize_card_name(n) == q
+            || n_amp.contains(&format!("（{}）", q_amp))
     })
 }
 
@@ -716,8 +722,10 @@ pub fn card_is_untargetable_by_opponent(def: &CardDefinition, ctx: &PlayerCondIn
 /// インスタンス（一時的なカード名書き換えを含む）のカード名一致判定
 pub fn has_instance_name_match(inst: &CardInstance, def: &CardDefinition, query: &str) -> bool {
     if let Some(ref ov) = inst.temp_name_override {
-        let q = strip_parens(query);
-        return ov == query || strip_parens(ov) == q;
+        let q = normalize_card_name(query);
+        let q_amp = query.replace('&', "＆");
+        let ov_amp = ov.replace('&', "＆");
+        return ov_amp == q_amp || normalize_card_name(ov) == q;
     }
     has_name_match(def, query)
 }
@@ -1042,9 +1050,13 @@ pub fn eval_cond_phrase(cond: &str, ctx: &PlayerCondInfo) -> bool {
     // 「自分のリムーブエリアに...がN枚以上ある」
     if c.contains("リムーブエリアに") {
         if let Some(req_n) = extract_number_before(c, "が", "枚以上")
+            .or_else(|| extract_number_before(c, "合わせて", "枚以上"))
             .or_else(|| extract_number_before(c, "カードが", "枚以上"))
         {
-            let scope_end = c.find("が").unwrap_or(c.len());
+            let scope_end = c.find("が合わせて").unwrap_or_else(|| {
+                let before_maj = c.find("枚以上").unwrap_or(c.len());
+                c[..before_maj].rfind('が').unwrap_or(before_maj)
+            });
             let scope = &c[..scope_end];
             let branches = parse_branches_from_phrase(scope, CardType::CHARACTER);
             let cnt = ctx
@@ -1190,7 +1202,16 @@ pub fn eval_cond_phrase(cond: &str, ctx: &PlayerCondInfo) -> bool {
         let need_active = req_slice.contains("アクティブ状態の");
         let need_stun = req_slice.contains("スタン状態の");
         let exclude_self = req_slice.contains("このキャラ以外の");
-        let branches = parse_branches_from_phrase(req_slice, CardType::CHARACTER);
+        let mut branches = parse_branches_from_phrase(req_slice, CardType::CHARACTER);
+        if include_partner {
+            for b in &mut branches {
+                if b.card_types.contains(&CardType::CHARACTER)
+                    && !b.card_types.contains(&CardType::PARTNER)
+                {
+                    b.card_types.push(CardType::PARTNER);
+                }
+            }
+        }
 
         let mut pool: Vec<(&CardInstance, &CardDefinition)> = ctx.field_cards.clone();
         if include_partner {
@@ -1235,10 +1256,14 @@ pub fn check_clause_conditions(clause: &str, ctx: &PlayerCondInfo) -> Result<(),
     if (sentence_count <= 1
         || clean.contains("場合に宣言できる")
         || clean.contains("場合にのみ宣言できる"))
-        && clean.contains("自分の現場に")
+        && (clean.contains("自分の現場に") || clean.contains("自分の現場かパートナーエリアに"))
     {
-        if let Some(req_slice) = extract_field_presence_condition(&clean) {
-            let cond_str = format!("自分の現場に{}がいる", req_slice);
+        if let Some((include_partner, req_slice)) = extract_field_presence_condition(&clean) {
+            let cond_str = if include_partner {
+                format!("自分の現場かパートナーエリアに{}がいる", req_slice)
+            } else {
+                format!("自分の現場に{}がいる", req_slice)
+            };
             if !eval_cond_phrase(&cond_str, ctx) {
                 return Err("自分の現場の条件キャラが不足しています".to_string());
             }
@@ -1331,15 +1356,28 @@ fn check_bond(bond_name: &str, ctx: &PlayerCondInfo) -> bool {
         .any(|(inst, def)| ctx.actor_id != Some(inst.instance_id.as_str()) && has_instance_name_match(inst, def, bond_name))
 }
 
-fn extract_field_presence_condition(clean: &str) -> Option<&str> {
-    let start = clean.rfind("自分の現場に")? + "自分の現場に".len();
-    let tail = &clean[start..];
+fn extract_field_presence_condition(clean: &str) -> Option<(bool, &str)> {
+    let candidate = match (
+        clean.rfind("自分の現場かパートナーエリアに"),
+        clean.rfind("自分の現場に"),
+    ) {
+        (Some(p_idx), Some(f_idx)) => {
+            if p_idx >= f_idx {
+                (true, &clean[p_idx + "自分の現場かパートナーエリアに".len()..])
+            } else {
+                (false, &clean[f_idx + "自分の現場に".len()..])
+            }
+        }
+        (Some(p_idx), None) => (true, &clean[p_idx + "自分の現場かパートナーエリアに".len()..]),
+        (None, Some(f_idx)) => (false, &clean[f_idx + "自分の現場に".len()..]),
+        (None, None) => return None,
+    };
+    let (include_partner, tail) = candidate;
     let end = tail
         .find("がいる場合")
         .or_else(|| tail.find("がいるなら"))
-        .or_else(|| tail.find("が登場した場合"))
-        ?;
-    Some(&tail[..end])
+        .or_else(|| tail.find("が登場した場合"))?;
+    Some((include_partner, &tail[..end]))
 }
 
 /// イベントの選択型効果（「以下から〜選んで行う」）を解析する

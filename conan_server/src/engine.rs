@@ -4,7 +4,8 @@ use crate::effects::{
     card_is_untargetable_by_opponent, card_matches_filter_with_ctx, check_action_trigger_match,
     check_ally_play_match, check_clause_conditions, check_disguise_conditions,
     check_event_play_conditions, check_hint_use_match, clause_turn_limit,
-    compute_passive_ap_for_target, compute_passive_lp_bonus, evaluate_passive_rush_and_swift,
+    compute_passive_ap_for_target, compute_passive_lp_bonus, eval_cond_phrase,
+    evaluate_passive_rush_and_swift,
     extract_bracketed_value, extract_clauses, has_instance_name_match, has_trait_match,
     merge_rush_capabilities, parse_clause_cost, parse_effect_steps, parse_event_mode_choice,
     resolve_state_branch, strip_parens, ActionEventKind, DeckPickAction,
@@ -569,14 +570,14 @@ impl MatchEngine {
     ) -> bool {
         let ctx = self.build_cond_info(player_id, Some(actor_id), CardOrientation::ACTIVE, source_level);
         if let Some(ref gate) = mc.mode_gate_condition {
-            if check_clause_conditions(gate, &ctx).is_err() {
+            if check_clause_conditions(gate, &ctx).is_err() || !eval_cond_phrase(gate, &ctx) {
                 self.log(format!("⚠️ [{}] のモード発動条件を満たしていません", actor_name));
                 return false;
             }
         }
         // 全て行う代替条件チェック
         if let Some(ref all_cond) = mc.all_condition {
-            if check_clause_conditions(all_cond, &ctx).is_ok() {
+            if check_clause_conditions(all_cond, &ctx).is_ok() && eval_cond_phrase(all_cond, &ctx) {
                 self.log(format!("✨ [{}] の条件達成により選択肢をすべて上から順に行います！", actor_name));
                 self.enqueue_mode_clauses(player_id, actor_id, actor_name, source_level, &mc.options, &mc.post_clauses, resume_context);
                 return self.drain_pending_clause_queue();
