@@ -1463,7 +1463,11 @@ pub fn parse_clause_cost(clause: &str) -> ClauseCost {
             .max(extract_count_around(prefix, "FILEエリアのカードを", "枚リムーブ"))
             .max(extract_count_around(prefix, "FILEエリアにあるカードを上から", "枚リムーブ"));
         cost.deck_mill = extract_count_around(prefix, "デッキのカードを上から", "枚リムーブ");
-        cost.sacrifice_self = prefix.contains("このキャラをリムーブする");
+        // 「このキャラをリムーブする」だけでなく「リムーブエリアに移す」も自己犠牲コストとして認識
+        cost.sacrifice_self = prefix.contains("このキャラをリムーブする")
+            || prefix.contains("このキャラをリムーブエリアに移")
+            || prefix.contains("〚リムーブエリアに移す〛")
+            || prefix.contains("〚リムーブエリアに移し");
     } else if let Some(opt_idx) = clean.find("てもよい。そうした場合、") {
         let opt_prefix = &clean[..opt_idx];
         let seg = opt_prefix.rsplit('。').next().unwrap_or(opt_prefix);
@@ -1508,27 +1512,27 @@ pub fn parse_effect_steps(
     let mut plan = ParsedClausePlan::default();
     let clean = strip_parens(clause);
 
-    // B03006 結成 少年探偵団: リムーブエリアから特徴[少年探偵団]のキャラを5枚まで選び、このキャラの下に重ねる
-    if clean.contains("このキャラの下に重ねる") {
-        let mut filter = TargetFilter::default();
-        filter.owner = OwnerScope::SelfOnly;
-        filter.zone = TargetZone::Remove;
-        filter.count = if clean.contains("5枚まで") { 5 } else { 1 };
-        let mut br = TargetBranch::default();
-        if clean.contains("特徴［少年探偵団］") || clean.contains("特徴[少年探偵団]") {
-            br.trait_req = Some("少年探偵団".to_string());
+    // B03006 / B06005 / B06006 / B08003 等: リムーブエリア等からキャラを選び、このキャラの下に重ねる
+    if clean.contains("選び、このキャラの下に重ねる") {
+        if let Some((tp, _)) = clean.split_once("選び、このキャラの下に重ねる") {
+            let zone = if tp.contains("リムーブエリア") {
+                TargetZone::Remove
+            } else {
+                TargetZone::Field
+            };
+            let mut filter = parse_target_filter(tp, zone, true, dynamic_level);
+            filter.owner = OwnerScope::SelfOnly;
+            plan.target_step = Some(TargetStep {
+                filter,
+                action: TargetAction::StackUnderSelf,
+                bonuses: vec![],
+                follow_up: vec![],
+                conditional_follow_up: None,
+                optional: clean.contains("まで選び"),
+                then_abort_if_skipped: false,
+            });
+            return plan;
         }
-        filter.branches = vec![br];
-        plan.target_step = Some(TargetStep {
-            filter,
-            action: TargetAction::StackUnderSelf,
-            bonuses: vec![],
-            follow_up: vec![],
-            conditional_follow_up: None,
-            optional: clean.contains("まで選び"),
-            then_abort_if_skipped: false,
-        });
-        return plan;
     }
 
     // B11082 ジン＆ベルモット: コストで現場のLv7以下黒をスタンさせ、「【現場リムーブ時】カードを1枚引く。」を付与
@@ -1886,10 +1890,26 @@ pub fn parse_effect_steps(
 
         // 3) 対象選択を伴う文（「〜選び、...」「手札から〜登場させる」「このイベントを〜にセットする」等）
         if is_target_selection_sentence(sentence) {
+            let mut target_sent = sentence;
+            // 「カードを1枚引き、相手の現場にいるキャラを1枚まで選び...」等の前置即時処理を分離
+            for sep in ["引き、", "リムーブし、", "手札に移し、", "AP＋1000、"] {
+                if let Some(sidx) = sentence.find(sep) {
+                    if sentence[sidx..].contains("選び、") || sentence[sidx..].contains("手札から") {
+                        let cut = sidx + sep.len() - "、".len();
+                        let prefix = sentence[..cut].trim();
+                        let pre_ops = parse_immediate_ops(prefix);
+                        if !pre_ops.is_empty() {
+                            push_op_or_extra(&mut plan, seen_target_or_search, pre_ops.into_iter().next().unwrap());
+                            target_sent = sentence[sidx + sep.len()..].trim();
+                            break;
+                        }
+                    }
+                }
+            }
             // 「カードを1枚引き、手札から〜登場させる」の前置即時処理を抽出
-            if !sentence.contains("選び") && !sentence.contains("このイベントを") {
-                if let Some(hidx) = sentence.find("手札から") {
-                    let prefix = sentence[..hidx].trim();
+            if !target_sent.contains("選び") && !target_sent.contains("このイベントを") {
+                if let Some(hidx) = target_sent.find("手札から") {
+                    let prefix = target_sent[..hidx].trim();
                     if !prefix.is_empty() {
                         let pre_ops = parse_immediate_ops(prefix);
                         if !pre_ops.is_empty() {
@@ -1903,7 +1923,7 @@ pub fn parse_effect_steps(
                                     plan.extra_clauses.push(format!("{}。", prefix));
                                 }
                             } else {
-                                plan.extra_clauses.push(format!("{}。", sentence));
+                                plan.extra_clauses.push(format!("{}。", target_sent));
                                 seen_target_or_search = true;
                                 continue;
                             }
@@ -1912,8 +1932,8 @@ pub fn parse_effect_steps(
                 }
             }
 
-            if let Some(tstep) = parse_target_step(sentence, dynamic_level, source_card_type) {
-                assign_or_queue_target_step(&mut plan, tstep, format!("{}。", sentence), &mut seen_target_or_search);
+            if let Some(tstep) = parse_target_step(target_sent, dynamic_level, source_card_type) {
+                assign_or_queue_target_step(&mut plan, tstep, format!("{}。", target_sent), &mut seen_target_or_search);
                 continue;
             }
         }
@@ -2866,8 +2886,15 @@ fn extract_bonuses_from_action(text: &str) -> Vec<TargetBonus> {
 }
 
 fn parse_target_action(text: &str) -> Option<TargetAction> {
-    if text.contains("証拠として得る") {
+    // 「相手はそのカードを〜証拠として得る」と「手札から裏向きで証拠として得る」を区別
+    if text.contains("証拠として得る") && !text.contains("相手はそのカード") && !text.contains("持ち主はそのカード") {
         return Some(TargetAction::PlaceHandCardAsEvidenceFaceDown);
+    }
+    if text.contains("このキャラとのコンタクトを発生させる") {
+        return Some(TargetAction::GrantContactForceAttack);
+    }
+    if text.contains("デッキの上か下に移す") {
+        return Some(TargetAction::BottomDeck);
     }
     if text.contains("使用する") && text.contains("イベント") {
         return Some(TargetAction::PlayEventFromHand);
@@ -4578,5 +4605,50 @@ mod tests {
         assert!(f.branches.iter().any(|b| branch_matches(&ran, ran.ap, b)));
         assert!(!f.branches.iter().any(|b| branch_matches(&gin, gin.ap, b)));
         assert!(!f.branches.iter().any(|b| branch_matches(&cogoro_hi, cogoro_hi.ap, b)));
+    }
+
+    #[test]
+    fn test_full_catalog_effect_audit() {
+        let path = if std::path::Path::new("data/dummy/cards.json").exists() {
+            "data/dummy/cards.json"
+        } else {
+            "../data/dummy/cards.json"
+        };
+        let catalog = CardCatalog::load_from_json(path).expect("catalog load failed");
+
+        let mut seen_canon = std::collections::HashSet::new();
+        let mut unparsed_selects = Vec::new();
+        let mut lost_prefixes = Vec::new();
+
+        for def in catalog.definitions.values() {
+            if !seen_canon.insert(def.canonical_id.clone()) {
+                continue;
+            }
+            let clean = strip_parens(&def.description);
+            for line in clean.lines().map(str::trim).filter(|l| !l.is_empty()) {
+                let after_colon = line.split_once('：').map(|x| x.1).unwrap_or_else(|| strip_leading_tags(line));
+                for sent in after_colon.split('。').map(str::trim).filter(|s| !s.is_empty()) {
+                    if let Some((tp, ap)) = sent.split_once("選び、") {
+                        if parse_target_action(ap).is_none()
+                            && !sent.contains("このキャラの下に重ねる")
+                            && !sent.contains("コストによってスタンさせたキャラに")
+                        {
+                            unparsed_selects.push(format!("{} ({}): {}", def.definition_id, def.names.first().unwrap_or(&def.definition_id), sent));
+                        }
+                        if tp.contains("引き、") || tp.contains("リムーブし、") {
+                            lost_prefixes.push(format!("{} ({}): {}", def.definition_id, def.names.first().unwrap_or(&def.definition_id), sent));
+                        }
+                    }
+                }
+            }
+        }
+
+        println!("🔍 カタログ自動監査: 未対応の『選び、』アクション = {}件, 複合前置文 = {}件", unparsed_selects.len(), lost_prefixes.len());
+        for item in &unparsed_selects {
+            println!("  [未対応アクション] {}", item);
+        }
+        for item in &lost_prefixes {
+            println!("  [複合前置文] {}", item);
+        }
     }
 }
