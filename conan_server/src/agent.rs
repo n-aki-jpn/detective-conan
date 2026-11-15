@@ -60,10 +60,27 @@ impl CpuWeights {
     }
 }
 
-#[derive(Debug, Clone)]
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
+
+#[derive(Debug)]
 pub struct RandomAgent {
     pub player_id: String,
     pub weights: CpuWeights,
+    last_turn: AtomicI32,
+    hints_used_this_turn: AtomicUsize,
+    last_hint_skipped: AtomicBool,
+}
+
+impl Clone for RandomAgent {
+    fn clone(&self) -> Self {
+        Self {
+            player_id: self.player_id.clone(),
+            weights: self.weights.clone(),
+            last_turn: AtomicI32::new(self.last_turn.load(Ordering::Relaxed)),
+            hints_used_this_turn: AtomicUsize::new(self.hints_used_this_turn.load(Ordering::Relaxed)),
+            last_hint_skipped: AtomicBool::new(self.last_hint_skipped.load(Ordering::Relaxed)),
+        }
+    }
 }
 
 impl RandomAgent {
@@ -71,6 +88,9 @@ impl RandomAgent {
         Self {
             player_id: player_id.to_string(),
             weights: CpuWeights::load_or_default("data/cpu_weights.json"),
+            last_turn: AtomicI32::new(-1),
+            hints_used_this_turn: AtomicUsize::new(0),
+            last_hint_skipped: AtomicBool::new(false),
         }
     }
 
@@ -78,11 +98,24 @@ impl RandomAgent {
         Self {
             player_id: player_id.to_string(),
             weights,
+            last_turn: AtomicI32::new(-1),
+            hints_used_this_turn: AtomicUsize::new(0),
+            last_hint_skipped: AtomicBool::new(false),
+        }
+    }
+
+    fn reset_turn_state_if_needed(&self, turn_number: i32) {
+        let prev = self.last_turn.load(Ordering::Relaxed);
+        if prev != turn_number {
+            self.last_turn.store(turn_number, Ordering::Relaxed);
+            self.hints_used_this_turn.store(0, Ordering::Relaxed);
+            self.last_hint_skipped.store(false, Ordering::Relaxed);
         }
     }
 
     /// 盤面の公開情報と自分の手札を参照して戦略的に意思決定を行う
     pub fn choose_action_with_engine(&self, engine: &MatchEngine, decision: &Value) -> Value {
+        self.reset_turn_state_if_needed(engine.turn);
         let kind = decision.get("kind").and_then(|v| v.as_str()).unwrap_or("");
         let opts = decision.get("options").cloned().unwrap_or(json!({}));
 
@@ -100,14 +133,20 @@ impl RandomAgent {
 
         match kind {
             "mulligan" => {
-                // Lv4以上の重いカードは戻して序盤の展開札を探す
+                // 高コスト（Lv.5以上）や後半用カードを戻し、Lv.1〜2の初動カード（灰原哀Lv.4含む）を残す
                 let mut return_ids = vec![];
+                let mut kept_low_drop = 0;
                 if let Some(hand_ids) = opts.get("handCardIds").and_then(|v| v.as_array()) {
                     for id_val in hand_ids {
                         if let Some(cid) = id_val.as_str() {
                             if let Some(c) = my_ps.hand.iter().find(|h| h.instance_id == cid) {
-                                let lvl = engine.catalog.get(&c.definition_id).map(|d| d.level).unwrap_or(0);
-                                if lvl >= 4 {
+                                let def = engine.catalog.get(&c.definition_id);
+                                let lvl = def.map(|d| d.level).unwrap_or(0);
+                                let is_haibara = def.map(|d| d.names.iter().any(|n| n.contains("灰原哀"))).unwrap_or(false);
+                                let keep = (lvl <= 2 || is_haibara) && kept_low_drop < 3;
+                                if keep {
+                                    kept_low_drop += 1;
+                                } else if lvl >= 5 || kept_low_drop >= 3 {
                                     return_ids.push(json!(cid));
                                 }
                             }
@@ -130,10 +169,13 @@ impl RandomAgent {
                     return json!({"value": {"type": "RESOLVE_CASE"}});
                 }
 
-                // 2. パートナーアシスト: FILE 6枚以上なら即解決編突入のため最優先、それ以外でも中盤なら積極的にFILEへ
-                if find_act("ASSIST").is_some() && my_ps.case_phase != CasePhase::RESOLUTION {
-                    let eff_file = my_ps.effective_file_count();
-                    if eff_file >= 6 || (eff_file >= 4 && my_ps.field.len() >= self.weights.assist_min_field) {
+                // 2. ターン開始時の ASSIST 先行化:
+                // HAND_PLAY の前に ASSIST を宣言してFILEを増やす（【FILE5】不発防止 ＆ 高Lvカード解禁 ＆ 解決編移行）
+                // ただし既にFILEが8枚以上ある場合は、パートナーで推理（証拠+1）した方が得なためASSISTを後回しにする
+                let eff_file = my_ps.effective_file_count();
+                if find_act("ASSIST").is_some() {
+                    let should_assist_first = !(eff_file >= 8 && find_act("DEDUCE").is_some());
+                    if should_assist_first {
                         return json!({"value": {"type": "ASSIST"}});
                     }
                 }
@@ -155,6 +197,10 @@ impl RandomAgent {
                                         }
                                         if def.description.contains("【登場時】") {
                                             score_f += self.weights.on_play_bonus;
+                                        }
+                                        // 【FILE5】条件を持つキャラはFILEが5枚未満なら優先度を下げる（効果不発防止）
+                                        if eff_file < 5 && (def.description.contains("【FILE 5】") || def.description.contains("【FILE5】")) {
+                                            score_f -= 3500.0;
                                         }
                                         if def.card_type == CardType::EVENT {
                                             score_f += self.weights.event_penalty;
@@ -227,13 +273,43 @@ impl RandomAgent {
                     }
                 }
 
-                // 6. ネクストヒント: 展開余地がありFILEが十分あるなら使用
-                if find_act("HINT_TAKE").is_some()
-                    && my_ps.field.len() < 5
-                    && my_ps.effective_file_count() >= 4
-                    && my_ps.hand.len() <= 4
-                {
-                    return json!({"value": {"type": "HINT_TAKE"}});
+                // 6. パートナーやLP2キャラの推理（DEDUCE）と、アタッカーの攻撃（ACTION）の振り分け
+                // 攻撃できないパートナーやLP2キャラは推理を優先し、高APアタッカーは除去・事件攻撃を優先する
+                if let Some(ded_act) = find_act("DEDUCE") {
+                    if let Some(actor_ids) = ded_act.get("actorIds").and_then(|v| v.as_array()) {
+                        let mut best_priority_deducer: Option<(&str, i32, i32, i32)> = None;
+                        for aid_v in actor_ids {
+                            if let Some(aid) = aid_v.as_str() {
+                                let is_partner = my_ps.partner.as_ref().map(|p| p.instance_id == aid).unwrap_or(false);
+                                let (lp, ap) = if is_partner {
+                                    let lp = my_ps.partner.as_ref()
+                                        .and_then(|p| engine.catalog.get(&p.definition_id))
+                                        .map(|d| d.lp)
+                                        .unwrap_or(1);
+                                    (lp, 0)
+                                } else if let Some(fc) = my_ps.field.iter().find(|c| c.instance_id == aid) {
+                                    let lp = engine.catalog.get(&fc.definition_id).map(|d| d.lp).unwrap_or(1);
+                                    let ap = engine.get_effective_ap(&self.player_id, fc);
+                                    (lp, ap)
+                                } else {
+                                    (1, 2000)
+                                };
+                                // パートナーまたはLP2以上ならACTIONより優先して推理させる
+                                if is_partner || lp >= 2 {
+                                    let key = (if is_partner { 1 } else { 0 }, lp, -ap);
+                                    let better = best_priority_deducer
+                                        .map(|(_, bp, blp, bap)| key > (bp, blp, bap))
+                                        .unwrap_or(true);
+                                    if better {
+                                        best_priority_deducer = Some((aid, key.0, key.1, key.2));
+                                    }
+                                }
+                            }
+                        }
+                        if let Some((aid, _, _, _)) = best_priority_deducer {
+                            return json!({"value": {"type": "DEDUCE", "actorId": aid}});
+                        }
+                    }
                 }
 
                 // 7. 攻撃 (ACTION): 有利トレード（確実に相手を倒せる）または事件攻撃を評価
@@ -329,9 +405,28 @@ impl RandomAgent {
                     return json!({"value": {"type": "ASSIST"}});
                 }
 
+                // 10. ネクストヒント（HINT_TAKE）の厳選使用:
+                // 3連続ヒント空撃ち等でFILEだけ失う挙動を遮断するため、
+                // ・直前のヒントがスキップされていない
+                // ・1ターンにつき原則1回まで（FILEが7枚以上の場合のみ最大2回）
+                // ・FILEが5枚以下になるような無理なヒント回収は行わない
+                if find_act("HINT_TAKE").is_some()
+                    && !self.last_hint_skipped.load(Ordering::Relaxed)
+                    && my_ps.field.len() < 5
+                    && eff_file > 5
+                {
+                    let max_hints = if eff_file >= 7 { 2 } else { 1 };
+                    let used = self.hints_used_this_turn.load(Ordering::Relaxed);
+                    if used < max_hints {
+                        self.hints_used_this_turn.store(used + 1, Ordering::Relaxed);
+                        return json!({"value": {"type": "HINT_TAKE"}});
+                    }
+                }
+
                 json!({"value": {"type": "END_TURN"}})
             }
             "hintPlay" => {
+                let eff_file = my_ps.effective_file_count();
                 if let Some(playable) = opts.get("playableCardIds").and_then(|v| v.as_array()) {
                     let mut best_cid: Option<&str> = None;
                     let mut best_score = i32::MIN;
@@ -339,7 +434,10 @@ impl RandomAgent {
                         if let Some(cid) = cid_v.as_str() {
                             if let Some(c) = my_ps.hand.iter().find(|h| h.instance_id == cid) {
                                 if let Some(def) = engine.catalog.get(&c.definition_id) {
-                                    let score = def.level * 1000 + def.ap;
+                                    let mut score = def.level * 1000 + def.ap;
+                                    if eff_file < 5 && (def.description.contains("【FILE 5】") || def.description.contains("【FILE5】")) {
+                                        score -= 3500;
+                                    }
                                     if score > best_score {
                                         best_score = score;
                                         best_cid = Some(cid);
@@ -349,9 +447,11 @@ impl RandomAgent {
                         }
                     }
                     if let Some(cid) = best_cid {
+                        self.last_hint_skipped.store(false, Ordering::Relaxed);
                         return json!({"value": {"cardId": cid}});
                     }
                 }
+                self.last_hint_skipped.store(true, Ordering::Relaxed);
                 json!({"value": {"cardId": null}})
             }
             "guard" => {
@@ -399,19 +499,26 @@ impl RandomAgent {
                     }
                 }
 
-                // 2. ガード: 相手APより高い（返り討ち・守備成功できる）最小十分APのキャラでブロック！
+                // 2. ガード: 相手APより高い（守備成功）か、AP同値（相打ち）でLP1以下のキャラでブロック！
                 if let Some(guards) = opts.get("guardCardIds").and_then(|v| v.as_array()) {
                     let mut best_win_guard: Option<(&str, i32)> = None;
+                    let mut best_trade_guard: Option<(&str, i32)> = None;
                     let mut weakest_guard: Option<(&str, i32)> = None;
 
                     for g_val in guards {
                         if let Some(gid) = g_val.as_str() {
                             if let Some(gc) = my_ps.field.iter().find(|c| c.instance_id == gid) {
                                 let g_ap = engine.get_effective_ap(&self.player_id, gc);
+                                let g_lp = engine.catalog.get(&gc.definition_id).map(|d| d.lp).unwrap_or(1);
                                 // 守備成功条件: g_ap > attacker_ap
                                 if g_ap > attacker_ap {
                                     if best_win_guard.map(|(_, b_ap)| g_ap < b_ap).unwrap_or(true) {
                                         best_win_guard = Some((gid, g_ap));
+                                    }
+                                } else if g_ap == attacker_ap && g_lp <= 1 {
+                                    // 相打ちで相手アタッカーを道連れにできる（LP2主力は温存）
+                                    if best_trade_guard.map(|(_, t_ap)| g_ap < t_ap).unwrap_or(true) {
+                                        best_trade_guard = Some((gid, g_ap));
                                     }
                                 }
                                 if weakest_guard.map(|(_, w_ap)| g_ap < w_ap).unwrap_or(true) {
@@ -422,6 +529,9 @@ impl RandomAgent {
                     }
 
                     if let Some((gid, _)) = best_win_guard {
+                        return json!({"value": {"guardCardId": gid}});
+                    }
+                    if let Some((gid, _)) = best_trade_guard {
                         return json!({"value": {"guardCardId": gid}});
                     }
                     // 事件攻撃で証拠が残り1枚以下のピンチなら最弱キャラを盾にしてでも守る
