@@ -1478,5 +1478,135 @@ pub fn train_cpu_self_play(
         println!("   - {} ({}): {}回", name, cid, cnt);
     }
 
+    recommend_tech_cards(catalog, p1_deck, p2_deck);
+
     best
+}
+
+/// 環境デッキ（P2）の傾向を分析し、P1デッキ外の有効な対策カード（テックカード）を推薦する
+fn recommend_tech_cards(
+    catalog: &CardCatalog,
+    p1_deck: &DeckDefinition,
+    p2_deck: &DeckDefinition,
+) {
+    let p1_colors: HashSet<String> = catalog
+        .get(&p1_deck.partner_id)
+        .map(|d| d.colors.iter().cloned().collect())
+        .unwrap_or_default();
+
+    let mut p1_canonical_ids: HashSet<String> = HashSet::new();
+    for item in &p1_deck.main_deck {
+        if let Some(def) = catalog.get(&item.definition_id) {
+            p1_canonical_ids.insert(def.canonical_id.clone());
+        } else {
+            p1_canonical_ids.insert(item.definition_id.clone());
+        }
+    }
+
+    // 環境デッキ（P2）の傾向を分析
+    let mut p2_high_lv = 0usize;
+    let mut p2_rush = 0usize;
+    let mut p2_removal = 0usize;
+    let mut p2_events = 0usize;
+    for item in &p2_deck.main_deck {
+        if let Some(def) = catalog.get(&item.definition_id) {
+            let cnt = item.count.max(0) as usize;
+            if def.level >= 6 {
+                p2_high_lv += cnt;
+            }
+            if def.description.contains("突撃") {
+                p2_rush += cnt;
+            }
+            if def.description.contains("リムーブ") || def.description.contains("スタン") || def.description.contains("手札に戻す") {
+                p2_removal += cnt;
+            }
+            if def.card_type == CardType::EVENT {
+                p2_events += cnt;
+            }
+        }
+    }
+
+    let mut seen_canonical: HashSet<String> = HashSet::new();
+    let mut candidates: Vec<(i32, String, String, String, Vec<String>)> = Vec::new();
+
+    for (id, def) in &catalog.definitions {
+        if def.card_type != CardType::CHARACTER && def.card_type != CardType::EVENT {
+            continue;
+        }
+        if p1_canonical_ids.contains(&def.canonical_id) || !seen_canonical.insert(def.canonical_id.clone()) {
+            continue;
+        }
+        // P1パートナーと同じ色（または無色）のカードのみ候補にする
+        let color_ok = p1_colors.is_empty()
+            || def.colors.is_empty()
+            || def.colors.iter().any(|c| p1_colors.contains(c));
+        if !color_ok {
+            continue;
+        }
+
+        let mut score: i32 = 0;
+        let mut reasons: Vec<String> = Vec::new();
+        let desc = &def.description;
+        let lv = def.level;
+        let ap = def.ap;
+        let lp = def.lp;
+
+        // 除去・妨害
+        if desc.contains("リムーブ") || desc.contains("デッキの下") {
+            let bonus = if p2_high_lv >= 8 { 45 } else { 30 };
+            score += bonus;
+            reasons.push("高Lv・脅威キャラの除去".to_string());
+        } else if desc.contains("スタン") || desc.contains("手札に戻す") {
+            score += 25;
+            reasons.push("盤面テンポ阻害（スタン/バウンス）".to_string());
+        }
+
+        // 突撃・証拠レース
+        if desc.contains("突撃") {
+            let bonus = if p2_removal >= 6 { 35 } else { 25 };
+            score += bonus;
+            reasons.push("突撃による即時打点・証拠奪取".to_string());
+        }
+
+        // ドロー・リソース回復
+        if desc.contains("カードを引く") || desc.contains("1枚引く") || desc.contains("2枚引く") || desc.contains("手札に加える") {
+            score += 25;
+            reasons.push("手札補充・安定化".to_string());
+        }
+
+        // 防御・カットイン
+        if desc.contains("カットイン") || desc.contains("アタックできない") {
+            let bonus = if p2_rush >= 4 { 35 } else { 20 };
+            score += bonus;
+            reasons.push("相手の速攻・アタック対策".to_string());
+        }
+
+        // ステータス効率（軽〜中コスト帯の優秀な打点・LP）
+        if def.card_type == CardType::CHARACTER {
+            if lv <= 4 && lp >= 2 {
+                score += 20;
+                reasons.push(format!("軽量高LP(Lv{}/LP{})", lv, lp));
+            }
+            if lv >= 5 && ap >= 6000 {
+                score += 15;
+            }
+        }
+
+        if score >= 35 && !reasons.is_empty() {
+            let name = def.names.first().map(|s| s.as_str()).unwrap_or(id).to_string();
+            let lv_str = if lv > 0 { format!("Lv{}", lv) } else { "Event".to_string() };
+            candidates.push((score, name, id.clone(), lv_str, reasons));
+        }
+    }
+
+    candidates.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.2.cmp(&b.2)));
+
+    println!("\n💡 【環境対策】相手デッキ（{}）に有効そうなデッキ外カード推薦 TOP5:", p2_deck.deck_name.as_deref().unwrap_or("名称未設定"));
+    println!(
+        "   (相手デッキ傾向: Lv6以上={}枚, 突撃={}枚, 除去={}枚, イベント={}枚)",
+        p2_high_lv, p2_rush, p2_removal, p2_events
+    );
+    for (score, name, id, lv_str, reasons) in candidates.into_iter().take(5) {
+        println!("   - {} ({} / {}) [評価:{}]: {}", name, id, lv_str, score, reasons.join("・"));
+    }
 }

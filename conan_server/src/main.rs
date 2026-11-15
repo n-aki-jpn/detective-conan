@@ -1268,10 +1268,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if args.get(1).map(|s| s.as_str()) == Some("train") {
         let generations: usize = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(10);
         let games_per_gen: usize = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(20);
+        let p1_deck = if let Some(path) = args.get(4) {
+            match MatchManager::load_deck(&PathBuf::from(path)) {
+                Ok(d) => {
+                    println!("📘 P1デッキを読み込みました: {} ({})", d.deck_name.as_deref().unwrap_or("名称未設定"), path);
+                    d
+                }
+                Err(e) => {
+                    eprintln!("❌ P1デッキの読み込みに失敗しました ({}): {}", path, e);
+                    return Err(e);
+                }
+            }
+        } else {
+            mgr.deck_def.clone()
+        };
+        let p2_deck = if let Some(path) = args.get(5) {
+            match MatchManager::load_deck(&PathBuf::from(path)) {
+                Ok(d) => {
+                    println!("📕 P2(環境)デッキを読み込みました: {} ({})", d.deck_name.as_deref().unwrap_or("名称未設定"), path);
+                    d
+                }
+                Err(e) => {
+                    eprintln!("❌ P2デッキの読み込みに失敗しました ({}): {}", path, e);
+                    return Err(e);
+                }
+            }
+        } else {
+            p1_deck.clone()
+        };
         agent::train_cpu_self_play(
             &mgr.catalog,
-            &mgr.deck_def,
-            &mgr.deck_def,
+            &p1_deck,
+            &p2_deck,
             generations,
             games_per_gen,
             "data/cpu_weights.json",
