@@ -126,6 +126,7 @@ pub struct MatchEngine {
     pub pending_hint_trigger: Option<(String, i32, Vec<String>)>,
     pub pending_ally_play: Option<(String, String, String, CardOrientation, Option<i32>, bool)>,
     pub pending_clause_queue: Vec<PendingClauseTask>,
+    pub pending_enter_field_queue: Vec<(String, String, String, CardOrientation, Option<i32>, String)>,
     pub pending_trigger_order_tasks: Vec<PendingClauseTask>,
     pub logs: Vec<String>,
     pub pending_file_logs: Vec<String>,
@@ -195,6 +196,7 @@ impl MatchEngine {
             pending_hint_trigger: None,
             pending_ally_play: None,
             pending_clause_queue: vec![],
+            pending_enter_field_queue: vec![],
             pending_trigger_order_tasks: vec![],
             logs: vec![],
             pending_file_logs: vec![],
@@ -473,6 +475,22 @@ impl MatchEngine {
                 &plan,
                 &task.resume_context,
                 task.evidence_source_inst_id.as_deref(),
+            ) {
+                return true;
+            }
+        }
+        while !self.pending_enter_field_queue.is_empty() {
+            if self.phase == MatchPhase::FINISHED || self.pending_decision.is_some() {
+                return true;
+            }
+            let (pid, dep_inst, dep_def, play_ori, src_lv, ctx) = self.pending_enter_field_queue.remove(0);
+            if self.resolve_character_enter_field_with_source(
+                &pid,
+                &dep_inst,
+                &dep_def,
+                play_ori,
+                src_lv,
+                &ctx,
             ) {
                 return true;
             }
@@ -3854,15 +3872,25 @@ impl MatchEngine {
             } else {
                 CardOrientation::ACTIVE
             };
-            for (dep_inst, dep_def) in picked_defs {
+            for (idx, (dep_inst, dep_def)) in picked_defs.iter().enumerate() {
                 if self.resolve_character_enter_field_with_source(
                     player_id,
-                    &dep_inst,
-                    &dep_def,
+                    dep_inst,
+                    dep_def,
                     play_ori,
                     source_level,
                     &resume_context,
                 ) {
+                    for (rem_inst, rem_def) in picked_defs.iter().skip(idx + 1) {
+                        self.pending_enter_field_queue.push((
+                            player_id.to_string(),
+                            rem_inst.clone(),
+                            rem_def.clone(),
+                            play_ori,
+                            source_level,
+                            resume_context.clone(),
+                        ));
+                    }
                     return;
                 }
             }
