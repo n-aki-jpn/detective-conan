@@ -116,6 +116,7 @@ pub struct MatchEngine {
     pub last_chosen_level: Option<i32>,
     pub last_chosen_name: Option<String>,
     pub last_chosen_instance_id: Option<String>,
+    pub last_cost_flipped_evidence_count: usize,
     pub last_removed_level_sum: i32,
     pub last_removed_ap_sum: i32,
     pub last_disguise_replaced_name: Option<String>,
@@ -183,6 +184,7 @@ impl MatchEngine {
             last_chosen_level: None,
             last_chosen_name: None,
             last_chosen_instance_id: None,
+            last_cost_flipped_evidence_count: 0,
             last_removed_level_sum: 0,
             last_removed_ap_sum: 0,
             last_disguise_replaced_name: None,
@@ -2150,7 +2152,8 @@ impl MatchEngine {
         };
 
         let cost = parse_clause_cost(&clause);
-        let pay_auto = cost.hand_remove == 0;
+        let pay_auto = cost.hand_remove == 0 && cost.evidence_flip_up == 0;
+        self.last_cost_flipped_evidence_count = 0;
         let cost_actor = set_host_id.clone().unwrap_or_else(|| actor_id.to_string());
         if !self.check_and_pay_set_card_cost(player_id, &cost_actor, &clause, false)
             || !self.pay_clause_cost_internal(player_id, &cost_actor, &cost, pay_auto)
@@ -2192,6 +2195,50 @@ impl MatchEngine {
         self.log(format!("⚡ {} が [{}] の【宣言】を発動！", player_id, card_name));
         let resolved_clause = resolve_state_branch(&clause, ori);
         let plan = parse_effect_steps(&resolved_clause, None, def.card_type);
+        if cost.evidence_flip_up > 0 {
+            let face_down_count = self
+                .players
+                .get(player_id)
+                .map(|ps| ps.evidence.iter().filter(|e| !e.face_up).count())
+                .unwrap_or(0);
+            if face_down_count >= cost.evidence_flip_up {
+                let max_flip = if cost.evidence_flip_up_any {
+                    face_down_count
+                } else {
+                    cost.evidence_flip_up
+                };
+                let flip_step = crate::effects::TargetStep {
+                    action: TargetAction::FlipEvidenceFaceUp,
+                    filter: crate::effects::TargetFilter {
+                        owner: crate::effects::OwnerScope::SelfOnly,
+                        zone: crate::effects::TargetZone::Evidence,
+                        count: max_flip,
+                        up_to: cost.evidence_flip_up_any,
+                        face_down_only: true,
+                        ..Default::default()
+                    },
+                    bonuses: Vec::new(),
+                    follow_up: Vec::new(),
+                    conditional_follow_up: None,
+                    optional: false,
+                    then_abort_if_skipped: false,
+                    scale_by_cost_flipped_evidence: false,
+                };
+                if self.prompt_target_step_with_plan(
+                    player_id,
+                    actor_id,
+                    &card_name,
+                    Some(def.level),
+                    &flip_step,
+                    None,
+                    Some(&plan),
+                    "MAIN",
+                    None,
+                ) {
+                    return;
+                }
+            }
+        }
         if cost.hand_remove > 0 {
             if self.prompt_hand_discard(
                 player_id,
@@ -2733,10 +2780,14 @@ impl MatchEngine {
                 }
             }
             "FLIP_EVIDENCE_FACE_UP" => {
+                if idx_in_selection == 0 {
+                    self.last_cost_flipped_evidence_count = 0;
+                }
                 for pid in [opp_id.as_str(), player_id] {
                     if let Some(ps) = self.players.get_mut(pid) {
                         if let Some(ev) = ps.evidence.iter_mut().find(|e| e.instance_id == tid) {
                             ev.face_up = true;
+                            self.last_cost_flipped_evidence_count += 1;
                             self.log(format!("🔓 [{}] の効果で証拠 [{}] を表向きにしました", actor_name, target_name));
                             break;
                         }
@@ -4748,6 +4799,7 @@ impl MatchEngine {
                     conditional_follow_up: None,
                     optional: true,
                     then_abort_if_skipped: false,
+                    scale_by_cost_flipped_evidence: false,
                 };
                 if self.prompt_target_step(player_id, cutin_instance_id, &card_name, Some(def.level), &ts, None, "GUARD", None) {
                     return true;
@@ -5711,6 +5763,7 @@ impl MatchEngine {
                     conditional_follow_up: None,
                     optional: false,
                     then_abort_if_skipped: false,
+                    scale_by_cost_flipped_evidence: false,
                 };
                 if self.prompt_hand_discard(
                     player_id,
@@ -8258,7 +8311,13 @@ impl MatchEngine {
             TargetZone::SetCards => "SET_CARDS",
         };
         let ap_delta = match ts.action {
-            TargetAction::ApBuff(v) => v,
+            TargetAction::ApBuff(v) => {
+                if ts.scale_by_cost_flipped_evidence {
+                    v * (self.last_cost_flipped_evidence_count.max(1) as i32)
+                } else {
+                    v
+                }
+            }
             TargetAction::ApDebuff(v) => -v,
             _ => 0,
         };

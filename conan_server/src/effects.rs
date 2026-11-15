@@ -310,6 +310,7 @@ pub struct ClauseCost {
     pub hand_filter: Option<TargetFilter>,
     pub evidence_remove: usize,
     pub evidence_flip_up: usize,
+    pub evidence_flip_up_any: bool,
     pub file_remove: usize,
     pub deck_mill: usize,
     pub sacrifice_self: bool,
@@ -406,6 +407,8 @@ pub struct TargetStep {
     pub optional: bool,
     #[serde(default)]
     pub then_abort_if_skipped: bool,
+    #[serde(default)]
+    pub scale_by_cost_flipped_evidence: bool,
 }
 
 /// デッキサーチステップ
@@ -1459,6 +1462,10 @@ pub fn parse_clause_cost(clause: &str) -> ClauseCost {
         cost.hand_filter = hf;
         cost.evidence_remove = extract_count_around(prefix, "証拠を", "つリムーブ");
         cost.evidence_flip_up = extract_count_around(prefix, "裏向きの証拠を", "つ表向き");
+        if prefix.contains("裏向きの証拠を1つ以上表向き") {
+            cost.evidence_flip_up = cost.evidence_flip_up.max(1);
+            cost.evidence_flip_up_any = true;
+        }
         cost.file_remove = extract_count_around(prefix, "FILEを", "枚リムーブ")
             .max(extract_count_around(prefix, "FILEエリアのカードを", "枚リムーブ"))
             .max(extract_count_around(prefix, "FILEエリアにあるカードを上から", "枚リムーブ"));
@@ -1530,6 +1537,7 @@ pub fn parse_effect_steps(
                 conditional_follow_up: None,
                 optional: clean.contains("まで選び"),
                 then_abort_if_skipped: false,
+                scale_by_cost_flipped_evidence: false,
             });
             return plan;
         }
@@ -1554,6 +1562,7 @@ pub fn parse_effect_steps(
             conditional_follow_up: None,
             optional: false,
             then_abort_if_skipped: false,
+            scale_by_cost_flipped_evidence: false,
         });
         return plan;
     }
@@ -2375,6 +2384,7 @@ fn try_combine_pick_and_split(
             conditional_follow_up: None,
             optional: false,
             then_abort_if_skipped: false,
+            scale_by_cost_flipped_evidence: false,
         });
     } else {
         return None;
@@ -2395,6 +2405,7 @@ fn try_combine_pick_and_split(
         conditional_follow_up: None,
         optional: false,
         then_abort_if_skipped: false,
+        scale_by_cost_flipped_evidence: false,
     })
 }
 
@@ -2652,6 +2663,7 @@ fn parse_target_step(
             conditional_follow_up: None,
             optional: false,
             then_abort_if_skipped: false,
+            scale_by_cost_flipped_evidence: false,
         });
     }
 
@@ -2674,6 +2686,7 @@ fn parse_target_step(
             conditional_follow_up: None,
             optional: true,
             then_abort_if_skipped: false,
+            scale_by_cost_flipped_evidence: false,
         });
     }
 
@@ -2698,6 +2711,7 @@ fn parse_target_step(
                 conditional_follow_up: None,
                 optional: sentence.contains("てもよい"),
                 then_abort_if_skipped: false,
+                scale_by_cost_flipped_evidence: false,
             });
         }
     }
@@ -2794,6 +2808,13 @@ fn parse_target_step(
         Vec::new()
     };
 
+    if matches!(action, TargetAction::ApBuff(_))
+        && !sentence.contains("相手の")
+        && filter.owner == OwnerScope::OppOnly
+    {
+        filter.owner = OwnerScope::SelfOnly;
+    }
+
     Some(TargetStep {
         action,
         filter,
@@ -2802,6 +2823,7 @@ fn parse_target_step(
         conditional_follow_up: None,
         optional: sentence.contains("てもよい"),
         then_abort_if_skipped: false,
+        scale_by_cost_flipped_evidence: sentence.contains("コストで表向きにした証拠1つにつき"),
     })
 }
 
