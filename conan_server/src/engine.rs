@@ -2203,8 +2203,21 @@ impl MatchEngine {
         let pay_auto = cost.hand_remove == 0 && cost.evidence_flip_up == 0;
         self.last_cost_flipped_evidence_count = 0;
         let cost_actor = set_host_id.clone().unwrap_or_else(|| actor_id.to_string());
+        // 証拠を表向きにするコストは後段のインタラクティブ選択（枚数分）で支払うため、ここでは自動で表向きにしない
+        let face_down_for_cost = self
+            .players
+            .get(player_id)
+            .map(|ps| ps.evidence.iter().filter(|e| !e.face_up).count())
+            .unwrap_or(0);
+        if cost.evidence_flip_up > 0 && face_down_for_cost < cost.evidence_flip_up {
+            self.log(format!("⚠️ [{}] の【宣言】コストを満たしていません（裏向きの証拠が不足）", card_name));
+            self.prompt_main_action(player_id);
+            return;
+        }
+        let mut auto_cost = cost.clone();
+        auto_cost.evidence_flip_up = 0;
         if !self.check_and_pay_set_card_cost(player_id, &cost_actor, &clause, false)
-            || !self.pay_clause_cost_internal(player_id, &cost_actor, &cost, pay_auto)
+            || !self.pay_clause_cost_internal(player_id, &cost_actor, &auto_cost, pay_auto)
         {
             self.prompt_main_action(player_id);
             return;

@@ -2053,6 +2053,22 @@ mod tests {
             "value": {"type": "DECLARE", "actorId": "p1_case"}
         }));
 
+        // 証拠を表向きにするコストは選択式で支払う
+        let flip_pd = engine.pending_decision.as_ref().unwrap().clone();
+        assert_eq!(flip_pd["options"]["effectType"], "FLIP_EVIDENCE_FACE_UP");
+        let flip_ids: Vec<String> = flip_pd["options"]["candidates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| c["instanceId"].as_str().unwrap().to_string())
+            .collect();
+        let flip_dec_id = flip_pd["decisionId"].as_str().unwrap().to_string();
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": flip_dec_id,
+            "revision": engine.revision,
+            "value": {"targetIds": flip_ids}
+        }));
+
         // Two evidence cards should now be face_up
         assert!(engine.players.get("p1").unwrap().evidence.iter().all(|e| e.face_up));
 
@@ -5477,6 +5493,83 @@ mod tests {
             plan,
             engine.logs
         );
+    }
+
+    #[test]
+    fn test_d08026_ap_scales_with_flipped_evidence() {
+        let catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();
+        let mut engine = engine::MatchEngine::new(catalog.clone());
+        engine.turn = 2;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.r#case = Some(models::CardInstance {
+            instance_id: "case_1".to_string(),
+            definition_id: "D08026".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::CASE,
+            orientation: models::CardOrientation::ACTIVE,
+            ..Default::default()
+        });
+        ps1.case_phase = models::CasePhase::RESOLUTION;
+        for i in 0..3 {
+            ps1.evidence.push(models::CardInstance {
+                instance_id: format!("ev_{}", i),
+                definition_id: "B01002".to_string(),
+                owner_id: "p1".to_string(),
+                zone: models::Zone::EVIDENCE,
+                face_up: false,
+                ..Default::default()
+            });
+        }
+        ps1.field.push(models::CardInstance {
+            instance_id: "haibara_1".to_string(),
+            definition_id: "B01016".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::FIELD,
+            ..Default::default()
+        });
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+        engine.prompt_main_action("p1");
+
+        let base_ap = {
+            let c = engine.players["p1"].field[0].clone();
+            engine.get_effective_ap("p1", &c)
+        };
+
+        let obs = build_player_observation(&engine, "p1");
+        let dec_id = obs["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": dec_id,
+            "revision": engine.revision,
+            "value": { "type": "DECLARE", "actorId": "case_1" }
+        })).unwrap();
+
+        let obs2 = build_player_observation(&engine, "p1");
+        eprintln!("PD1: {}", obs2["pendingDecision"]);
+        let dec_id = obs2["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": dec_id,
+            "revision": engine.revision,
+            "value": { "targetIds": ["ev_0", "ev_1", "ev_2"] }
+        })).unwrap();
+
+        let obs3 = build_player_observation(&engine, "p1");
+        eprintln!("PD2: {}", obs3["pendingDecision"]);
+        let dec_id = obs3["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": dec_id,
+            "revision": engine.revision,
+            "value": { "targetId": "haibara_1" }
+        })).unwrap();
+
+        let new_ap = {
+            let c = engine.players["p1"].field[0].clone();
+            engine.get_effective_ap("p1", &c)
+        };
+        assert_eq!(new_ap - base_ap, 3000, "3枚表向きなら+3000 (logs: {:?})", engine.logs);
     }
 
     #[test]
