@@ -2581,6 +2581,14 @@
               }
             });
           }
+          const decAct = actions.find(a => a.type === 'DECLARE' && (a.actors || []).some(ac => ac.actorId === cid));
+          if (decAct) {
+            cmds.push({
+              label: '⚡ 【宣言】能力を使う',
+              cssText: 'background:#8b5cf6; border-color:#a78bfa;',
+              onClick: () => submitDecision({ type: 'DECLARE', actorId: cid })
+            });
+          }
         } else if (zoneInfo.isMine && zoneInfo.zone === 'FIELD') {
           const atkAct = actions.find(a => a.type === 'ACTION' && (a.actorIds || []).includes(cid));
           if (atkAct) {
