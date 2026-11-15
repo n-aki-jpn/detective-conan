@@ -76,6 +76,7 @@ pub enum TargetAction {
     GrantBulletOnCaseAttackDiscard,
     RemoveSetCards(usize),
     StunAndGrantOnRemoveDraw,
+    StackUnderSelf,
 }
 
 impl TargetAction {
@@ -115,6 +116,7 @@ impl TargetAction {
             TargetAction::GrantBulletOnCaseAttackDiscard => "GRANT_BULLET_ON_CASE_DISCARD",
             TargetAction::RemoveSetCards(_) => "REMOVE_SET_CARDS",
             TargetAction::StunAndGrantOnRemoveDraw => "STUN_AND_GRANT_ON_REMOVE_DRAW",
+            TargetAction::StackUnderSelf => "STACK_UNDER_SELF",
         }
     }
 
@@ -1505,6 +1507,29 @@ pub fn parse_effect_steps(
 ) -> ParsedClausePlan {
     let mut plan = ParsedClausePlan::default();
     let clean = strip_parens(clause);
+
+    // B03006 結成 少年探偵団: リムーブエリアから特徴[少年探偵団]のキャラを5枚まで選び、このキャラの下に重ねる
+    if clean.contains("このキャラの下に重ねる") {
+        let mut filter = TargetFilter::default();
+        filter.owner = OwnerScope::SelfOnly;
+        filter.zone = TargetZone::Remove;
+        filter.count = if clean.contains("5枚まで") { 5 } else { 1 };
+        let mut br = TargetBranch::default();
+        if clean.contains("特徴［少年探偵団］") || clean.contains("特徴[少年探偵団]") {
+            br.trait_req = Some("少年探偵団".to_string());
+        }
+        filter.branches = vec![br];
+        plan.target_step = Some(TargetStep {
+            filter,
+            action: TargetAction::StackUnderSelf,
+            bonuses: vec![],
+            follow_up: vec![],
+            conditional_follow_up: None,
+            optional: clean.contains("まで選び"),
+            then_abort_if_skipped: false,
+        });
+        return plan;
+    }
 
     // B11082 ジン＆ベルモット: コストで現場のLv7以下黒をスタンさせ、「【現場リムーブ時】カードを1枚引く。」を付与
     if clean.contains("コストによってスタンさせたキャラに、相手のターン終了時まで「【現場リムーブ時】カードを1枚引く。」を与える") {

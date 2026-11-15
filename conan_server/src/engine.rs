@@ -1249,18 +1249,26 @@ impl MatchEngine {
                 }
                 // 自分は手札を1枚リムーブする
                 if desc.contains("自分は手札を") && desc.contains("リムーブ") {
-                    let mut removed_def = None;
-                    if let Some(ps) = self.players.get_mut(player_id) {
-                        if let Some(mut card) = ps.hand.pop() {
-                            removed_def = Some(card.definition_id.clone());
-                            card.zone = Zone::REMOVE;
-                            ps.remove.push(card);
-                        }
-                    }
-                    if let Some(rdid) = removed_def {
-                        let rname = self.card_name_by_def(&rdid);
-                        self.log(format!("📜 事件 [{}] の解決編移行時効果: {} は手札から [{}] をリムーブしました", case_name, player_id, rname));
-                    }
+                    let case_inst_id = self.players.get(player_id)
+                        .and_then(|p| p.r#case.as_ref())
+                        .map(|c| c.instance_id.clone())
+                        .unwrap_or_default();
+                    self.prompt_hand_discard(
+                        player_id,
+                        &case_inst_id,
+                        &case_name,
+                        None,
+                        1,
+                        None,
+                        false,
+                        false,
+                        &[],
+                        None,
+                        None,
+                        None,
+                        "MAIN",
+                        None,
+                    );
                 }
             }
         }
@@ -1818,7 +1826,7 @@ impl MatchEngine {
                 }
                 self.log(format!("🤝 {} が パートナーのアシスト を宣言（パートナーをFILEへ移動）", player_id));
                 self.check_resolution_transition(player_id);
-                if self.phase == MatchPhase::FINISHED {
+                if self.phase == MatchPhase::FINISHED || self.pending_decision.is_some() {
                     return;
                 }
                 self.prompt_main_action(player_id);
@@ -2664,6 +2672,29 @@ impl MatchEngine {
                 }
                 if attached > 0 {
                     self.log(format!("🔧 [{}] の効果で [{}] に山札の上から{}枚裏向きでセットしました", actor_name, target_name, attached));
+                }
+            }
+            "STACK_UNDER_SELF" => {
+                let mut stacked_info: Option<(String, usize)> = None;
+                if let Some(ps) = self.players.get_mut(player_id) {
+                    if let Some(pos) = ps.remove.iter().position(|c| c.instance_id == tid) {
+                        let mut card = ps.remove.remove(pos);
+                        card.face_up = true;
+                        let def_id = card.definition_id.clone();
+                        if let Some(actor) = ps.field.iter_mut().find(|c| c.instance_id == actor_id) {
+                            actor.set_cards.push(card);
+                            if !actor.set_cards.is_empty() {
+                                actor.has_rush = true;
+                            }
+                            stacked_info = Some((def_id, actor.set_cards.len()));
+                        } else {
+                            ps.remove.push(card);
+                        }
+                    }
+                }
+                if let Some((def_id, total)) = stacked_info {
+                    let cname = self.card_name_by_def(&def_id);
+                    self.log(format!("📚 [{}] の効果で [{}] を下に重ねました（合計{}枚）", actor_name, cname, total));
                 }
             }
             "STUN_AND_GRANT_ON_REMOVE_DRAW" => {
@@ -8808,5 +8839,6 @@ fn target_action_prompt_title(action: &TargetAction, filter: &TargetFilter) -> S
         TargetAction::GrantBulletOnCaseAttackDiscard => "事件攻撃時ブレット化能力を与える自分のキャラを選択してください".to_string(),
         TargetAction::RemoveSetCards(n) => format!("リムーブするセットカードを{}枚選択してください", n),
         TargetAction::StunAndGrantOnRemoveDraw => "スタンさせて「【現場リムーブ時】カードを1枚引く。」を与えるキャラを1枚選択してください".to_string(),
+        TargetAction::StackUnderSelf => "下に重ねるカードをリムーブエリアから選択してください".to_string(),
     }
 }

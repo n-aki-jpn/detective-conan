@@ -1642,9 +1642,19 @@ mod tests {
         engine.players.insert("p1".to_string(), ps1);
         engine.players.insert("p2".to_string(), ps2);
 
-        // 1. Trigger resolution transition -> hand size goes from 1 to 0
+        // 1. Trigger resolution transition -> prompts hand discard, then hand size goes from 1 to 0
         engine.check_resolution_transition("p1");
         assert_eq!(engine.players.get("p1").unwrap().case_phase, models::CasePhase::RESOLUTION);
+        let discard_pd = engine.pending_decision.as_ref().unwrap().clone();
+        assert_eq!(discard_pd["kind"], "targetSelect");
+        assert_eq!(discard_pd["options"]["effectType"], "DISCARD_HAND");
+        let discard_dec_id = discard_pd["decisionId"].as_str().unwrap().to_string();
+        let target_hand_id = discard_pd["options"]["candidates"][0]["instanceId"].as_str().unwrap().to_string();
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": discard_dec_id,
+            "revision": engine.revision,
+            "value": {"targetId": target_hand_id, "effectType": "DISCARD_HAND"}
+        }));
         assert_eq!(engine.players.get("p1").unwrap().hand.len(), 0);
 
         // 2. Declare option should include case card
@@ -4860,6 +4870,19 @@ mod tests {
         let hand_before = engine.players.get("p1").unwrap().hand.len();
         engine.trigger_on_remove_char("p1", "blk_lv6", "B11085", false);
         assert_eq!(engine.players.get("p1").unwrap().hand.len(), hand_before + 1);
+    }
+
+    #[test]
+    fn test_b03006_shounen_tanteidan_on_enter_stack() {
+        let catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();
+        let card = catalog.get("B03006").expect("B03006 must exist in catalog");
+        let clauses = effects::extract_clauses(&card.description, effects::TriggerKind::OnPlay, models::CardType::CHARACTER);
+        assert!(!clauses.is_empty(), "Must extract 【登場時】");
+        let plan = effects::parse_effect_steps(&clauses[0], Some(8), models::CardType::CHARACTER);
+        let ts = plan.target_step.as_ref().expect("Must have target_step");
+        assert_eq!(ts.action, effects::TargetAction::StackUnderSelf);
+        assert_eq!(ts.filter.zone, effects::TargetZone::Remove);
+        assert_eq!(ts.filter.count, 5);
     }
 }
 
