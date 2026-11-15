@@ -2828,26 +2828,12 @@
         el.style.opacity = '0.25';
         el.style.borderStyle = 'dashed';
         el.innerHTML = '<span style="margin:auto; color:#64748b; font-size:0.75rem;">空枠</span>';
-        if (card && !isSecret && window.currentEffectActorId && card.instanceId === window.currentEffectActorId) {
-        el.classList.add('card-effect-actor');
-        const b = document.createElement('div');
-        b.className = 'contact-role-badge eff';
-        b.innerText = '⚡ 発動中';
-        el.appendChild(b);
-      }
-      return el;
+        return el;
       }
       if (isSecret || !card.name) {
         el.className += ' secret';
         el.innerHTML = '<span>裏面</span>';
-        if (card && !isSecret && window.currentEffectActorId && card.instanceId === window.currentEffectActorId) {
-        el.classList.add('card-effect-actor');
-        const b = document.createElement('div');
-        b.className = 'contact-role-badge eff';
-        b.innerText = '⚡ 発動中';
-        el.appendChild(b);
-      }
-      return el;
+        return el;
       }
 
       const typeLabel = card.cardType === 'PARTNER' ? 'パートナー' : (card.cardType === 'CASE' ? '事件' : 'キャラ');
@@ -3879,13 +3865,6 @@
     function createCardSlot(id, card, boardZoneInfo = null) {
       const el = createCardEl(card, false, false, boardZoneInfo);
       el.id = id;
-      if (card && !isSecret && window.currentEffectActorId && card.instanceId === window.currentEffectActorId) {
-        el.classList.add('card-effect-actor');
-        const b = document.createElement('div');
-        b.className = 'contact-role-badge eff';
-        b.innerText = '⚡ 発動中';
-        el.appendChild(b);
-      }
       return el;
     }
 

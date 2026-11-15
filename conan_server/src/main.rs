@@ -5328,5 +5328,18 @@ mod tests {
             actors
         );
     }
+
+    #[test]
+    fn test_index_html_no_undefined_is_secret_in_card_slot() {
+        let html = std::fs::read_to_string("../src/conan_engine/web/static/index.html")
+            .expect("index.html must be readable");
+        let start = html.find("function createCardSlot(").expect("createCardSlot must exist");
+        let end = html[start..].find("\n    function ").map(|i| start + i).unwrap_or(html.len());
+        let fn_body = &html[start..end];
+        assert!(
+            !fn_body.contains("isSecret"),
+            "createCardSlot must not reference undefined variable isSecret"
+        );
+    }
 }
 
