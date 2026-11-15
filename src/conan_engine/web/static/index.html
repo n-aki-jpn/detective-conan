@@ -1139,8 +1139,14 @@
       pointer-events: none;
       box-shadow: 0 1px 4px rgba(0,0,0,0.6);
     }
+    .card-effect-actor {
+      outline: 3px solid #a855f7 !important;
+      box-shadow: 0 0 16px rgba(168, 85, 247, 0.9) !important;
+      z-index: 9;
+    }
     .contact-role-badge.atk { background: #d97706; }
     .contact-role-badge.tgt { background: #dc2626; }
+    .contact-role-badge.eff { background: #7e22ce; }
     .card-actionable {
       outline: 2px solid #38bdf8 !important;
       box-shadow: 0 0 10px rgba(56, 189, 248, 0.45);
@@ -2822,12 +2828,26 @@
         el.style.opacity = '0.25';
         el.style.borderStyle = 'dashed';
         el.innerHTML = '<span style="margin:auto; color:#64748b; font-size:0.75rem;">空枠</span>';
-        return el;
+        if (card && !isSecret && window.currentEffectActorId && card.instanceId === window.currentEffectActorId) {
+        el.classList.add('card-effect-actor');
+        const b = document.createElement('div');
+        b.className = 'contact-role-badge eff';
+        b.innerText = '⚡ 発動中';
+        el.appendChild(b);
+      }
+      return el;
       }
       if (isSecret || !card.name) {
         el.className += ' secret';
         el.innerHTML = '<span>裏面</span>';
-        return el;
+        if (card && !isSecret && window.currentEffectActorId && card.instanceId === window.currentEffectActorId) {
+        el.classList.add('card-effect-actor');
+        const b = document.createElement('div');
+        b.className = 'contact-role-badge eff';
+        b.innerText = '⚡ 発動中';
+        el.appendChild(b);
+      }
+      return el;
       }
 
       const typeLabel = card.cardType === 'PARTNER' ? 'パートナー' : (card.cardType === 'CASE' ? '事件' : 'キャラ');
@@ -2966,6 +2986,13 @@
           b.innerText = '🎯 対象';
           el.appendChild(b);
         }
+      }
+      if (card && !isSecret && window.currentEffectActorId && card.instanceId === window.currentEffectActorId) {
+        el.classList.add('card-effect-actor');
+        const b = document.createElement('div');
+        b.className = 'contact-role-badge eff';
+        b.innerText = '⚡ 発動中';
+        el.appendChild(b);
       }
       return el;
     }
@@ -3166,6 +3193,7 @@
       document.getElementById('opp-case-phase').innerText = opp.casePhase === 'RESOLUTION' ? '解決編' : '事件編';
 
       window.currentActionContext = obs.actionContext || null;
+      window.currentEffectActorId = (obs.pendingDecision && obs.pendingDecision.options && obs.pendingDecision.options.actorId) || null;
 
       const renderExtraPartners = (elId, list, isMine) => {
         const box = document.getElementById(elId);
@@ -3687,7 +3715,7 @@
           const dockTargetDesc = (maxSelect === 1 && !hasOffBoard)
             ? `${pd.options.title || '対象選択'}（緑枠のカードを直接タップ可）`
             : (pd.options.title || '効果の対象を選んでください');
-          setDockCommand(isDiscard ? '💸 手札破棄' : '🎯 対象選択', '#16a34a', dockTargetDesc, (wrap) => {
+          setDockCommand(isDiscard ? '💸 手札破棄' : `⚡ ${actorName}`, '#16a34a', dockTargetDesc, (wrap) => {
             if (pd.options.optional) {
               const bSkip = document.createElement('button');
               bSkip.className = 'btn btn-secondary';
@@ -3851,6 +3879,13 @@
     function createCardSlot(id, card, boardZoneInfo = null) {
       const el = createCardEl(card, false, false, boardZoneInfo);
       el.id = id;
+      if (card && !isSecret && window.currentEffectActorId && card.instanceId === window.currentEffectActorId) {
+        el.classList.add('card-effect-actor');
+        const b = document.createElement('div');
+        b.className = 'contact-role-badge eff';
+        b.innerText = '⚡ 発動中';
+        el.appendChild(b);
+      }
       return el;
     }
 
