@@ -922,7 +922,12 @@ impl RandomAgent {
                             .map(|arr| arr.iter().filter_map(|x| x.as_str()).collect())
                             .unwrap_or_default();
 
-                        if distinct_names && !cname.is_empty() && used_names.contains(cname) {
+                        let cnames: Vec<&str> = cname
+                            .split(&['&', '＆'][..])
+                            .map(str::trim)
+                            .filter(|s| !s.is_empty())
+                            .collect();
+                        if distinct_names && cnames.iter().any(|n| used_names.contains(*n)) {
                             continue;
                         }
                         if distinct_levels && used_levels.contains(&clv) {
@@ -937,8 +942,10 @@ impl RandomAgent {
                             }
                         }
 
-                        if distinct_names && !cname.is_empty() {
-                            used_names.insert(cname.to_string());
+                        if distinct_names {
+                            for n in cnames {
+                                used_names.insert(n.to_string());
+                            }
                         }
                         if distinct_levels {
                             used_levels.insert(clv);
@@ -1190,7 +1197,12 @@ impl RandomAgent {
                             .map(|arr| arr.iter().filter_map(|x| x.as_str()).collect())
                             .unwrap_or_default();
 
-                        if distinct_names && used_names.contains(cname) {
+                        let cnames: Vec<&str> = cname
+                            .split(&['&', '＆'][..])
+                            .map(str::trim)
+                            .filter(|s| !s.is_empty())
+                            .collect();
+                        if distinct_names && cnames.iter().any(|n| used_names.contains(*n)) {
                             continue;
                         }
                         if distinct_levels && used_levels.contains(&clv) {
@@ -1206,7 +1218,9 @@ impl RandomAgent {
                         }
 
                         if distinct_names {
-                            used_names.insert(cname.to_string());
+                            for n in cnames {
+                                used_names.insert(n.to_string());
+                            }
                         }
                         if distinct_levels {
                             used_levels.insert(clv);

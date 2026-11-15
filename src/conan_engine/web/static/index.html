@@ -3560,7 +3560,15 @@
           const canSelectMore = (cand) => {
             if (selectedIds.length >= maxSelect) return false;
             const chosenCands = candidates.filter(c => selectedIds.includes(c.instanceId));
-            if (distinctNames && chosenCands.some(c => c.name === cand.name)) return false;
+            if (distinctNames) {
+              const splitNames = (n) => String(n || '').split(/[&＆]/).map(s => s.trim()).filter(Boolean);
+              const candNames = splitNames(cand.name);
+              const hasOverlap = chosenCands.some(c => {
+                const cNames = splitNames(c.name);
+                return candNames.some(cn => cNames.includes(cn));
+              });
+              if (hasOverlap) return false;
+            }
             if (distinctLevels && chosenCands.some(c => Number(c.level) === Number(cand.level))) return false;
             if (distinctColors) {
               const usedCols = new Set(chosenCands.flatMap(c => c.colors || []));
