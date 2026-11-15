@@ -4927,8 +4927,13 @@
         currentDeckDef.partnerId = data.partnerId || null;
         currentDeckDef.caseId = data.caseId || null;
         currentDeckDef.mainDeck = Array.isArray(data.mainDeck) ? data.mainDeck : [];
-        if (typeof renderDeckBuilder === 'function') renderDeckBuilder();
-        if (typeof updateDeckSummary === 'function') updateDeckSummary();
+        deckQtyMap = {};
+        currentDeckDef.mainDeck.forEach(item => {
+          if (item.count > 0) deckQtyMap[item.definitionId] = item.count;
+        });
+        populateFixedSelects();
+        updateBuilderSummary();
+        renderBuilderCatalog();
         alert(`公式コード (${data.code}) からデッキリストを読み込みました！\n必要に応じて「💾 保存」を押してください。`);
       } catch (e) {
         alert(`通信エラー: ${e.message}`);
