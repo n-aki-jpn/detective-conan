@@ -1686,6 +1686,10 @@
             title="タカラトミー公式デッキレシピコードを発行">
             🌐 公式コード発行
           </button>
+          <button id="btn-import-official-deck" class="btn" onclick="importOfficialDeck()" style="background:#0369a1; flex:1; min-width:120px;"
+            title="タカラトミー公式デッキコード（9桁）からデッキリストを作成">
+            🌐 公式コード読込
+          </button>
         </div>
       </div>
 
@@ -4883,6 +4887,49 @@
         } else {
           alert(`公式コード発行に失敗しました:\n${data.error || 'コードが返されませんでした'}`);
         }
+      } catch (e) {
+        alert(`通信エラー: ${e.message}`);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = originalText;
+        }
+      }
+    }
+
+    async function importOfficialDeck() {
+      const raw = prompt("タカラトミー公式デッキコード（9桁の英数字）を入力してください:");
+      if (!raw) return;
+      const code = raw.trim();
+      if (!/^[A-Za-z0-9]{9}$/.test(code)) {
+        alert("公式コードは9文字の英数字で入力してください。");
+        return;
+      }
+
+      const btn = document.getElementById('btn-import-official-deck');
+      const originalText = btn ? btn.innerHTML : '';
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '⏳ 読込中...';
+      }
+
+      try {
+        const res = await fetch('/api/deck/import_official', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(`公式コードの読み込みに失敗しました:\n${data.error || '不明なエラー'}`);
+          return;
+        }
+        currentDeckDef.partnerId = data.partnerId || null;
+        currentDeckDef.caseId = data.caseId || null;
+        currentDeckDef.mainDeck = Array.isArray(data.mainDeck) ? data.mainDeck : [];
+        if (typeof renderDeckBuilder === 'function') renderDeckBuilder();
+        if (typeof updateDeckSummary === 'function') updateDeckSummary();
+        alert(`公式コード (${data.code}) からデッキリストを読み込みました！\n必要に応じて「💾 保存」を押してください。`);
       } catch (e) {
         alert(`通信エラー: ${e.message}`);
       } finally {

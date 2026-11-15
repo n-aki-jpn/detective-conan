@@ -764,6 +764,205 @@ fn resolve_color_code(colors: &[String]) -> String {
     }
 }
 
+#[derive(Deserialize)]
+struct ImportOfficialDeckRequest {
+    code: String,
+}
+
+fn decode_html_entities(s: &str) -> String {
+    s.replace("&quot;", "\"")
+        .replace("&#34;", "\"")
+        .replace("&#x22;", "\"")
+        .replace("&apos;", "'")
+        .replace("&#39;", "'")
+        .replace("&#x27;", "'")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&amp;", "&")
+}
+
+fn extract_attr_value(tag: &str, attr_name: &str) -> Option<String> {
+    let lower = tag.to_ascii_lowercase();
+    for quote in ['"', '\''] {
+        let pat = format!("{}={}", attr_name, quote);
+        if let Some(pos) = lower.find(&pat) {
+            let start = pos + pat.len();
+            if let Some(end_rel) = tag[start..].find(quote) {
+                return Some(decode_html_entities(&tag[start..start + end_rel]));
+            }
+        }
+    }
+    None
+}
+
+fn parse_official_deck_html(html: &str) -> Result<serde_json::Value, String> {
+    let mut deck_values = Vec::new();
+    let mut search_from = 0;
+    while let Some(rel_start) = html[search_from..].find('<') {
+        let tag_start = search_from + rel_start;
+        let Some(rel_end) = html[tag_start..].find('>') else {
+            break;
+        };
+        let tag = &html[tag_start..tag_start + rel_end + 1];
+        search_from = tag_start + rel_end + 1;
+
+        let tag_lower = tag.to_ascii_lowercase();
+        if tag_lower.starts_with("<input") {
+            if let Some(name) = extract_attr_value(tag, "name") {
+                if name == "deck" {
+                    if let Some(val) = extract_attr_value(tag, "value") {
+                        deck_values.push(val);
+                    }
+                }
+            }
+        }
+    }
+
+    if deck_values.is_empty() {
+        return Err("HTML内に <input name=\"deck\" value=\"...\"> がありません。コードが無効、またはページ構造が変わった可能性があります。".to_string());
+    }
+
+    let mut parsed_decks = Vec::new();
+    for val in deck_values {
+        let deck: serde_json::Value = serde_json::from_str(&val)
+            .map_err(|e| format!("deck属性の値をJSONとして解析できませんでした: {}", e))?;
+        let obj = deck
+            .as_object()
+            .ok_or_else(|| "deckがJSONオブジェクトではありません。".to_string())?;
+        let mut normalized = serde_json::Map::new();
+        for key in ["partner", "incident", "other"] {
+            let arr = obj
+                .get(key)
+                .and_then(|v| v.as_array())
+                .ok_or_else(|| format!("デッキ情報に '{}' がないか、配列ではありません。", key))?;
+            if arr.iter().any(|c| c.as_str().map(|s| s.is_empty()).unwrap_or(true)) {
+                return Err(format!("'{}' に不正なカード番号が含まれています。", key));
+            }
+            normalized.insert(key.to_string(), serde_json::Value::Array(arr.clone()));
+        }
+        parsed_decks.push(serde_json::Value::Object(normalized));
+    }
+
+    if parsed_decks.iter().any(|d| d != &parsed_decks[0]) {
+        return Err("異なる内容のdeck属性が複数見つかりました。HTMLの確認が必要です。".to_string());
+    }
+
+    Ok(parsed_decks.into_iter().next().unwrap())
+}
+
+async fn handle_import_official_deck(
+    Json(body): Json<ImportOfficialDeckRequest>,
+) -> impl IntoResponse {
+    let code = body.code.trim();
+    if code.len() != 9 || !code.chars().all(|c| c.is_ascii_alphanumeric()) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "公式コードは9文字の英数字で入力してください。"})),
+        )
+            .into_response();
+    }
+
+    let url = format!(
+        "https://www.takaratomy.co.jp/products/conan-cardgame/deckrecipe/create?d_code={}",
+        code
+    );
+    let client = match reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": format!("HTTPクライアント初期化エラー: {}", e)})),
+            )
+                .into_response();
+        }
+    };
+
+    let resp = match client
+        .get(&url)
+        .header("Accept", "text/html,application/xhtml+xml")
+        .header("Accept-Language", "ja")
+        .header("User-Agent", "Mozilla/5.0")
+        .send()
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({"error": format!("公式サイトへの通信に失敗しました: {}", e)})),
+            )
+                .into_response();
+        }
+    };
+
+    let html = match resp.text().await {
+        Ok(t) => t,
+        Err(e) => {
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({"error": format!("HTMLの読み取りに失敗しました: {}", e)})),
+            )
+                .into_response();
+        }
+    };
+
+    let deck = match parse_official_deck_html(&html) {
+        Ok(d) => d,
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"error": e})),
+            )
+                .into_response();
+        }
+    };
+
+    let partner_id = deck["partner"]
+        .as_array()
+        .and_then(|a| a.first())
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let case_id = deck["incident"]
+        .as_array()
+        .and_then(|a| a.first())
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let mut counts: Vec<(String, usize)> = Vec::new();
+    if let Some(other) = deck["other"].as_array() {
+        for item in other {
+            if let Some(cid) = item.as_str() {
+                if let Some(existing) = counts.iter_mut().find(|(id, _)| id == cid) {
+                    existing.1 += 1;
+                } else {
+                    counts.push((cid.to_string(), 1));
+                }
+            }
+        }
+    }
+    let main_deck: Vec<serde_json::Value> = counts
+        .into_iter()
+        .map(|(definition_id, count)| json!({"definitionId": definition_id, "count": count}))
+        .collect();
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "code": code,
+            "partnerId": partner_id,
+            "caseId": case_id,
+            "mainDeck": main_deck,
+            "raw": deck
+        })),
+    )
+        .into_response()
+}
+
 async fn handle_publish_deck(
     State(state): State<SharedState>,
     Json(body): Json<PublishDeckRequest>,
@@ -963,6 +1162,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/set_cpu", post(handle_set_cpu))
         .route("/api/save_deck", post(handle_save_deck))
         .route("/api/deck/publish", post(handle_publish_deck))
+        .route("/api/deck/import_official", post(handle_import_official_deck))
         .route("/api/decision", post(handle_decision))
         .fallback_service(ServeDir::new(&static_dir))
         .with_state(shared_state);
@@ -4883,6 +5083,15 @@ mod tests {
         assert_eq!(ts.action, effects::TargetAction::StackUnderSelf);
         assert_eq!(ts.filter.zone, effects::TargetZone::Remove);
         assert_eq!(ts.filter.count, 5);
+    }
+
+    #[test]
+    fn test_parse_official_deck_html() {
+        let html = r#"<html><body><form><input type="hidden" name="deck" value="{&quot;partner&quot;:[&quot;B01001&quot;],&quot;incident&quot;:[&quot;B01002&quot;],&quot;other&quot;:[&quot;B01003&quot;,&quot;B01003&quot;,&quot;B01004&quot;]}"></form></body></html>"#;
+        let deck = parse_official_deck_html(html).expect("Must parse valid official deck html");
+        assert_eq!(deck["partner"][0], "B01001");
+        assert_eq!(deck["incident"][0], "B01002");
+        assert_eq!(deck["other"].as_array().unwrap().len(), 3);
     }
 }
 
