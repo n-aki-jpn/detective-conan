@@ -3644,6 +3644,34 @@ mod tests {
     }
 
     #[test]
+    fn test_ally_play_trigger_queue_keeps_all_consecutive_entries() {
+        let catalog = load_test_catalog();
+        let mut engine = MatchEngine::new(catalog);
+        engine.turn = 4;
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        let ps2 = engine::PlayerState::new("p2".to_string());
+        ps1.partner = Some(test_inst("p1_p", "B01001", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+        ps1.r#case = Some(test_inst("p1_case", "B01002", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        for i in 0..6 {
+            ps1.deck.push(test_inst(&format!("d{}", i), "B01021", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        }
+        ps1.field.push(test_inst("c_b11003", "B11003", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        ps1.field.push(test_inst("ai", "B01016", "p1", models::Zone::FIELD, models::CardOrientation::SLEEP));
+        ps1.field.push(test_inst("ayumi", "B01011", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        // 五人囃子のように連続して2体登場させる（1体目の登場時効果で選択待ちになっても2体目の誘発を失わない）
+        let _ = engine.resolve_character_enter_field_with_source("p1", "ai", "B01016", models::CardOrientation::SLEEP, Some(0), "MAIN");
+        let _ = engine.resolve_character_enter_field_with_source("p1", "ayumi", "B01011", models::CardOrientation::ACTIVE, Some(0), "MAIN");
+        assert_eq!(engine.pending_ally_play.len(), 2, "連続登場した2体分の登場時誘発待ちが保持されること");
+    }
+
+    #[test]
     fn test_case_attack_guard_then_cutin_both_sides_and_case_resolve() {
         let mut catalog = load_test_catalog();
         catalog.definitions.insert("T_AP4000_BLUE".to_string(), models::CardDefinition {

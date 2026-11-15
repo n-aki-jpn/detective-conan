@@ -126,7 +126,7 @@ pub struct MatchEngine {
     pub next_opp_evidence_remove_triggers: Vec<(String, String, String, String)>,
     pub action_hirameki_blocked_player: Option<String>,
     pub pending_hint_trigger: Option<(String, i32, Vec<String>)>,
-    pub pending_ally_play: Option<(String, String, String, CardOrientation, Option<i32>, bool)>,
+    pub pending_ally_play: Vec<(String, String, String, CardOrientation, Option<i32>, bool)>,
     pub pending_clause_queue: Vec<PendingClauseTask>,
     pub pending_enter_field_queue: Vec<(String, String, String, CardOrientation, Option<i32>, String)>,
     pub pending_trigger_order_tasks: Vec<PendingClauseTask>,
@@ -197,7 +197,7 @@ impl MatchEngine {
             next_opp_evidence_remove_triggers: vec![],
             action_hirameki_blocked_player: None,
             pending_hint_trigger: None,
-            pending_ally_play: None,
+            pending_ally_play: Vec::new(),
             pending_clause_queue: vec![],
             pending_enter_field_queue: vec![],
             pending_trigger_order_tasks: vec![],
@@ -1173,7 +1173,7 @@ impl MatchEngine {
         self.self_entered_field_players_this_turn.clear();
         self.action_hirameki_blocked_player = None;
         self.pending_hint_trigger = None;
-        self.pending_ally_play = None;
+        self.pending_ally_play.clear();
 
         for ps in self.players.values_mut() {
             for c in &mut ps.field {
@@ -6537,7 +6537,7 @@ impl MatchEngine {
         *entry += 1;
         let is_first = *entry == 1;
 
-        self.pending_ally_play = Some((
+        self.pending_ally_play.push((
             player_id.to_string(),
             actor_id.to_string(),
             definition_id.to_string(),
@@ -6560,13 +6560,15 @@ impl MatchEngine {
     }
 
     fn try_fire_pending_ally_play(&mut self, resume_context: &str) -> bool {
-        if self.pending_decision.is_some() {
-            return false;
+        // 複数のキャラが連続で登場した場合（五人囃子など）、登場順にすべての「キャラ登場時」誘発を処理する
+        while !self.pending_decision.is_some() && !self.pending_ally_play.is_empty() {
+            let (pid, inst_id, def_id, ori, src_lv, is_first) = self.pending_ally_play.remove(0);
+            self.debug_log(format!("[DEBUG][ALLY_PLAY] fire trigger for entered {}({}) remaining_queue={}", def_id, inst_id, self.pending_ally_play.len()));
+            if self.trigger_on_ally_play(&pid, &inst_id, &def_id, ori, src_lv, is_first, resume_context) {
+                return true;
+            }
         }
-        let Some((pid, inst_id, def_id, ori, src_lv, is_first)) = self.pending_ally_play.take() else {
-            return false;
-        };
-        self.trigger_on_ally_play(&pid, &inst_id, &def_id, ori, src_lv, is_first, resume_context)
+        false
     }
 
     fn try_fire_pending_hint_trigger(&mut self, player_id: &str, after_hint_level: Option<i32>) -> bool {
