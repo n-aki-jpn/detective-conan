@@ -187,13 +187,41 @@ fn send_logs_to_gas_webhook(rows: Vec<Value>) {
                         })
                     })
                     .collect();
+                let p1_file = self.engine.players.get("player1").map(|p| p.effective_file_count()).unwrap_or(0);
+                let p2_file = self.engine.players.get("player2").map(|p| p.effective_file_count()).unwrap_or(0);
+                let format_field = |pid: &str| -> String {
+                    self.engine.players.get(pid).map(|ps| {
+                        ps.field.iter().map(|c| {
+                            let def = self.engine.catalog.get(&c.definition_id);
+                            let name = def.and_then(|d| d.names.first()).map(|s| s.as_str()).unwrap_or(&c.definition_id);
+                            let ap = self.engine.get_effective_ap(pid, c);
+                            let lp = def.map(|d| d.lp).unwrap_or(1);
+                            format!("{}(AP:{},LP:{})", name, ap, lp)
+                        }).collect::<Vec<_>>().join(",")
+                    }).unwrap_or_default()
+                };
+                let cpu_diff_str = if self.p2_is_cpu {
+                    format!("{:?}", self.cpu_agent.as_ref().map(|a| a.difficulty).unwrap_or_default()).to_lowercase()
+                } else {
+                    "none".to_string()
+                };
                 webhook_rows.push(json!({
                     "timestamp": ts,
                     "roomId": self.room_id,
                     "type": "MATCH",
                     "message": format!(
-                        "winner={} reason={:?} turn={} p1_ev={} p2_ev={} cpu={}",
-                        winner, self.engine.finish_reason, self.engine.turn, p1_ev, p2_ev, self.p2_is_cpu
+                        "winner={} reason={:?} turn={} p1_ev={} p2_ev={} p1_file={} p2_file={} cpu={} cpu_diff={} p1_field=[{}] p2_field=[{}]",
+                        winner,
+                        self.engine.finish_reason,
+                        self.engine.turn,
+                        p1_ev,
+                        p2_ev,
+                        p1_file,
+                        p2_file,
+                        self.p2_is_cpu,
+                        cpu_diff_str,
+                        format_field("player1"),
+                        format_field("player2")
                     ),
                 }));
                 Self::send_logs_to_gas_webhook(webhook_rows);
