@@ -657,6 +657,25 @@ impl MatchEngine {
                         }
                     }
                 }
+                for ep in &ps.extra_partners {
+                    if let Some(ep_def) = self.catalog.get(&ep.definition_id) {
+                        for clause in extract_clauses(&ep_def.description, TriggerKind::OnTurnEnd, ep_def.card_type) {
+                            if ep_def.card_type != CardType::PARTNER && !allows_partner_area(&clause) {
+                                continue;
+                            }
+                            if pid == current_turn_pid || clause.contains("相手のターン終了時") || clause.contains("自分か相手のターン終了時") {
+                                effects_to_trigger.push(EndTask {
+                                    pid: pid.clone(),
+                                    actor_id: ep.instance_id.clone(),
+                                    host_id: ep.instance_id.clone(),
+                                    def_id: ep.definition_id.clone(),
+                                    ori: ep.orientation,
+                                    clause,
+                                });
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -798,6 +817,9 @@ impl MatchEngine {
                         if p.zone == Zone::PARTNER {
                             list.push((p.instance_id.clone(), p.definition_id.clone(), p.orientation, true));
                         }
+                    }
+                    for ep in &ps.extra_partners {
+                        list.push((ep.instance_id.clone(), ep.definition_id.clone(), ep.orientation, true));
                     }
                     if let Some(ref cs) = ps.r#case {
                         list.push((cs.instance_id.clone(), cs.definition_id.clone(), cs.orientation, false));
@@ -1044,6 +1066,9 @@ impl MatchEngine {
                     list.push((p.instance_id.clone(), p.definition_id.clone(), p.orientation, true));
                 }
             }
+            for ep in &ps.extra_partners {
+                list.push((ep.instance_id.clone(), ep.definition_id.clone(), ep.orientation, true));
+            }
             if let Some(ref cs) = ps.r#case {
                 list.push((cs.instance_id.clone(), cs.definition_id.clone(), cs.orientation, false));
             }
@@ -1122,6 +1147,9 @@ impl MatchEngine {
                         if p.zone == Zone::PARTNER {
                             list.push((p.instance_id.clone(), p.definition_id.clone(), p.orientation, true));
                         }
+                    }
+                    for ep in &ps.extra_partners {
+                        list.push((ep.instance_id.clone(), ep.definition_id.clone(), ep.orientation, true));
                     }
                     if let Some(ref cs) = ps.r#case {
                         list.push((cs.instance_id.clone(), cs.definition_id.clone(), cs.orientation, false));
@@ -1298,7 +1326,7 @@ impl MatchEngine {
         }
         let opp_id = self.opponent_id_of(victim_id);
         if let Some(opp_ps) = self.players.get(&opp_id) {
-            for c in opp_ps.field.iter().chain(opp_ps.partner.iter()) {
+            for c in opp_ps.field.iter().chain(opp_ps.partner.iter()).chain(opp_ps.extra_partners.iter()) {
                 if let Some(def) = self.catalog.get(&c.definition_id) {
                     if def.description.contains("相手は【ヒラメキ】を発動できない") {
                         return true;
