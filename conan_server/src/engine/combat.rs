@@ -453,11 +453,22 @@ impl MatchEngine {
             } else {
                 val.get("guardCardId").and_then(|v| v.as_str()).map(|s| s.to_string())
             };
-            if guard_id.is_none() && self.attacker_forces_guard(&attacker_pid, &attacker_actor_id) {
+            if guard_id.is_none() {
+                // 1. 防御側のキャラに「必ずガードする」が有効なアクティブキャラがいる場合、強制的にそのキャラでガード
                 if let Some(forced_gid) = self.players.get(&defender_pid).and_then(|ps| {
-                    ps.field.iter().find(|c| c.orientation == CardOrientation::ACTIVE).map(|c| c.instance_id.clone())
+                    ps.field.iter()
+                        .find(|c| c.orientation == CardOrientation::ACTIVE && c.must_guard_this_turn)
+                        .map(|c| c.instance_id.clone())
                 }) {
                     guard_id = Some(forced_gid);
+                } 
+                // 2. 攻撃側の能力による強制ガード
+                else if self.attacker_forces_guard(&attacker_pid, &attacker_actor_id) {
+                    if let Some(forced_gid) = self.players.get(&defender_pid).and_then(|ps| {
+                        ps.field.iter().find(|c| c.orientation == CardOrientation::ACTIVE).map(|c| c.instance_id.clone())
+                    }) {
+                        guard_id = Some(forced_gid);
+                    }
                 }
             }
             if let Some(ref gid) = guard_id {
