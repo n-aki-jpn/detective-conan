@@ -292,9 +292,37 @@
       border-color: #f59e0b;
     }
 
-    .fixed-cards-col .card.PARTNER {
+    .fixed-cards-col .card.PARTNER,
+    .fixed-cards-col .card.EXTRA_PARTNER {
       width: 72px;
       height: 96px;
+    }
+
+    .extra-partners-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      background: rgba(245, 158, 11, 0.12);
+      border: 1.5px solid #f59e0b;
+      border-radius: 6px;
+      padding: 3px;
+      box-shadow: 0 0 10px rgba(245, 158, 11, 0.25);
+    }
+
+    .extra-partners-label {
+      font-size: 0.58rem;
+      font-weight: 800;
+      color: #fbbf24;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+      line-height: 1.1;
+    }
+
+    .extra-partners-cards {
+      display: flex;
+      gap: 4px;
+      align-items: center;
     }
 
     .card.CASE {
@@ -1275,7 +1303,8 @@
         width: 86px;
         height: 60px;
       }
-      .fixed-cards-col .card.PARTNER {
+      .fixed-cards-col .card.PARTNER,
+      .fixed-cards-col .card.EXTRA_PARTNER {
         width: 78px;
         height: 108px;
       }
@@ -2626,6 +2655,15 @@
               onClick: () => submitDecision({ type: 'DECLARE', actorId: cid })
             });
           }
+        } else if (zoneInfo.isMine && zoneInfo.zone === 'EXTRA_PARTNER') {
+          const decAct = actions.find(a => a.type === 'DECLARE' && (a.actors || []).some(ac => ac.actorId === cid));
+          if (decAct) {
+            cmds.push({
+              label: '⚡ パートナーエリア【宣言】能力を使う',
+              cssText: 'background:#8b5cf6; border-color:#a78bfa;',
+              onClick: () => submitDecision({ type: 'DECLARE', actorId: cid })
+            });
+          }
         } else if (zoneInfo.isMine && zoneInfo.zone === 'PARTNER') {
           if (actions.some(a => a.type === 'ASSIST')) {
             cmds.push({
@@ -2824,6 +2862,8 @@
       const cmds = getBoardCardCommands(card, zoneInfo, obs);
       if (cmds.length > 0) {
         openCardActionMenu(card, cmds, anchorRect);
+      } else if (zoneInfo && zoneInfo.zone === 'EXTRA_PARTNER') {
+        showCardModal(card);
       }
     }
 
@@ -3211,21 +3251,20 @@
           return;
         }
         box.style.display = 'flex';
+        box.className = 'extra-partners-wrap';
+        const lbl = document.createElement('div');
+        lbl.className = 'extra-partners-label';
+        lbl.innerText = '🌟 パートナーエリア(MR)';
+        box.appendChild(lbl);
+
+        const cardsRow = document.createElement('div');
+        cardsRow.className = 'extra-partners-cards';
         list.forEach(ep => {
-          const pill = document.createElement('button');
-          pill.className = 'btn btn-secondary';
-          pill.style.cssText = 'font-size:0.65rem; padding:2px 5px; line-height:1.2; text-align:left; border-color:#f59e0b; background:#1e293b;';
-          pill.innerText = `🤝 ${ep.name || ep.definitionId}`;
-          pill.onclick = () => {
-            const cmds = isMine ? getCardCommands(ep, { zone: 'PARTNER', isMine: true }) : [];
-            if (cmds.length > 0) {
-              openCardActionMenu(ep, cmds, pill.getBoundingClientRect());
-            } else {
-              showCardModal(ep);
-            }
-          };
-          box.appendChild(pill);
+          const cardEl = createCardEl(ep, false, false, { zone: 'EXTRA_PARTNER', isMine });
+          cardEl.classList.add('EXTRA_PARTNER');
+          cardsRow.appendChild(cardEl);
         });
+        box.appendChild(cardsRow);
       };
 
       // Field
