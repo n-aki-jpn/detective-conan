@@ -1150,6 +1150,7 @@ impl MatchEngine {
         c.rush_target = None;
         c.used_declare_this_turn = false;
         c.can_attack_active = false;
+        c.must_guard_this_turn = false;
         c.has_bullet = false;
         c.base_ap_override = None;
         c.temp_level_delta = 0;
@@ -2603,6 +2604,17 @@ impl MatchEngine {
                     if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == tid) {
                         c.has_bullet = true;
                         self.log(format!("💥 [{}] の効果で [{}] に〚ブレット〛を与えました！", actor_name, target_name));
+                    }
+                }
+            }
+            "GIVE_MUST_GUARD" => {
+                for pid in [opp_id.as_str(), player_id] {
+                    if let Some(ps) = self.players.get_mut(pid) {
+                        if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == tid) {
+                            c.must_guard_this_turn = true;
+                            self.log(format!("🛡️ [{}] の効果で [{}] はガードできる場合、必ずガードするようになりました！", actor_name, target_name));
+                            break;
+                        }
                     }
                 }
             }
@@ -4163,7 +4175,7 @@ impl MatchEngine {
         let attacker_forces_guard = self.attacker_forces_guard(&attacker_pid, &attacker_actor_id);
         let is_case_attack = opp_ps.r#case.as_ref().map(|c| c.instance_id == contact_target_id).unwrap_or(false);
 
-        let guards: Vec<String> = if attacker_has_bullet {
+        let mut guards: Vec<String> = if attacker_has_bullet {
             vec![]
         } else {
             opp_ps.field.iter()
@@ -4171,7 +4183,16 @@ impl MatchEngine {
                 .map(|c| c.instance_id.clone())
                 .collect()
         };
-        let must_guard = attacker_forces_guard && !guards.is_empty();
+        // 「このキャラはガードできる場合、必ずガードする」を持つキャラがいる場合、そのキャラが必ずガードする
+        let forced_guards: Vec<String> = opp_ps.field.iter()
+            .filter(|c| c.must_guard_this_turn && guards.contains(&c.instance_id))
+            .map(|c| c.instance_id.clone())
+            .collect();
+        let char_forces_guard = !forced_guards.is_empty();
+        if char_forces_guard {
+            guards = forced_guards;
+        }
+        let must_guard = (attacker_forces_guard || char_forces_guard) && !guards.is_empty();
 
         let (cutins, disguises, disguise_target_id) = if !cutin_or_disguise_used && !is_case_attack {
             self.collect_cutin_and_disguise_options(defender_pid, &contact_target_id)
@@ -9251,6 +9272,7 @@ fn target_action_prompt_title(action: &TargetAction, filter: &TargetFilter) -> S
         TargetAction::ApDebuff(v) => format!("AP－{}する{}キャラを{}体選択してください", v, prefix, max_n),
         TargetAction::GiveRush(_) => format!("突撃/迅速を与える{}キャラを選択してください", prefix),
         TargetAction::GiveBullet => format!("〚ブレット〛を与える{}キャラを選択してください", prefix),
+        TargetAction::GiveMustGuard => format!("必ずガードさせる{}キャラを選択してください", prefix),
         TargetAction::GiveCanAttackActive => format!("アクティブ状態攻撃権を与える{}キャラを選択してください", prefix),
         TargetAction::SetBaseApZero => format!("元のAPを0にする{}キャラを選択してください", prefix),
         TargetAction::LevelDelta(d) => format!("レベル{}する{}キャラを選択してください", d, prefix),

@@ -5791,6 +5791,18 @@ mod tests {
     }
 
     #[test]
+    fn test_b05005_declare_grants_must_guard() {
+        let catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();
+        let desc = catalog.get("B05005").unwrap().description.clone();
+        let clauses = effects::extract_clauses(&desc, effects::TriggerKind::Declare, models::CardType::CHARACTER);
+        assert!(!clauses.is_empty());
+        let plan = effects::parse_effect_steps(&clauses[0], None, models::CardType::CHARACTER);
+        let ts = plan.target_step.as_ref().unwrap_or_else(|| panic!("target_step必須: {:?}", plan));
+        assert_eq!(ts.action, effects::TargetAction::GiveMustGuard);
+        assert_eq!(ts.filter.owner, effects::OwnerScope::OppOnly);
+    }
+
+    #[test]
     fn test_index_html_no_undefined_is_secret_in_card_slot() {
         let html = std::fs::read_to_string("../src/conan_engine/web/static/index.html")
             .expect("index.html must be readable");

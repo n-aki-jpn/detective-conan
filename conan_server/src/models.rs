@@ -112,6 +112,8 @@ pub struct CardInstance {
     #[serde(default)]
     pub can_attack_active: bool,
     #[serde(default)]
+    pub must_guard_this_turn: bool,
+    #[serde(default)]
     pub has_bullet: bool,
     #[serde(default)]
     pub base_ap_override: Option<i32>,
@@ -143,6 +145,7 @@ impl Default for CardInstance {
             used_declare_this_turn: false,
             set_cards: Vec::new(),
             can_attack_active: false,
+            must_guard_this_turn: false,
             has_bullet: false,
             base_ap_override: None,
             temp_level_delta: 0,

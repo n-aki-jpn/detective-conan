@@ -61,6 +61,7 @@ pub enum TargetAction {
     SetDeckTopFaceDown(usize),
     GiveBullet,
     GiveCanAttackActive,
+    GiveMustGuard,
     SetBaseApZero,
     LevelDelta(i32),
     ReviveSplitGonin,
@@ -102,6 +103,7 @@ impl TargetAction {
             TargetAction::SetDeckTopFaceDown(_) => "SET_DECK_TOP_FACE_DOWN",
             TargetAction::GiveBullet => "GIVE_BULLET",
             TargetAction::GiveCanAttackActive => "GIVE_CAN_ATTACK_ACTIVE",
+            TargetAction::GiveMustGuard => "GIVE_MUST_GUARD",
             TargetAction::SetBaseApZero => "SET_BASE_AP_ZERO",
             TargetAction::LevelDelta(_) => "LEVEL_DELTA",
             TargetAction::ReviveSplitGonin => "REVIVE_SPLIT_GONIN",
@@ -2494,6 +2496,10 @@ fn try_parse_conditional_sentence(
         return None;
     }
     let (cond_raw, then_raw) = sentence.split_once("場合、")?;
+    // 「...」内の「場合、」（付与される能力テキスト）は条件分岐として扱わない
+    if cond_raw.matches('「').count() > cond_raw.matches('」').count() {
+        return None;
+    }
     let cond = cond_raw.trim();
     if cond.contains("カードのレベル以下") {
         // B04063 のような修飾句ではなく条件文のみ捕捉
@@ -2988,6 +2994,9 @@ fn extract_bonuses_from_action(text: &str) -> Vec<TargetBonus> {
 }
 
 fn parse_target_action(text: &str) -> Option<TargetAction> {
+    if text.contains("ガードできる場合、必ずガードする") {
+        return Some(TargetAction::GiveMustGuard);
+    }
     // 「相手はそのカードを〜証拠として得る」と「手札から裏向きで証拠として得る」を区別
     if text.contains("相手はそのカードを表向きのまま証拠として得る")
         || text.contains("持ち主はそのカードを表向きで証拠として得る")
