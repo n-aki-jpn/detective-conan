@@ -1,0 +1,617 @@
+use crate::agent::RandomAgent;
+use crate::catalog::CardCatalog;
+use crate::engine::MatchEngine;
+use crate::models::{self, DeckDefinition, MatchPhase};
+use rand::Rng;
+use serde_json::{json, Value};
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+
+// ─── Room / Session Management ───────────────────────────────────────────────
+
+pub struct MatchRoom {
+    pub room_id: String,
+    pub engine: MatchEngine,
+    pub p2_is_cpu: bool,
+    pub cpu_agent: Option<RandomAgent>,
+    pub p1_deck: DeckDefinition,
+    pub p2_deck: Option<DeckDefinition>,
+    pub p1_connected: bool,
+    pub p2_connected: bool,
+    pub created_at: std::time::Instant,
+    pub match_logged: bool,
+}
+
+impl MatchRoom {
+    pub fn new(
+        room_id: &str,
+        catalog: CardCatalog,
+        p1_deck: DeckDefinition,
+        is_cpu: bool,
+        default_p2_deck: DeckDefinition,
+    ) -> Self {
+        let engine = MatchEngine::new(catalog.clone());
+        let cpu_agent = if is_cpu {
+            Some(RandomAgent::new("player2"))
+        } else {
+            None
+        };
+
+        let mut room = Self {
+            room_id: room_id.to_string(),
+            engine,
+            p2_is_cpu: is_cpu,
+            cpu_agent,
+            p1_deck: p1_deck.clone(),
+            p2_deck: if is_cpu {
+                Some(default_p2_deck.clone())
+            } else {
+                None
+            },
+            p1_connected: true,
+            p2_connected: is_cpu,
+            created_at: std::time::Instant::now(),
+            match_logged: false,
+        };
+
+        // 両プレイヤーの状態を初期化（クライアントでの観戦・表示用）
+        room.engine.add_player("player1", &p1_deck);
+        let p2_init_deck = if is_cpu {
+            default_p2_deck
+        } else {
+            p1_deck.clone()
+        };
+        room.engine.add_player("player2", &p2_init_deck);
+
+        if is_cpu {
+            room.engine.start_match();
+            room.process_cpu_if_needed();
+        } else {
+            // 対人オンライン部屋はP2参加（join_p2）まで待機フェーズ
+            room.engine.phase = MatchPhase::WAITING;
+            room.flush_logs();
+        }
+
+        room
+    }
+
+    pub fn join_p2(&mut self, catalog: &CardCatalog, p2_deck: DeckDefinition) {
+        self.flush_logs();
+
+        self.p2_deck = Some(p2_deck.clone());
+        self.p2_connected = true;
+        self.p2_is_cpu = false;
+        self.cpu_agent = None;
+
+        // P2参加と同時に、新鮮な両者デッキで試合開始！
+        let mut engine = MatchEngine::new(catalog.clone());
+        engine.add_player("player1", &self.p1_deck);
+        engine.add_player("player2", &p2_deck);
+        engine.start_match();
+        self.engine = engine;
+        self.match_logged = false;
+        self.flush_logs();
+    }
+
+    pub fn reset_match(&mut self, catalog: &CardCatalog) {
+        // リセット前の未出力ファイル/標準出力ログをフラッシュ（未完了試合は外部送信しない）
+        self.flush_logs();
+
+        let mut engine = MatchEngine::new(catalog.clone());
+        engine.add_player("player1", &self.p1_deck);
+        let p2_deck = self.p2_deck.as_ref().unwrap_or(&self.p1_deck);
+        engine.add_player("player2", p2_deck);
+        engine.start_match();
+        self.engine = engine;
+        self.match_logged = false;
+        self.process_cpu_if_needed();
+        self.flush_logs();
+    }
+
+    pub fn send_logs_to_gas_webhook(rows: Vec<Value>) {
+        if rows.is_empty() {
+            return;
+        }
+        let Ok(url) = std::env::var("GAS_LOG_WEBHOOK_URL") else {
+            return;
+        };
+        let url = url.trim().to_string();
+        if url.is_empty() {
+            return;
+        }
+        let row_count = rows.len();
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            handle.spawn(async move {
+                let client = reqwest::Client::builder()
+                    .timeout(std::time::Duration::from_secs(30))
+                    .build();
+                let Ok(client) = client else {
+                    eprintln!("⚠️ [GAS Webhook] HTTPクライアントの構築に失敗しました");
+                    return;
+                };
+                println!("📡 [GAS Webhook] 試合完了ログ ({}行) を送信中...", row_count);
+                let payload = json!({ "rows": rows });
+                match client.post(&url).json(&payload).send().await {
+                    Ok(resp) => {
+                        let status = resp.status();
+                        if status.is_success() {
+                            println!("✅ [GAS Webhook] 送信完了 (HTTP {})", status);
+                        } else {
+                            let body_txt = resp.text().await.unwrap_or_default();
+                            eprintln!(
+                                "⚠️ [GAS Webhook] HTTP {} 応答: {}",
+                                status,
+                                body_txt.chars().take(200).collect::<String>()
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("⚠️ [GAS Webhook] 送信失敗: {}", e);
+                        tracing::warn!("Failed to post logs to GAS webhook: {}", e);
+                    }
+                }
+            });
+        }
+    }
+
+    pub fn flush_logs(&mut self) {
+        use std::io::Write;
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+
+        if !self.engine.pending_file_logs.is_empty() {
+            let _ = std::fs::create_dir_all("logs");
+            let lines: Vec<String> = self.engine.pending_file_logs.drain(..).collect();
+
+            // 1. 標準出力へリアルタイム出力
+            for line in &lines {
+                println!("[{}][room:{}] {}", ts, self.room_id, line);
+            }
+            let _ = std::io::stdout().flush();
+
+            // 2. ローカルファイル logs/all_rooms.log へ追記
+            if let Ok(mut f) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("logs/all_rooms.log")
+            {
+                for line in &lines {
+                    let _ = writeln!(f, "[{}][room:{}] {}", ts, self.room_id, line);
+                }
+                let _ = f.flush();
+            }
+        }
+
+        // 3. 試合が完了したとき（winner_id 確定時）のみ matches.jsonl 記録と外部 GAS Webhook 送信を行う
+        if !self.match_logged {
+            if let Some(ref winner) = self.engine.winner_id {
+                self.match_logged = true;
+                let _ = std::fs::create_dir_all("logs");
+
+                let p1_ev = self
+                    .engine
+                    .players
+                    .get("player1")
+                    .map(|p| p.evidence.len())
+                    .unwrap_or(0);
+                let p2_ev = self
+                    .engine
+                    .players
+                    .get("player2")
+                    .map(|p| p.evidence.len())
+                    .unwrap_or(0);
+                let p1_file = self
+                    .engine
+                    .players
+                    .get("player1")
+                    .map(|p| p.effective_file_count())
+                    .unwrap_or(0);
+                let p2_file = self
+                    .engine
+                    .players
+                    .get("player2")
+                    .map(|p| p.effective_file_count())
+                    .unwrap_or(0);
+                let first_player = self
+                    .engine
+                    .player_order
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| "player1".to_string());
+
+                // カード定義IDを「ID:カード名(Lv.X)」に変換するヘルパー
+                let fmt_def = |def_id: &str| -> String {
+                    if let Some(d) = self.engine.catalog.get(def_id) {
+                        let name = d.names.first().map(|s| s.as_str()).unwrap_or(def_id);
+                        format!("{}:{}(Lv.{})", def_id, name, d.level)
+                    } else {
+                        def_id.to_string()
+                    }
+                };
+
+                // 1. デッキレシピの集計サマリーを作成するヘルパー
+                let build_deck_analytics = |deck: &DeckDefinition| -> Value {
+                    let mut level_curve: HashMap<i32, i32> = HashMap::new();
+                    let mut cards_map = serde_json::Map::new();
+                    for item in &deck.main_deck {
+                        cards_map.insert(fmt_def(&item.definition_id), json!(item.count));
+                        if let Some(d) = self.engine.catalog.get(&item.definition_id) {
+                            *level_curve.entry(d.level).or_insert(0) += item.count;
+                        }
+                    }
+                    json!({
+                        "deckId": deck.deck_id,
+                        "partner": fmt_def(&deck.partner_id),
+                        "case": fmt_def(&deck.case_id),
+                        "cards": cards_map,
+                        "levelCurve": level_curve,
+                    })
+                };
+
+                // 2. 試合終了時の各ゾーン（手札残り＝腐った札、現場、リムーブ、証拠、FILE）を集計するヘルパー
+                let build_zone_analytics = |pid: &str, deck: &DeckDefinition| -> Value {
+                    let Some(ps) = self.engine.players.get(pid) else {
+                        return json!({});
+                    };
+                    let to_list = |cards: &[models::CardInstance]| -> Vec<String> {
+                        cards.iter().map(|c| fmt_def(&c.definition_id)).collect()
+                    };
+
+                    // デッキ内にあったカードのうち、山札(deck)に残らず一度でも引いた・絡んだカードを算出
+                    let mut remaining_deck_counts: HashMap<String, i32> = HashMap::new();
+                    for c in &ps.deck {
+                        *remaining_deck_counts
+                            .entry(c.definition_id.clone())
+                            .or_insert(0) += 1;
+                    }
+                    let mut seen_cards: Vec<String> = Vec::new();
+                    for item in &deck.main_deck {
+                        let rem = remaining_deck_counts
+                            .get(&item.definition_id)
+                            .copied()
+                            .unwrap_or(0);
+                        let drawn_count = (item.count - rem).max(0);
+                        for _ in 0..drawn_count {
+                            seen_cards.push(fmt_def(&item.definition_id));
+                        }
+                    }
+
+                    json!({
+                        "field": to_list(&ps.field),
+                        "endHand": to_list(&ps.hand),       // 最後まで使えず手札に残ったカード（事故要因の特定用）
+                        "remove": to_list(&ps.remove),      // 使用済みイベント・リムーブされたカード
+                        "evidence": to_list(&ps.evidence),
+                        "file": to_list(&ps.file),
+                        "seenCards": seen_cards,            // この試合中に山札から離れた（引いた/めくった）全カード
+                    })
+                };
+
+                let p2_deck_ref = self.p2_deck.as_ref().unwrap_or(&self.p1_deck);
+                let p1_deck_info = build_deck_analytics(&self.p1_deck);
+                let p2_deck_info = build_deck_analytics(p2_deck_ref);
+                let p1_zones = build_zone_analytics("player1", &self.p1_deck);
+                let p2_zones = build_zone_analytics("player2", p2_deck_ref);
+
+                let cpu_diff_str = if self.p2_is_cpu {
+                    format!(
+                        "{:?}",
+                        self.cpu_agent
+                            .as_ref()
+                            .map(|a| a.difficulty)
+                            .unwrap_or_default()
+                    )
+                    .to_lowercase()
+                } else {
+                    "none".to_string()
+                };
+
+                // ローカルの logs/matches.jsonl に完全な構造化データを出力
+                let rec = json!({
+                    "timestamp": ts,
+                    "roomId": self.room_id,
+                    "p2IsCpu": self.p2_is_cpu,
+                    "cpuDifficulty": cpu_diff_str,
+                    "firstPlayer": first_player,
+                    "winner": winner,
+                    "finishReason": self.engine.finish_reason,
+                    "turn": self.engine.turn,
+                    "p1Evidence": p1_ev,
+                    "p2Evidence": p2_ev,
+                    "p1File": p1_file,
+                    "p2File": p2_file,
+                    "p1Deck": p1_deck_info,
+                    "p2Deck": p2_deck_info,
+                    "p1Zones": p1_zones,
+                    "p2Zones": p2_zones,
+                });
+                if let Ok(mut f) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open("logs/matches.jsonl")
+                {
+                    let _ = writeln!(f, "{}", rec);
+                    let _ = f.flush();
+                }
+
+                // 試合終了時にその試合の全ログと試合結果をまとめて GAS Webhook へ送信
+                let mut webhook_rows: Vec<Value> = self
+                    .engine
+                    .logs
+                    .iter()
+                    .map(|line| {
+                        json!({
+                            "timestamp": ts,
+                            "roomId": self.room_id,
+                            "type": "LOG",
+                            "message": line,
+                        })
+                    })
+                    .collect();
+
+                let format_field = |pid: &str| -> String {
+                    self.engine
+                        .players
+                        .get(pid)
+                        .map(|ps| {
+                            ps.field
+                                .iter()
+                                .map(|c| {
+                                    let def = self.engine.catalog.get(&c.definition_id);
+                                    let name = def
+                                        .and_then(|d| d.names.first())
+                                        .map(|s| s.as_str())
+                                        .unwrap_or(&c.definition_id);
+                                    let ap = self.engine.get_effective_ap(pid, c);
+                                    let lp = def.map(|d| d.lp).unwrap_or(1);
+                                    format!("{}:{}(AP:{},LP:{})", c.definition_id, name, ap, lp)
+                                })
+                                .collect::<Vec<_>>()
+                                .join(",")
+                        })
+                        .unwrap_or_default()
+                };
+
+                let format_hand = |pid: &str| -> String {
+                    self.engine
+                        .players
+                        .get(pid)
+                        .map(|ps| {
+                            ps.hand
+                                .iter()
+                                .map(|c| fmt_def(&c.definition_id))
+                                .collect::<Vec<_>>()
+                                .join(",")
+                        })
+                        .unwrap_or_default()
+                };
+
+                let format_deck_compact = |deck: &DeckDefinition| -> String {
+                    let main_str = deck
+                        .main_deck
+                        .iter()
+                        .map(|item| format!("{}x{}", item.definition_id, item.count))
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    format!("P:{}/C:{}/M:[{}]", deck.partner_id, deck.case_id, main_str)
+                };
+
+                let match_summary_msg = format!(
+                    "winner={} first={} reason={:?} turn={} p1_ev={} p2_ev={} p1_file={} p2_file={} cpu={} cpu_diff={} p1_field=[{}] p2_field=[{}] p1_hand=[{}] p2_hand=[{}] p1_deck={} p2_deck={}",
+                    winner,
+                    first_player,
+                    self.engine.finish_reason,
+                    self.engine.turn,
+                    p1_ev,
+                    p2_ev,
+                    p1_file,
+                    p2_file,
+                    self.p2_is_cpu,
+                    cpu_diff_str,
+                    format_field("player1"),
+                    format_field("player2"),
+                    format_hand("player1"),
+                    format_hand("player2"),
+                    format_deck_compact(&self.p1_deck),
+                    format_deck_compact(p2_deck_ref)
+                );
+
+                // 標準出力にも試合完了サマリーを出力
+                println!("[{}][room:{}][MATCH] {}", ts, self.room_id, match_summary_msg);
+                let _ = std::io::stdout().flush();
+
+                // 既存の MATCH 行に p1_hand, p2_hand, p1_deck, p2_deck を追加
+                webhook_rows.push(json!({
+                    "timestamp": ts,
+                    "roomId": self.room_id,
+                    "type": "MATCH",
+                    "message": match_summary_msg,
+                }));
+                Self::send_logs_to_gas_webhook(webhook_rows);
+            }
+        }
+    }
+
+    pub fn process_cpu_if_needed(&mut self) {
+        let max_steps = 50;
+        let mut steps = 0;
+        loop {
+            if steps >= max_steps || !self.p2_is_cpu {
+                break;
+            }
+            match &self.engine.pending_decision {
+                Some(dec) => {
+                    if dec.get("playerId").and_then(|v| v.as_str()) != Some("player2") {
+                        break;
+                    }
+                    let ans = match &self.cpu_agent {
+                        Some(agent) => agent.choose_action_with_engine(&self.engine, dec),
+                        None => break,
+                    };
+                    if self.engine.submit_decision("player2", &ans).is_err() {
+                        break;
+                    }
+                }
+                None => break,
+            }
+            steps += 1;
+        }
+        self.flush_logs();
+    }
+}
+
+// ─── Match Manager ────────────────────────────────────────────────────────────
+
+pub struct MatchManager {
+    pub deck_path: PathBuf,
+    pub decks_dir: PathBuf,
+    pub catalog: CardCatalog,
+    pub deck_def: DeckDefinition,
+    pub rooms: HashMap<String, MatchRoom>,
+}
+
+pub fn sanitize_deck(
+    sent_deck: Option<DeckDefinition>,
+    fallback_deck: &DeckDefinition,
+) -> DeckDefinition {
+    if let Some(d) = sent_deck {
+        let count: i32 = d.main_deck.iter().map(|item| item.count).sum();
+        if count == 40 && !d.partner_id.is_empty() && !d.case_id.is_empty() {
+            return d;
+        }
+    }
+    fallback_deck.clone()
+}
+
+pub fn load_deck_from_dir(decks_dir: &Path, id: &str) -> Option<DeckDefinition> {
+    let safe_id: String = id
+        .chars()
+        .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
+        .collect();
+    if safe_id.is_empty() {
+        return None;
+    }
+    let target = decks_dir.join(format!("{}.json", safe_id));
+    let content = std::fs::read_to_string(&target).ok()?;
+    serde_json::from_str::<DeckDefinition>(&content).ok()
+}
+
+impl MatchManager {
+    pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
+        let catalog_path = PathBuf::from("data/dummy/cards.json");
+        let deck_path = PathBuf::from("data/dummy/deck.json");
+        let decks_dir = PathBuf::from("data/dummy/decks");
+
+        if !decks_dir.exists() {
+            let _ = std::fs::create_dir_all(&decks_dir);
+        }
+
+        let catalog = CardCatalog::load_from_json(&catalog_path)?;
+        let deck_def = Self::load_deck(&deck_path)?;
+
+        let mut mgr = MatchManager {
+            deck_path,
+            decks_dir,
+            catalog: catalog.clone(),
+            deck_def: deck_def.clone(),
+            rooms: HashMap::new(),
+        };
+
+        // Create initial default local room
+        let default_room =
+            MatchRoom::new("default", catalog, deck_def.clone(), true, deck_def);
+        mgr.rooms.insert("default".to_string(), default_room);
+
+        Ok(mgr)
+    }
+
+    pub fn load_deck(path: &PathBuf) -> Result<DeckDefinition, Box<dyn std::error::Error>> {
+        let content = std::fs::read_to_string(path)?;
+        let deck: DeckDefinition = serde_json::from_str(&content)?;
+        Ok(deck)
+    }
+
+    pub fn save_deck(&mut self, new_def: DeckDefinition) -> Result<(), String> {
+        // クライアント側（localStorage）保存に移行したため、サーバー側ファイルには書き込まずメモリのみ保持
+        self.deck_def = new_def;
+        Ok(())
+    }
+
+    pub fn list_decks(&self) -> Vec<Value> {
+        let mut list = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(&self.decks_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                    if let Ok(content) = std::fs::read_to_string(&path) {
+                        if let Ok(val) = serde_json::from_str::<Value>(&content) {
+                            let file_stem = path
+                                .file_stem()
+                                .and_then(|s| s.to_str())
+                                .unwrap_or("")
+                                .to_string();
+                            let deck_name = val
+                                .get("deckName")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or(&file_stem)
+                                .to_string();
+                            let partner_id = val
+                                .get("partnerId")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string();
+                            let case_id = val
+                                .get("caseId")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string();
+                            let total_cards: i64 = val
+                                .get("mainDeck")
+                                .and_then(|v| v.as_array())
+                                .map(|arr| {
+                                    arr.iter()
+                                        .filter_map(|item| {
+                                            item.get("count").and_then(|c| c.as_i64())
+                                        })
+                                        .sum()
+                                })
+                                .unwrap_or(0);
+
+                            list.push(json!({
+                                "fileId": file_stem,
+                                "deckId": val.get("deckId").and_then(|v| v.as_str()).unwrap_or(&file_stem),
+                                "deckName": deck_name,
+                                "partnerId": partner_id,
+                                "caseId": case_id,
+                                "totalCards": total_cards,
+                                "isActive": self.deck_def.deck_id.as_deref() == val.get("deckId").and_then(|v| v.as_str())
+                            }));
+                        }
+                    }
+                }
+            }
+        }
+        list
+    }
+
+    pub fn create_room(&mut self, is_cpu: bool, p1_deck: Option<DeckDefinition>) -> String {
+        let mut rng = rand::thread_rng();
+        let code: u32 = rng.gen_range(1000..9999);
+        let room_id = format!("{}", code);
+
+        let deck = sanitize_deck(p1_deck, &self.deck_def);
+        let room = MatchRoom::new(
+            &room_id,
+            self.catalog.clone(),
+            deck,
+            is_cpu,
+            self.deck_def.clone(),
+        );
+        self.rooms.insert(room_id.clone(), room);
+        room_id
+    }
+}
+
+pub type SharedState = Arc<Mutex<MatchManager>>;
