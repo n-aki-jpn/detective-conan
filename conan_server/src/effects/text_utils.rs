@@ -27,6 +27,22 @@ pub fn strip_parens(input: &str) -> String {
     out
 }
 
+/// カギ括弧 `「...」` で囲まれた付与能力テキスト等を除去する（トリガー種別判定での誤爆防止）
+pub fn strip_quotes(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut depth = 0usize;
+    for ch in input.chars() {
+        if ch == '「' {
+            depth += 1;
+        } else if ch == '」' {
+            depth = depth.saturating_sub(1);
+        } else if depth == 0 {
+            out.push(ch);
+        }
+    }
+    out
+}
+
 /// 説明文を改行単位の能力句（clause）に分解し、指定トリガーに該当するものだけを返す
 pub fn extract_clauses(description: &str, trigger: TriggerKind, card_type: CardType) -> Vec<String> {
     let lines: Vec<String> = description
@@ -46,10 +62,11 @@ pub fn extract_clauses(description: &str, trigger: TriggerKind, card_type: CardT
 
 pub fn line_matches_trigger(line: &str, trigger: TriggerKind, card_type: CardType) -> bool {
     let clean = strip_parens(line);
+    let unquoted = strip_quotes(&clean);
     match trigger {
         TriggerKind::OnPlay => {
             if card_type == CardType::EVENT {
-                let t = clean.trim_start();
+                let t = unquoted.trim_start();
                 // イベント使用時：ヒラメキ・カットイン・相手ターン中効果・セット中継続効果・宣言等は除外
                 !t.starts_with("【ヒラメキ】")
                     && !t.starts_with("【カットイン】")
@@ -63,7 +80,7 @@ pub fn line_matches_trigger(line: &str, trigger: TriggerKind, card_type: CardTyp
                     && !(t.starts_with("【解決編】【自分ターン中】")
                         && t.contains("手札にあるこのイベントはレベル"))
             } else {
-                line.contains("【登場時】")
+                unquoted.contains("【登場時】")
             }
         }
         TriggerKind::Declare => {
@@ -71,58 +88,71 @@ pub fn line_matches_trigger(line: &str, trigger: TriggerKind, card_type: CardTyp
         }
         TriggerKind::Cutin => line.trim_start().starts_with("【カットイン】"),
         TriggerKind::Hirameki => line.trim_start().starts_with("【ヒラメキ】"),
-        TriggerKind::DisguiseCond => line.contains("【変装】"),
-        TriggerKind::OnDisguise => line.contains("【変装時】"),
+        TriggerKind::DisguiseCond => unquoted.contains("【変装】"),
+        TriggerKind::OnDisguise => unquoted.contains("【変装時】"),
         TriggerKind::OnRemove => {
-            line.contains("【現場リムーブ時】")
-                || clean.contains("自分の現場にいるこのキャラが自分の能力や効果によってリムーブされたとき")
+            !extract_leading_bracket_tags(line).iter().any(|t| *t == "宣言")
+                && (unquoted.contains("【現場リムーブ時】")
+                    || unquoted.contains("自分の現場にいるこのキャラが自分の能力や効果によってリムーブされたとき"))
         }
         TriggerKind::OnCharRemoved => {
-            !line.contains("【登場時】")
-                && !line.contains("【宣言】")
-                && !line.contains("【カットイン】")
-                && !line.contains("【ヒラメキ】")
-                && !line.contains("【現場リムーブ時】")
-                && !clean.starts_with("このイベントがセットされている")
-                && !clean.contains("自分の現場にいるこのキャラが自分の能力や効果によってリムーブされたとき")
-                && !clean.contains("コンタクトによってリムーブされたとき")
-                && !clean.contains("証拠がリムーブされたとき")
-                && clean.contains("キャラ")
-                && clean.contains("リムーブされたとき")
+            !unquoted.contains("【登場時】")
+                && !unquoted.contains("【宣言】")
+                && !unquoted.contains("【カットイン】")
+                && !unquoted.contains("【ヒラメキ】")
+                && !unquoted.contains("【現場リムーブ時】")
+                && !unquoted.starts_with("このイベントがセットされている")
+                && !unquoted.contains("自分の現場にいるこのキャラが自分の能力や効果によってリムーブされたとき")
+                && !unquoted.contains("コンタクトによってリムーブされたとき")
+                && !unquoted.contains("証拠がリムーブされたとき")
+                && unquoted.contains("キャラ")
+                && unquoted.contains("リムーブされたとき")
         }
         TriggerKind::OnTurnEnd => {
-            // 「ターン終了時まで〜」という継続期間表記はトリガーではない
-            clean.contains("ターン終了時、")
-                || clean.contains("自分のターン終了時、")
-                || clean.contains("相手のターン終了時、")
+            // 「ターン終了時まで〜」という継続期間表記や付与テキスト内の「ターン終了時、」はトリガーではない
+            !unquoted.contains("【登場時】")
+                && !unquoted.contains("【宣言】")
+                && (unquoted.contains("ターン終了時、")
+                    || unquoted.contains("自分のターン終了時、")
+                    || unquoted.contains("相手のターン終了時、"))
         }
         TriggerKind::OnAction => {
-            !clean.starts_with("このイベントがセットされている")
-                && !clean.contains("アクション［事件］によって証拠を得たとき")
-                && !clean.contains("アクションによって証拠を得たとき")
-                && !clean.contains("ガードされたとき")
-                && !clean.contains("ガードしたとき")
-                && (clean.contains("アクションしたとき")
-                    || clean.contains("アクション［キャラ］したとき")
-                    || clean.contains("アクション［事件］したとき")
-                    || clean.contains("推理したとき")
-                    || clean.contains("推理かアクションしたとき"))
+            !unquoted.starts_with("このイベントがセットされている")
+                && !unquoted.contains("【登場時】")
+                && !unquoted.contains("【宣言】")
+                && !unquoted.contains("アクション［事件］によって証拠を得たとき")
+                && !unquoted.contains("アクションによって証拠を得たとき")
+                && !unquoted.contains("ガードされたとき")
+                && !unquoted.contains("ガードしたとき")
+                && (unquoted.contains("アクションしたとき")
+                    || unquoted.contains("アクション［キャラ］したとき")
+                    || unquoted.contains("アクション［事件］したとき")
+                    || unquoted.contains("推理したとき")
+                    || unquoted.contains("推理かアクションしたとき"))
         }
         TriggerKind::OnContact => {
-            clean.contains("コンタクトしたとき") || clean.contains("コンタクトされたとき")
+            !unquoted.contains("【登場時】")
+                && !unquoted.contains("【宣言】")
+                && (unquoted.contains("コンタクトしたとき") || unquoted.contains("コンタクトされたとき"))
         }
         TriggerKind::OnContactWin => {
-            clean.contains("コンタクトで勝利したとき")
-                || clean.contains("コンタクトによってリムーブされたとき")
+            !unquoted.contains("【登場時】")
+                && !unquoted.contains("【宣言】")
+                && (unquoted.contains("コンタクトで勝利したとき")
+                    || unquoted.contains("コンタクトによってリムーブされたとき"))
         }
         TriggerKind::OnHintUse => {
-            clean.contains("ネクストヒントで") && clean.contains("を使用したとき")
+            !unquoted.contains("【登場時】")
+                && !unquoted.contains("【宣言】")
+                && unquoted.contains("ネクストヒントで")
+                && unquoted.contains("を使用したとき")
         }
         TriggerKind::OnAllyPlay => {
-            !line.contains("【登場時】")
-                && !line.contains("【現場リムーブ時】")
-                && !clean.starts_with("このイベントがセットされている")
-                && (line.contains("【疾風】") || clean.contains("登場したとき"))
+            !unquoted.contains("【登場時】")
+                && !unquoted.contains("【宣言】")
+                && !unquoted.contains("【現場リムーブ時】")
+                && !unquoted.starts_with("このイベントがセットされている")
+                && (unquoted.contains("【疾風】") || unquoted.contains("登場したとき"))
         }
         TriggerKind::Passive => {
             !line.contains("【登場時】")
