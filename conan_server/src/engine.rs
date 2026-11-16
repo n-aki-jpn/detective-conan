@@ -108,6 +108,8 @@ pub struct MatchEngine {
     pub turn_hint_blocked_players: HashSet<String>,
     pub turn_cutin_blocked_players: HashSet<String>,
     pub turn_event_blocked_players: HashSet<String>,
+    /// 「このターン中、自分は〚カード名［X］〛を使用できず、登場させられない」によるターン内BAN（player_id -> カード名一覧）
+    pub turn_name_bans: HashMap<String, Vec<String>>,
     pub refreshed_players: HashSet<String>,
     pub self_entered_field_players_this_turn: HashSet<String>,
     pub acted_this_turn_ids: HashSet<String>,
@@ -179,6 +181,7 @@ impl MatchEngine {
             turn_hint_blocked_players: HashSet::new(),
             turn_cutin_blocked_players: HashSet::new(),
             turn_event_blocked_players: HashSet::new(),
+            turn_name_bans: HashMap::new(),
             refreshed_players: HashSet::new(),
             self_entered_field_players_this_turn: HashSet::new(),
             acted_this_turn_ids: HashSet::new(),
@@ -1172,6 +1175,7 @@ impl MatchEngine {
         self.turn_hint_blocked_players.clear();
         self.turn_cutin_blocked_players.clear();
         self.turn_event_blocked_players.clear();
+        self.turn_name_bans.clear();
         self.self_entered_field_players_this_turn.clear();
         self.action_hirameki_blocked_player = None;
         self.pending_hint_trigger = None;
@@ -1427,6 +1431,10 @@ impl MatchEngine {
             if can_normal_play {
                 for c in &ps.hand {
                     if let Some(c_def) = self.catalog.get(&c.definition_id) {
+                        // ターン内・カード名BAN（B06103 ジン等）: 使用・登場を禁止
+                        if self.is_name_banned_this_turn(player_id, c, c_def) {
+                            continue;
+                        }
                         let card_colors = normalize_color_set(&c_def.colors);
                         let color_ok = card_colors.is_empty() || case_colors.is_empty() || card_colors.is_subset(&case_colors);
                         let eff_lv = if c_def.card_type == CardType::EVENT {
@@ -1719,6 +1727,10 @@ impl MatchEngine {
         }
         for hc in &ps.hand {
             if let Some(h_def) = self.catalog.get(&hc.definition_id) {
+                // ターン内・カード名BAN（B06103 ジン等）: 手札からの使用を禁止
+                if self.is_name_banned_this_turn(player_id, hc, h_def) {
+                    continue;
+                }
                 if (h_def.card_type == CardType::EVENT
                     || (h_def.card_type == CardType::CHARACTER
                         && h_def.description.contains("この能力はこのカードが手札にあり")))
@@ -1787,6 +1799,26 @@ impl MatchEngine {
                 let mut played_def_id = None;
                 let mut played_inst_id = None;
                 let mut is_event = false;
+                // ターン内・カード名BAN（B06103 ジン等）の防御的再チェック
+                {
+                    let (ban_def_id, banned) = {
+                        let c_opt = self
+                            .players
+                            .get(player_id)
+                            .and_then(|ps| ps.hand.iter().find(|c| c.instance_id == card_id));
+                        let did = c_opt.map(|c| c.definition_id.clone()).unwrap_or_default();
+                        let banned = match (c_opt, did.as_str()) {
+                            (Some(c), d) => self.is_name_banned_this_turn(player_id, c, self.catalog.get(d).unwrap_or_else(|| panic!("catalog missing {d}"))),
+                            _ => false,
+                        };
+                        (did, banned)
+                    };
+                    if banned {
+                        self.log(format!("🚫 {} はこのターン中、〚カード名［{}］〛を使用・登場させられません", player_id, self.card_name_by_def(&ban_def_id)));
+                        self.prompt_main_action(player_id);
+                        return;
+                    }
+                }
                 if let Some(ps) = self.players.get_mut(player_id) {
                     if let Some(idx) = ps.hand.iter().position(|c| c.instance_id == card_id) {
                         let mut card = ps.hand.remove(idx);
@@ -1850,6 +1882,10 @@ impl MatchEngine {
 
                     for c in &ps.hand {
                         if let Some(c_def) = self.catalog.get(&c.definition_id) {
+                            // ターン内・カード名BAN（B06103 ジン等）: 使用・登場を禁止
+                            if self.is_name_banned_this_turn(player_id, c, c_def) {
+                                continue;
+                            }
                             let card_colors = normalize_color_set(&c_def.colors);
                             let color_ok = card_colors.is_empty() || case_colors.is_empty() || card_colors.is_subset(&case_colors);
                             let slot_ok = true;
@@ -2680,6 +2716,25 @@ impl MatchEngine {
                 } else {
                     CardOrientation::ACTIVE
                 };
+                // ターン内・カード名BAN（B06103 ジン等）の防御的再チェック（手札からの登場時）
+                if effect_type == "PLAY_FROM_HAND" || target_zone == "HAND" {
+                    let (ban_def_id, banned) = {
+                        let c_opt = self
+                            .players
+                            .get(player_id)
+                            .and_then(|ps| ps.hand.iter().find(|c| c.instance_id == tid));
+                        let did = c_opt.map(|c| c.definition_id.clone()).unwrap_or_default();
+                        let banned = match (c_opt, did.as_str()) {
+                            (Some(c), d) => self.is_name_banned_this_turn(player_id, c, self.catalog.get(d).unwrap_or_else(|| panic!("catalog missing {d}"))),
+                            _ => false,
+                        };
+                        (did, banned)
+                    };
+                    if banned {
+                        self.log(format!("🚫 {} はこのターン中、〚カード名［{}］〛を使用・登場させられません", player_id, self.card_name_by_def(&ban_def_id)));
+                        return;
+                    }
+                }
                 if let Some(ps) = self.players.get_mut(player_id) {
                     {
                         let src_vec = if effect_type == "PLAY_FROM_HAND" || target_zone == "HAND" {
@@ -4416,6 +4471,26 @@ impl MatchEngine {
         let mut is_event = false;
         if let Some(card_id) = val.get("cardId").and_then(|v| v.as_str()) {
             let turn = self.turn;
+            // ターン内・カード名BAN（B06103 ジン等）の防御的再チェック
+            {
+                let (ban_def_id, banned) = {
+                    let c_opt = self
+                        .players
+                        .get(player_id)
+                        .and_then(|ps| ps.hand.iter().find(|c| c.instance_id == card_id));
+                    let did = c_opt.map(|c| c.definition_id.clone()).unwrap_or_default();
+                    let banned = match (c_opt, did.as_str()) {
+                        (Some(c), d) => self.is_name_banned_this_turn(player_id, c, self.catalog.get(d).unwrap_or_else(|| panic!("catalog missing {d}"))),
+                        _ => false,
+                    };
+                    (did, banned)
+                };
+                if banned {
+                    self.log(format!("🚫 {} はこのターン中、〚カード名［{}］〛を使用・登場させられません", player_id, self.card_name_by_def(&ban_def_id)));
+                    self.prompt_main_action(player_id);
+                    return;
+                }
+            }
             if let Some(ps) = self.players.get_mut(player_id) {
                 if let Some(idx) = ps.hand.iter().position(|c| c.instance_id == card_id) {
                     let def_id_peek = ps.hand[idx].definition_id.clone();
@@ -6641,6 +6716,19 @@ impl MatchEngine {
         }
     }
 
+    /// ターン内・カード名BAN（B06103 ジン等）: そのプレイヤーが指定カードを使用・登場させられるか
+    fn is_name_banned_this_turn(
+        &self,
+        player_id: &str,
+        inst: &CardInstance,
+        def: &crate::models::CardDefinition,
+    ) -> bool {
+        let Some(bans) = self.turn_name_bans.get(player_id) else {
+            return false;
+        };
+        bans.iter().any(|b| has_instance_name_match(inst, def, b))
+    }
+
     // ─── Unified Effect Execution Helpers ────────────────────────────────────
 
     fn opponent_id_of(&self, player_id: &str) -> String {
@@ -7420,6 +7508,13 @@ impl MatchEngine {
                     self.turn_event_blocked_players.insert(player_id.to_string());
                     self.log(format!("🚫 [{}] の効果: このターン中、{} はイベントを使用できません", actor_name, player_id));
                 }
+                ImmediateOp::BanNameThisTurn(ref ban_name) => {
+                    self.turn_name_bans.entry(player_id.to_string()).or_default().push(ban_name.clone());
+                    self.log(format!(
+                        "🚫 [{}] の効果: このターン中、自分は〚カード名［{}］〛を使用できず、登場させることができません",
+                        actor_name, ban_name
+                    ));
+                }
                 ImmediateOp::DiscardHandTo(target_cnt) => {
                     let cur_len = self.players.get(player_id).map(|p| p.hand.len()).unwrap_or(0);
                     if cur_len > *target_cnt {
@@ -8164,6 +8259,10 @@ impl MatchEngine {
                 }
                 let def_opt = self.catalog.get(&c.definition_id);
                 if let Some(def) = def_opt {
+                    // ターン内・カード名BAN（B06103 ジン等）: 手札からの使用・登場候補から除外
+                    if filter.zone == TargetZone::Hand && self.is_name_banned_this_turn(&oid, c, def) {
+                        continue;
+                    }
                     let eff_lv = def.level + c.temp_level_delta;
                     if filter.min_level_from_prev {
                         if let Some(plv) = self.last_chosen_level {

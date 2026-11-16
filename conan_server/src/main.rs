@@ -5412,6 +5412,115 @@ mod tests {
         );
     }
 
+    /// B06103 ジンの「このターン中、自分は〚カード名［ジン］〛を使用できず、登場させることができない」の回帰テスト
+    /// 手札にジンが2枚ある状態で1枚目を宣言・登場させた後、2枚目は同じターンに宣言・プレイできなくなる
+    #[test]
+    fn test_b06103_gin_turn_name_ban_second_hand_jin() {
+        let catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();
+        let mut engine = engine::MatchEngine::new(catalog.clone());
+        engine.turn = 2;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        let mut cs = models::CardInstance {
+            instance_id: "case1".to_string(),
+            definition_id: "B01002".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::CASE,
+            ..Default::default()
+        };
+        cs.orientation = models::CardOrientation::ACTIVE;
+        ps1.r#case = Some(cs);
+        ps1.case_phase = models::CasePhase::RESOLUTION;
+
+        ps1.field.push(models::CardInstance {
+            instance_id: "blk_1".to_string(),
+            definition_id: "B11085".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::FIELD,
+            ..Default::default()
+        });
+        ps1.hand.push(models::CardInstance {
+            instance_id: "gin_h".to_string(),
+            definition_id: "B06103".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::HAND,
+            ..Default::default()
+        });
+        ps1.hand.push(models::CardInstance {
+            instance_id: "jin2_h".to_string(),
+            definition_id: "B06103".to_string(),
+            owner_id: "p1".to_string(),
+            zone: models::Zone::HAND,
+            ..Default::default()
+        });
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+        engine.prompt_main_action("p1");
+
+        // 宣言前に両方のジンがDECLARE候補に含まれること
+        let obs = build_player_observation(&engine, "p1");
+        let actions = obs["pendingDecision"]["options"]["actions"]
+            .as_array()
+            .expect("actions must exist");
+        let declare_action = actions.iter().find(|a| a["type"] == "DECLARE")
+            .expect("DECLARE action must exist");
+        let actors: Vec<&str> = declare_action["actors"].as_array().unwrap()
+            .iter().filter_map(|a| a["actorId"].as_str()).collect();
+        assert!(actors.contains(&"gin_h") && actors.contains(&"jin2_h"),
+            "宣言前に両方のジンがDECLARE候補になること: {:?}", actors);
+
+        // 1枚目のジンを宣言し、現場の黒キャラをリムーブして登場させる
+        let dec_id = obs["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": dec_id,
+            "revision": engine.revision,
+            "value": { "type": "DECLARE", "actorId": "gin_h" }
+        })).unwrap();
+
+        let obs2 = build_player_observation(&engine, "p1");
+        assert_eq!(obs2["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+        let ts_id = obs2["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": ts_id,
+            "revision": engine.revision,
+            "value": { "targetId": "blk_1" }
+        })).unwrap();
+
+        // 効果解決後、ターン内BANが登録されていること
+        assert!(
+            engine.turn_name_bans.get("p1").map(|b| b.iter().any(|n| n.contains("ジン"))).unwrap_or(false),
+            "ターン内・カード名BAN（ジン）がp1に登録されていること: {:?}", engine.turn_name_bans
+        );
+
+        // 2枚目のジン(jin2_h)は同一ターンにDECLARE候補・HAND_PLAY候補に含まれないこと
+        let obs3 = build_player_observation(&engine, "p1");
+        let actions3 = obs3["pendingDecision"]["options"]["actions"]
+            .as_array()
+            .expect("actions must exist after resolve");
+        let declare_after = actions3.iter().find(|a| a["type"] == "DECLARE");
+        let actors_after: Vec<&str> = declare_after
+            .and_then(|d| d["actors"].as_array())
+            .map(|arr| arr.iter().filter_map(|a| a["actorId"].as_str()).collect())
+            .unwrap_or_default();
+        assert!(
+            !actors_after.contains(&"jin2_h"),
+            "BAN中のjin2_hはDECLARE候補に含まれないこと: {:?}",
+            actors_after
+        );
+        let hand_play_after = actions3.iter().find(|a| a["type"] == "HAND_PLAY");
+        let hand_ids: Vec<&str> = hand_play_after
+            .and_then(|h| h["cardIds"].as_array())
+            .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
+            .unwrap_or_default();
+        assert!(
+            !hand_ids.contains(&"jin2_h"),
+            "BAN中のjin2_hはHAND_PLAY候補に含まれないこと: {:?}",
+            hand_ids
+        );
+    }
+
     #[test]
     fn test_b11007_ayumi_on_enter_rush() {
         let catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();

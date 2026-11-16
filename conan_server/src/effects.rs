@@ -398,6 +398,18 @@ pub enum ImmediateOp {
     EventModeChoice(EventModeChoice),
     ReviveSelfFromRemove { sleep: bool },
     PlaySelfFromHand { sleep: bool },
+    BanNameThisTurn(String),
+}
+
+/// 「このターン中、自分は〚カード名［X］〛を使用できず、登場させることができない。」（B06103 ジン等）
+/// によるターン内・カード名ベースの使用BAN名を抽出する
+pub fn extract_turn_name_ban(sentence: &str) -> Option<String> {
+    if !sentence.contains("このターン中")
+        || (!sentence.contains("使用できず") && !sentence.contains("使用できない"))
+    {
+        return None;
+    }
+    extract_bracketed_value(sentence, "〚カード名［", "］〛").map(|s| s.to_string())
 }
 
 /// 対象選択ステップ
@@ -1694,6 +1706,13 @@ pub fn parse_effect_steps(
             || sentence.starts_with("その後、公開したカードの残りを")
             || (sentence.starts_with("このイベントは") && sentence.contains("場合に使用できる"))
         {
+            continue;
+        }
+
+        // 「このターン中、自分は〚カード名［X］〛を使用できず、登場させることができない。」（B06103 ジン）
+        // ターン内・カード名ベースの使用BANを登録
+        if let Some(ban_name) = extract_turn_name_ban(sentence) {
+            push_op_or_extra(&mut plan, seen_target_or_search, ImmediateOp::BanNameThisTurn(ban_name));
             continue;
         }
 
