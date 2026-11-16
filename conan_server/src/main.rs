@@ -6248,5 +6248,273 @@ createCardEl(null, true, false, null);
         );
         assert_eq!(eng4.players["p1"].hand.len(), 2, "カードを2枚引いていること");
     }
+
+    #[test]
+    fn test_b05106_gin_and_vodka_and_cross_char_removed_triggers() {
+        let catalog = load_test_catalog();
+
+        // 1-A. B05106 ジン＆ウォッカ: 効果による相手キャラリムーブ時に誘発（AP8000以下のみ対象・ターン1）
+        {
+            let mut engine = MatchEngine::new(catalog.clone());
+            engine.turn = 4;
+            engine.turn_player_id = "p1".to_string();
+            engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+            let mut ps1 = engine::PlayerState::new("p1".to_string());
+            ps1.case_phase = models::CasePhase::RESOLUTION;
+            ps1.partner = Some(test_inst("p1_p", "B05104", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+            for i in 0..8 {
+                ps1.file.push(test_inst(&format!("f_{}", i), "B05104", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+            }
+            ps1.field.push(test_inst("gv_1", "B05106", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+            ps1.hand.push(test_inst("verm_h", "B11086", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+
+            let mut ps2 = engine::PlayerState::new("p2".to_string());
+            ps2.field.push(test_inst("opp_low", "B05055", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE)); // Lv6 AP4000
+            ps2.field.push(test_inst("opp_mid", "B05046", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE)); // Lv8 AP7000
+            let mut opp_high = test_inst("opp_high", "B05051", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE); // Lv8 AP8000 + 2000 = AP10000
+            opp_high.temp_ap_bonus = 2000;
+            ps2.field.push(opp_high);
+
+            engine.players.insert("p1".to_string(), ps1);
+            engine.players.insert("p2".to_string(), ps2);
+            engine.prompt_main_action("p1");
+
+            // ベルモット登場時効果で相手 Lv6 をリムーブ
+            let obs1 = build_player_observation(&engine, "p1");
+            engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": obs1["pendingDecision"]["decisionId"],
+                "revision": engine.revision,
+                "value": { "type": "HAND_PLAY", "cardId": "verm_h" }
+            })).unwrap();
+
+            let obs2 = build_player_observation(&engine, "p1");
+            assert_eq!(obs2["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+            engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": obs2["pendingDecision"]["decisionId"],
+                "revision": engine.revision,
+                "value": { "targetId": "opp_low" }
+            })).unwrap();
+
+            // 相手キャラリムーブ後、B05106 ジン＆ウォッカの誘発効果でAP8000以下選択が出ること
+            let obs3 = build_player_observation(&engine, "p1");
+            assert_eq!(
+                obs3["pendingDecision"]["kind"].as_str(),
+                Some("targetSelect"),
+                "B05106の『相手の現場にいるキャラがリムーブされたとき』効果が発動すること (logs: {:?})",
+                engine.logs
+            );
+            assert_eq!(obs3["pendingDecision"]["options"]["actorId"].as_str(), Some("gv_1"));
+            assert_eq!(obs3["pendingDecision"]["options"]["effectType"].as_str(), Some("REMOVE"));
+            let cands: Vec<&str> = obs3["pendingDecision"]["options"]["candidates"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|c| c["instanceId"].as_str())
+                .collect();
+            assert!(cands.contains(&"opp_mid"), "AP7000は対象に含まれること: {:?}", cands);
+            assert!(!cands.contains(&"opp_high"), "AP10000はAP8000以下対象から除外されること: {:?}", cands);
+
+            engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": obs3["pendingDecision"]["decisionId"],
+                "revision": engine.revision,
+                "value": { "targetId": "opp_mid" }
+            })).unwrap();
+
+            assert!(engine.players["p2"].remove.iter().any(|c| c.instance_id == "opp_low"));
+            assert!(engine.players["p2"].remove.iter().any(|c| c.instance_id == "opp_mid"));
+            let obs4 = build_player_observation(&engine, "p1");
+            assert_eq!(
+                obs4["pendingDecision"]["kind"].as_str(),
+                Some("mainAction"),
+                "ターン1制限によりB05106でopp_midをリムーブしても2重発動せずmainActionに戻ること (logs: {:?})",
+                engine.logs
+            );
+        }
+
+        // 1-B. B05106 ジン＆ウォッカ: バトルによる相手キャラリムーブ時も発動しmainActionで上書きされないこと
+        {
+            let mut engine = MatchEngine::new(catalog.clone());
+            engine.turn = 4;
+            engine.turn_player_id = "p1".to_string();
+            engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+            let mut ps1 = engine::PlayerState::new("p1".to_string());
+            ps1.case_phase = models::CasePhase::RESOLUTION;
+            ps1.partner = Some(test_inst("p1_p", "B05104", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+            ps1.field.push(test_inst("gv_1", "B05106", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+            ps1.field.push(test_inst("atk_1", "B11086", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+
+            let mut ps2 = engine::PlayerState::new("p2".to_string());
+            ps2.field.push(test_inst("opp_def", "B05055", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP)); // AP4000
+            ps2.field.push(test_inst("opp_2", "B05054", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE)); // AP1000（ガード可能）
+
+            engine.players.insert("p1".to_string(), ps1);
+            engine.players.insert("p2".to_string(), ps2);
+            engine.prompt_main_action("p1");
+
+            let obs1 = build_player_observation(&engine, "p1");
+            engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": obs1["pendingDecision"]["decisionId"],
+                "revision": engine.revision,
+                "value": { "type": "ACTION", "actorId": "atk_1", "targetId": "opp_def" }
+            })).unwrap();
+
+            // p2 ガードパス -> バトルで opp_def リムーブ -> B05106 誘発
+            let obs_g = build_player_observation(&engine, "p2");
+            assert_eq!(obs_g["pendingDecision"]["kind"].as_str(), Some("guard"));
+            engine.submit_decision("p2", &serde_json::json!({
+                "decisionId": obs_g["pendingDecision"]["decisionId"],
+                "revision": engine.revision,
+                "value": { "pass": true }
+            })).unwrap();
+
+            let obs_gv = build_player_observation(&engine, "p1");
+            assert_eq!(
+                obs_gv["pendingDecision"]["kind"].as_str(),
+                Some("targetSelect"),
+                "バトル勝利で相手リムーブ時もB05106のtargetSelectが上書きされず表示されること (logs: {:?})",
+                engine.logs
+            );
+            assert_eq!(obs_gv["pendingDecision"]["options"]["actorId"].as_str(), Some("gv_1"));
+            engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": obs_gv["pendingDecision"]["decisionId"],
+                "revision": engine.revision,
+                "value": { "targetId": "opp_2" }
+            })).unwrap();
+
+            assert!(engine.players["p2"].remove.iter().any(|c| c.instance_id == "opp_def"));
+            assert!(engine.players["p2"].remove.iter().any(|c| c.instance_id == "opp_2"));
+            assert_eq!(
+                build_player_observation(&engine, "p1")["pendingDecision"]["kind"].as_str(),
+                Some("mainAction")
+            );
+        }
+
+        // 2. 横展開: B05066 赤井秀一＆沖矢昴（相手キャラリムーブ時 Lv8以下リムーブ）
+        {
+            let mut engine = MatchEngine::new(catalog.clone());
+            engine.turn = 4;
+            engine.turn_player_id = "p1".to_string();
+            engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+            let mut ps1 = engine::PlayerState::new("p1".to_string());
+            ps1.partner = Some(test_inst("p1_p", "B05064", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE)); // 赤パートナー
+            ps1.field.push(test_inst("akai_sub", "B05066", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+
+            let mut ps2 = engine::PlayerState::new("p2".to_string());
+            ps2.field.push(test_inst("opp_1", "B05055", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP));
+            ps2.field.push(test_inst("opp_2", "B05046", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP)); // Lv8
+
+            engine.players.insert("p1".to_string(), ps1);
+            engine.players.insert("p2".to_string(), ps2);
+            engine.prompt_main_action("p1");
+
+            let obs1 = build_player_observation(&engine, "p1");
+            engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": obs1["pendingDecision"]["decisionId"],
+                "revision": engine.revision,
+                "value": { "type": "ACTION", "actorId": "akai_sub", "targetId": "opp_1" }
+            })).unwrap();
+            let obs_gv = build_player_observation(&engine, "p1");
+            assert_eq!(obs_gv["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+            assert_eq!(obs_gv["pendingDecision"]["options"]["actorId"].as_str(), Some("akai_sub"));
+        }
+
+        // 3. 横展開: B07096 ウォッカ（自ターン中 相手Lv4以下リムーブ時1ドロー）
+        {
+            let mut engine = MatchEngine::new(catalog.clone());
+            engine.turn = 4;
+            engine.turn_player_id = "p1".to_string();
+            engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+            let mut ps1 = engine::PlayerState::new("p1".to_string());
+            ps1.partner = Some(test_inst("p1_p", "B05104", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+            ps1.field.push(test_inst("vodka_4", "B07096", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+            ps1.deck.push(test_inst("d1", "B05104", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+            ps1.deck.push(test_inst("d2", "B05104", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+            let mut ps2 = engine::PlayerState::new("p2".to_string());
+            ps2.field.push(test_inst("opp_lv6", "B05055", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP)); // Lv6 -> 非誘発
+            ps2.field.push(test_inst("opp_lv4", "B11007", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP)); // Lv4 -> 誘発
+
+            engine.players.insert("p1".to_string(), ps1);
+            engine.players.insert("p2".to_string(), ps2);
+
+            engine.move_field_char_to_remove("p2", "opp_lv6", false, true);
+            engine.trigger_on_remove_char("p2", "opp_lv6", "B05055", false);
+            assert_eq!(engine.players["p1"].hand.len(), 0, "Lv6リムーブではB07096は誘発しないこと");
+
+            engine.move_field_char_to_remove("p2", "opp_lv4", false, true);
+            engine.trigger_on_remove_char("p2", "opp_lv4", "B11007", false);
+            assert_eq!(engine.players["p1"].hand.len(), 1, "Lv4以下リムーブでB07096が1枚ドローすること");
+        }
+
+        // 4. 横展開: B05059 白馬探（相手ターン中 スリープ状態の自身/探偵キャラリムーブ時1ドロー）
+        {
+            let mut engine = MatchEngine::new(catalog.clone());
+            engine.turn = 4;
+            engine.turn_player_id = "p2".to_string(); // 相手ターン中
+            engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+            let mut ps1 = engine::PlayerState::new("p1".to_string());
+            ps1.field.push(test_inst("hakuba", "B05059", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+            ps1.field.push(test_inst("det_act", "B05050", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+            ps1.field.push(test_inst("det_slp", "B05050", "p1", models::Zone::FIELD, models::CardOrientation::SLEEP));
+            ps1.deck.push(test_inst("d1", "B05059", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+            ps1.deck.push(test_inst("d2", "B05059", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+            engine.players.insert("p1".to_string(), ps1);
+            engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+
+            // アクティブな探偵リムーブでは不発
+            engine.move_field_char_to_remove("p1", "det_act", false, true);
+            engine.trigger_on_remove_char("p1", "det_act", "B05050", false);
+            assert_eq!(engine.players["p1"].hand.len(), 0);
+
+            // スリープ状態の探偵リムーブで1ドロー
+            engine.move_field_char_to_remove("p1", "det_slp", false, true);
+            engine.trigger_on_remove_char("p1", "det_slp", "B05050", false);
+            assert_eq!(engine.players["p1"].hand.len(), 1, "B05059がスリープ状態探偵リムーブで1枚ドローすること");
+        }
+
+        // 5. 横展開: B03112 ライ（自ターン中 自分能力・効果で黒キャラリムーブ時LP+1）
+        {
+            let mut engine = MatchEngine::new(catalog.clone());
+            engine.turn = 4;
+            engine.turn_player_id = "p1".to_string();
+            engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+            let mut ps1 = engine::PlayerState::new("p1".to_string());
+            ps1.field.push(test_inst("rye", "B03112", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+            ps1.field.push(test_inst("verm_d", "B11086", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+            ps1.field.push(test_inst("blk_sac", "B11085", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+            engine.players.insert("p1".to_string(), ps1);
+            engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+            engine.prompt_main_action("p1");
+
+            assert_eq!(engine.get_effective_lp("p1", &engine.players["p1"].field[0]), 1);
+
+            let obs1 = build_player_observation(&engine, "p1");
+            engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": obs1["pendingDecision"]["decisionId"],
+                "revision": engine.revision,
+                "value": { "type": "DECLARE", "actorId": "verm_d" }
+            })).unwrap();
+            let obs2 = build_player_observation(&engine, "p1");
+            engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": obs2["pendingDecision"]["decisionId"],
+                "revision": engine.revision,
+                "value": { "targetId": "blk_sac" }
+            })).unwrap();
+
+            assert_eq!(
+                engine.get_effective_lp("p1", &engine.players["p1"].field[0]),
+                2,
+                "自分の能力で黒キャラをリムーブしたためB03112ライがLP+1されること (logs: {:?})",
+                engine.logs
+            );
+        }
+    }
 }
 

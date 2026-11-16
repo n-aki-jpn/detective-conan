@@ -12,6 +12,7 @@ pub enum TriggerKind {
     DisguiseCond,
     OnDisguise,
     OnRemove,
+    OnCharRemoved,
     OnTurnEnd,
     OnAction,
     OnContact,
@@ -334,6 +335,7 @@ pub enum ImmediateOp {
     OppRemoveEvidence(usize),
     SelfRemoveEvidence { count: usize, trigger_hirameki: bool },
     SelfApBuff(i32),
+    SelfLpBuff(i32),
     SelfActivate,
     SelfGiveRush(Option<String>),
     MillDeck(usize),
@@ -562,6 +564,19 @@ fn line_matches_trigger(line: &str, trigger: TriggerKind, card_type: CardType) -
         TriggerKind::OnRemove => {
             line.contains("【現場リムーブ時】")
                 || clean.contains("自分の現場にいるこのキャラが自分の能力や効果によってリムーブされたとき")
+        }
+        TriggerKind::OnCharRemoved => {
+            !line.contains("【登場時】")
+                && !line.contains("【宣言】")
+                && !line.contains("【カットイン】")
+                && !line.contains("【ヒラメキ】")
+                && !line.contains("【現場リムーブ時】")
+                && !clean.starts_with("このイベントがセットされている")
+                && !clean.contains("自分の現場にいるこのキャラが自分の能力や効果によってリムーブされたとき")
+                && !clean.contains("コンタクトによってリムーブされたとき")
+                && !clean.contains("証拠がリムーブされたとき")
+                && clean.contains("キャラ")
+                && clean.contains("リムーブされたとき")
         }
         TriggerKind::OnTurnEnd => {
             // 「ターン終了時まで〜」という継続期間表記はトリガーではない
@@ -3849,6 +3864,12 @@ pub fn parse_immediate_ops(sentence: &str) -> Vec<ImmediateOp> {
             ops.push(ImmediateOp::SelfApBuff(buff));
         }
 
+        if !p.contains("与える") && !sentence.contains('「') {
+            if let Some(lp_buff) = parse_signed_lp(p, true) {
+                ops.push(ImmediateOp::SelfLpBuff(lp_buff));
+            }
+        }
+
         if p.contains("このキャラをアクティブに") {
             ops.push(ImmediateOp::SelfActivate);
         }
@@ -4289,6 +4310,84 @@ pub fn check_ally_play_match(
 
     let branches = parse_branches_from_phrase(subj, CardType::CHARACTER);
     branches.iter().any(|b| branch_matches(played_def, played_ap, b))
+}
+
+/// 現場のキャラがリムーブされたときの常駐誘発（`〜のキャラがリムーブされたとき`）に一致するか判定する
+#[allow(clippy::too_many_arguments)]
+pub fn check_char_removed_match(
+    clause: &str,
+    owner_is_watcher: bool,
+    self_instance_id: &str,
+    removed_instance_id: &str,
+    removed_def: &CardDefinition,
+    removed_ap: i32,
+    removed_level: i32,
+    removed_orientation: CardOrientation,
+    by_own_ability_of_removed_owner: bool,
+) -> bool {
+    let clean = strip_parens(clause);
+    let body = strip_leading_tags(&clean);
+    let Some(idx) = body.find("リムーブされたとき") else {
+        return false;
+    };
+    let trig = body[..idx].trim();
+
+    if trig.contains("自分の能力や効果によって") && !by_own_ability_of_removed_owner {
+        return false;
+    }
+
+    let mut eff_def = removed_def.clone();
+    eff_def.level = removed_level;
+
+    if trig.contains("相手の現場に") {
+        if owner_is_watcher {
+            return false;
+        }
+        let subj = trig
+            .replace("相手の現場にいる", "")
+            .replace("相手の現場に", "");
+        let subj = subj.trim().trim_end_matches(['が', 'に', 'で']).trim();
+        let branches = parse_branches_from_phrase(subj, CardType::CHARACTER);
+        return branches.iter().any(|b| branch_matches(&eff_def, removed_ap, b));
+    }
+
+    if !owner_is_watcher {
+        return false;
+    }
+    if trig.contains("このキャラ以外の") && self_instance_id == removed_instance_id {
+        return false;
+    }
+
+    if !removed_instance_id.is_empty() && self_instance_id == removed_instance_id {
+        if trig.starts_with("スリープ状態のこのキャラ") {
+            return removed_orientation == CardOrientation::SLEEP;
+        }
+        if trig.contains("このキャラか") || trig.starts_with("このキャラ") {
+            return true;
+        }
+        return false;
+    }
+
+    let Some((_, after_field)) = trig.split_once("自分の現場にいる") else {
+        return false;
+    };
+    let subj = after_field
+        .replace("このキャラ以外の", "")
+        .replace("自分の能力や効果によって", "");
+    let subj = subj.trim().trim_end_matches(['が', 'に', 'で']).trim();
+
+    if subj.contains("スリープ状態の") && removed_orientation != CardOrientation::SLEEP {
+        return false;
+    }
+    if subj.contains("スタン状態の") && removed_orientation != CardOrientation::STUN {
+        return false;
+    }
+    if subj.contains("アクティブ状態の") && removed_orientation != CardOrientation::ACTIVE {
+        return false;
+    }
+
+    let branches = parse_branches_from_phrase(subj, CardType::CHARACTER);
+    branches.iter().any(|b| branch_matches(&eff_def, removed_ap, b))
 }
 
 fn check_passive_extra_conditions(body: &str, pctx: &PassiveEvalContext) -> bool {

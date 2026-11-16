@@ -102,6 +102,8 @@ pub struct CardInstance {
     #[serde(default)]
     pub temp_ap_bonus: i32,
     #[serde(default)]
+    pub temp_lp_bonus: i32,
+    #[serde(default)]
     pub has_rush: bool,
     #[serde(default)]
     pub rush_target: Option<String>,
@@ -140,6 +142,7 @@ impl Default for CardInstance {
             entered_turn: default_entered_turn(),
             face_up: false,
             temp_ap_bonus: 0,
+            temp_lp_bonus: 0,
             has_rush: false,
             rush_target: None,
             used_declare_this_turn: false,

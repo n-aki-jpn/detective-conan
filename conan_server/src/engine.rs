@@ -2,7 +2,8 @@ use crate::catalog::CardCatalog;
 use crate::effects::{
     allows_partner_area, branch_matches, branch_matches_with_ctx, card_effective_level,
     card_is_untargetable_by_opponent, card_matches_filter_with_ctx, check_action_trigger_match,
-    check_ally_play_match, check_clause_conditions, check_disguise_conditions,
+    check_ally_play_match, check_char_removed_match, check_clause_conditions,
+    check_disguise_conditions,
     check_event_play_conditions, check_hint_use_match, clause_turn_limit,
     compute_passive_ap_for_target, compute_passive_lp_bonus, eval_cond_phrase,
     evaluate_passive_rush_and_swift,
@@ -124,6 +125,7 @@ pub struct MatchEngine {
     pub last_cost_flipped_evidence_count: usize,
     pub last_removed_level_sum: i32,
     pub last_removed_ap_sum: i32,
+    pub last_removed_char_state: Option<(String, CardOrientation, i32, i32)>,
     pub last_disguise_replaced_name: Option<String>,
     pub last_slept_names: Vec<String>,
     pub next_opp_evidence_remove_triggers: Vec<(String, String, String, String)>,
@@ -196,6 +198,7 @@ impl MatchEngine {
             last_cost_flipped_evidence_count: 0,
             last_removed_level_sum: 0,
             last_removed_ap_sum: 0,
+            last_removed_char_state: None,
             last_disguise_replaced_name: None,
             last_slept_names: vec![],
             next_opp_evidence_remove_triggers: vec![],
@@ -1149,6 +1152,7 @@ impl MatchEngine {
 
     fn reset_turn_card_modifiers(c: &mut CardInstance) {
         c.temp_ap_bonus = 0;
+        c.temp_lp_bonus = 0;
         c.has_rush = false;
         c.rush_target = None;
         c.used_declare_this_turn = false;
@@ -4930,11 +4934,16 @@ impl MatchEngine {
             if let (Some(a_def_id), Some(d_def_id)) = (actor_def_id, def_def_id) {
                 let actor_name = self.card_name_by_def(&a_def_id);
                 let def_name = self.card_name_by_def(&d_def_id);
+                if !self.contact_ap_buffs.is_empty() {
+                    let buffs = format!("{:?}", self.contact_ap_buffs);
+                    self.debug_log(format!("[DEBUG][CONTACT_END] contact_ap_buffs expired: {}", buffs));
+                }
+                self.contact_ap_buffs.clear();
 
                 if actor_ap >= def_ap {
                     if let Some((rem_def, removed_sets)) = self.move_field_char_to_remove(&defender_pid, &def_cid, true, false) {
                         self.log(format!("💥 バトル決着: [{}] (AP{}) vs [{}] (AP{}) ➔ {} の [{}] をリムーブ！", actor_name, actor_ap, def_name, def_ap, defender_pid, def_name));
-                        self.trigger_on_remove(&defender_pid, &rem_def);
+                        self.trigger_on_remove_char(&defender_pid, &def_cid, &rem_def, false);
                         for (sid, sdid) in removed_sets {
                             self.trigger_set_card_on_remove(&defender_pid, &sid, &sdid);
                         }
@@ -4955,7 +4964,7 @@ impl MatchEngine {
             self.debug_log(format!("[DEBUG][CONTACT_END] contact_ap_buffs expired: {}", buffs));
         }
         self.contact_ap_buffs.clear();
-        if !self.drain_pending_clause_queue() {
+        if !self.pending_decision.is_some() && !self.drain_pending_clause_queue() {
             self.prompt_main_action(&attacker_pid);
         }
     }
@@ -5674,7 +5683,7 @@ impl MatchEngine {
         let Some(target_def) = self.catalog.get(&card.definition_id) else {
             return 0;
         };
-        let mut total = target_def.lp;
+        let mut total = target_def.lp + card.temp_lp_bonus;
         if card.zone != Zone::FIELD && card.zone != Zone::PARTNER {
             return total;
         }
@@ -5738,7 +5747,7 @@ impl MatchEngine {
     }
 
     /// キャラがフィールドを離れる際の保護チェック（B01039/B05041/B11050）とリムーブ処理
-    fn move_field_char_to_remove(
+    pub fn move_field_char_to_remove(
         &mut self,
         owner_pid: &str,
         char_inst_id: &str,
@@ -5809,6 +5818,26 @@ impl MatchEngine {
         }
         if rescued {
             return None;
+        }
+
+        if let Some(c_snapshot) = self
+            .players
+            .get(owner_pid)
+            .and_then(|ps| ps.field.iter().find(|c| c.instance_id == char_inst_id))
+            .cloned()
+        {
+            let eff_ap = self.get_effective_ap(owner_pid, &c_snapshot);
+            let eff_lv = self
+                .catalog
+                .get(&c_snapshot.definition_id)
+                .map(|d| d.level + c_snapshot.temp_level_delta)
+                .unwrap_or(0);
+            self.last_removed_char_state = Some((
+                char_inst_id.to_string(),
+                c_snapshot.orientation,
+                eff_lv,
+                eff_ap,
+            ));
         }
 
         let mut removed_sets: Vec<(String, String)> = vec![];
@@ -5969,6 +5998,57 @@ impl MatchEngine {
         self.trigger_on_remove_char(owner_id, "", definition_id, false);
     }
 
+    /// モーダルUIが既に開いている場合はキューへ退避し、そうでなければ即座に句プランを実行する
+    fn execute_or_enqueue_plan(
+        &mut self,
+        player_id: &str,
+        actor_id: &str,
+        actor_name: &str,
+        source_level: Option<i32>,
+        card_type: CardType,
+        plan: ParsedClausePlan,
+    ) {
+        let is_main_action_pending = self
+            .pending_decision
+            .as_ref()
+            .and_then(|pd| pd.get("kind").and_then(|k| k.as_str()))
+            == Some("mainAction");
+        if self.pending_decision.is_some() && !is_main_action_pending {
+            self.pending_clause_queue.push(PendingClauseTask {
+                player_id: player_id.to_string(),
+                actor_id: actor_id.to_string(),
+                actor_name: actor_name.to_string(),
+                source_level,
+                card_type,
+                clause: String::new(),
+                resume_context: "MAIN".to_string(),
+                evidence_source_inst_id: None,
+                post_target_ops: vec![],
+                plan: Some(plan),
+            });
+        } else {
+            let saved_main = if is_main_action_pending {
+                self.pending_decision.take()
+            } else {
+                None
+            };
+            let _ = self.execute_clause_plan(
+                player_id,
+                actor_id,
+                actor_name,
+                source_level,
+                &plan,
+                "MAIN",
+                None,
+            );
+            if self.pending_decision.is_none() {
+                if let Some(m) = saved_main {
+                    self.pending_decision = Some(m);
+                }
+            }
+        }
+    }
+
     /// 現場リムーブ時トリガーを解決する（インスタンスID・自分の能力/効果によるリムーブかを指定）
     pub fn trigger_on_remove_char(
         &mut self,
@@ -5977,16 +6057,18 @@ impl MatchEngine {
         definition_id: &str,
         by_own_ability: bool,
     ) {
-        let Some(def) = self.catalog.get(definition_id).cloned() else {
+        let Some(removed_def) = self.catalog.get(definition_id).cloned() else {
             return;
         };
-        let clauses = extract_clauses(&def.description, TriggerKind::OnRemove, def.card_type);
-        if clauses.is_empty() {
-            return;
-        }
         let card_name = self.card_name_by_def(definition_id);
+        let (rem_ori, rem_lv, rem_ap) = match self.last_removed_char_state.take() {
+            Some((id, o, lv, ap)) if id == instance_id || instance_id.is_empty() => (o, lv, ap),
+            _ => (CardOrientation::ACTIVE, removed_def.level, removed_def.ap),
+        };
 
-        for clause in clauses {
+        // 1) リムーブされたキャラ自身の【現場リムーブ時】能力（および自己能力リムーブ時効果）
+        let self_clauses = extract_clauses(&removed_def.description, TriggerKind::OnRemove, removed_def.card_type);
+        for clause in self_clauses {
             if clause.contains("自分の能力や効果によってリムーブされたとき") && !by_own_ability {
                 continue;
             }
@@ -6004,12 +6086,117 @@ impl MatchEngine {
             if !self.pay_clause_cost(owner_id, instance_id, &cost) {
                 continue;
             }
-            let plan = parse_effect_steps(&clause, None, def.card_type);
-            let _ = self.execute_clause_plan(owner_id, instance_id, &card_name, Some(def.level), &plan, "MAIN", None);
+            let plan = parse_effect_steps(&clause, None, removed_def.card_type);
+            self.execute_or_enqueue_plan(
+                owner_id,
+                instance_id,
+                &card_name,
+                Some(removed_def.level),
+                removed_def.card_type,
+                plan,
+            );
         }
         if !instance_id.is_empty() && self.granted_on_remove_draw_until_opp_end.remove(instance_id).is_some() {
             self.draw_cards(owner_id, 1);
             self.log(format!("🎴 [{}] に付与された【現場リムーブ時】効果でカードを1枚引きました！", card_name));
+        }
+
+        // 2) 現場・パートナー等の常駐ウォッチャーによる「キャラがリムーブされたとき」誘発（B05106 ジン＆ウォッカ等）
+        let opp_id = self.opponent_id_of(owner_id);
+        let turn_pid = self.turn_player_id.clone();
+        let watch_order: Vec<(String, bool)> = if turn_pid == owner_id {
+            vec![(owner_id.to_string(), true), (opp_id, false)]
+        } else {
+            vec![(opp_id, false), (owner_id.to_string(), true)]
+        };
+
+        for (watch_pid, owner_is_watcher) in watch_order {
+            if watch_pid.is_empty() {
+                continue;
+            }
+            let mut watchers: Vec<(String, String, CardOrientation, bool, bool)> = self
+                .players
+                .get(&watch_pid)
+                .map(|ps| {
+                    let mut list: Vec<(String, String, CardOrientation, bool, bool)> = ps
+                        .field
+                        .iter()
+                        .map(|c| (c.instance_id.clone(), c.definition_id.clone(), c.orientation, false, false))
+                        .collect();
+                    if let Some(ref p) = ps.partner {
+                        if p.zone == Zone::PARTNER {
+                            list.push((p.instance_id.clone(), p.definition_id.clone(), p.orientation, true, false));
+                        }
+                    }
+                    for ep in &ps.extra_partners {
+                        list.push((ep.instance_id.clone(), ep.definition_id.clone(), ep.orientation, true, false));
+                    }
+                    list
+                })
+                .unwrap_or_default();
+
+            if owner_is_watcher && !instance_id.is_empty() {
+                watchers.push((
+                    instance_id.to_string(),
+                    definition_id.to_string(),
+                    rem_ori,
+                    false,
+                    true,
+                ));
+            }
+
+            for (watcher_id, wdef_id, ori, in_partner, is_removed_self) in watchers {
+                let Some(wdef) = self.catalog.get(&wdef_id).cloned() else {
+                    continue;
+                };
+                let watcher_name = self.card_name_by_def(&wdef_id);
+                for clause in extract_clauses(&wdef.description, TriggerKind::OnCharRemoved, wdef.card_type) {
+                    if in_partner && wdef.card_type != CardType::PARTNER && !allows_partner_area(&clause) {
+                        continue;
+                    }
+                    if is_removed_self
+                        && !clause.contains("このキャラか")
+                        && !clause.contains("スリープ状態のこのキャラ")
+                    {
+                        continue;
+                    }
+                    if !check_char_removed_match(
+                        &clause,
+                        owner_is_watcher,
+                        &watcher_id,
+                        instance_id,
+                        &removed_def,
+                        rem_ap,
+                        rem_lv,
+                        rem_ori,
+                        by_own_ability,
+                    ) {
+                        continue;
+                    }
+                    let ctx = self.build_cond_info(&watch_pid, Some(&watcher_id), ori, None);
+                    if check_clause_conditions(&clause, &ctx).is_err() {
+                        continue;
+                    }
+                    if !self.can_use_clause_this_turn(&watcher_id, &clause) {
+                        continue;
+                    }
+                    let cost = parse_clause_cost(&clause);
+                    if !self.pay_clause_cost(&watch_pid, &watcher_id, &cost) {
+                        continue;
+                    }
+                    self.mark_clause_used_this_turn(&watcher_id, &clause);
+                    self.log(format!("✨ [{}] の誘発効果（キャラリムーブ時）が発動！", watcher_name));
+                    let plan = parse_effect_steps(&clause, None, wdef.card_type);
+                    self.execute_or_enqueue_plan(
+                        &watch_pid,
+                        &watcher_id,
+                        &watcher_name,
+                        Some(wdef.level),
+                        wdef.card_type,
+                        plan,
+                    );
+                }
+            }
         }
     }
 
@@ -6394,7 +6581,14 @@ impl MatchEngine {
                 continue;
             }
             let plan = parse_effect_steps(&clause, None, def.card_type);
-            let _ = self.execute_clause_plan(attacker_pid, actor_id, &card_name, Some(def.level), &plan, "MAIN", None);
+            self.execute_or_enqueue_plan(
+                attacker_pid,
+                actor_id,
+                &card_name,
+                Some(def.level),
+                def.card_type,
+                plan,
+            );
         }
     }
 
@@ -7206,6 +7400,14 @@ impl MatchEngine {
                                 .and_then(|d| d.names.first().cloned())
                                 .unwrap_or_else(|| actor_name.to_string());
                             self.log(format!("✨ [{}] の効果で [{}] のAP +{}", actor_name, target_name, amt));
+                        }
+                    }
+                }
+                ImmediateOp::SelfLpBuff(amt) => {
+                    if let Some(ps) = self.players.get_mut(player_id) {
+                        if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == actor_id) {
+                            c.temp_lp_bonus += *amt;
+                            self.log(format!("✨ [{}] の効果で自身のLP +{}", actor_name, amt));
                         }
                     }
                 }
