@@ -2551,3 +2551,112 @@ fn test_mr_partner_area_movement_and_duplicate_removal() {
     );
 }
 
+#[test]
+fn test_b11086_vermouth_declare_level_limit_and_trigger_order() {
+    let catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();
+    let mut engine = engine::MatchEngine::new(catalog.clone());
+    engine.turn = 6;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+    engine.phase = models::MatchPhase::MAIN;
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    ps1.case_phase = models::CasePhase::RESOLUTION;
+    ps1.partner = Some(models::CardInstance {
+        instance_id: "p1_partner".to_string(),
+        definition_id: "B03107".to_string(), // 黒パートナー
+        owner_id: "p1".to_string(),
+        zone: models::Zone::PARTNER,
+        ..Default::default()
+    });
+    ps1.field.push(models::CardInstance {
+        instance_id: "vermouth_1".to_string(),
+        definition_id: "B11086".to_string(), // Lv8 ベルモット
+        owner_id: "p1".to_string(),
+        zone: models::Zone::FIELD,
+        orientation: models::CardOrientation::ACTIVE,
+        ..Default::default()
+    });
+    ps1.field.push(models::CardInstance {
+        instance_id: "vodka_lv5".to_string(),
+        definition_id: "B03116".to_string(), // Lv5 ウォッカ
+        owner_id: "p1".to_string(),
+        zone: models::Zone::FIELD,
+        orientation: models::CardOrientation::ACTIVE,
+        ..Default::default()
+    });
+    ps1.deck.push(models::CardInstance {
+        instance_id: "d_1".to_string(),
+        definition_id: "B01097".to_string(),
+        owner_id: "p1".to_string(),
+        zone: models::Zone::DECK,
+        ..Default::default()
+    });
+
+    let mut ps2 = engine::PlayerState::new("p2".to_string());
+    ps2.field.push(models::CardInstance {
+        instance_id: "opp_genta_lv8".to_string(),
+        definition_id: "B07008".to_string(), // Lv8 小嶋元太 (SLEEP) -> Lv5以下ではないため対象外であるべき！
+        owner_id: "p2".to_string(),
+        zone: models::Zone::FIELD,
+        orientation: models::CardOrientation::SLEEP,
+        ..Default::default()
+    });
+    ps2.field.push(models::CardInstance {
+        instance_id: "opp_low_lv4".to_string(),
+        definition_id: "B01014".to_string(), // Lv4 小嶋元太 (SLEEP) -> Lv5以下なので対象になるべき！
+        owner_id: "p2".to_string(),
+        zone: models::Zone::FIELD,
+        orientation: models::CardOrientation::SLEEP,
+        ..Default::default()
+    });
+
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), ps2);
+    engine.prompt_main_action("p1");
+
+    // 1) B11086 ベルモットの【宣言】を発動
+    let obs1 = build_player_observation(&engine, "p1");
+    let dec1 = obs1["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec1,
+        "revision": engine.revision,
+        "value": { "type": "DECLARE", "actorId": "vermouth_1" }
+    })).unwrap();
+
+    // 2) コストとして自分の現場の黒キャラ vodka_lv5 (B03116, Lv5) をリムーブ
+    let obs2 = build_player_observation(&engine, "p1");
+    let dec2 = obs2["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec2,
+        "revision": engine.revision,
+        "value": { "targetId": "vodka_lv5" }
+    })).unwrap();
+
+    // 3) 公式ルール通り、まずベルモットの「そうした場合、リムーブしたキャラのレベル以下のレベルのスリープ状態のキャラを1枚まで選び、リムーブする」が先に解決され、
+    //    候補には Lv4 の opp_low_lv4 のみが含まれ、Lv8 の opp_genta_lv8 (B07008) は含まれないこと！
+    let obs3 = build_player_observation(&engine, "p1");
+    assert_eq!(obs3["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+    assert_eq!(obs3["pendingDecision"]["options"]["actorId"].as_str(), Some("vermouth_1"), "ウォッカの誘発より先にベルモットの後続効果（そうした場合〜）を解決すること");
+    let cands: Vec<&str> = obs3["pendingDecision"]["options"]["candidates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|c| c["instanceId"].as_str())
+        .collect();
+    assert!(cands.contains(&"opp_low_lv4"), "Lv5以下のスリープキャラ(opp_low_lv4)が候補に含まれること: {:?}", cands);
+    assert!(!cands.contains(&"opp_genta_lv8"), "Lv8の小嶋元太(B07008)はLv5以下ではないため候補に含まれないこと: {:?}", cands);
+
+    let dec3 = obs3["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec3,
+        "revision": engine.revision,
+        "value": { "targetId": "opp_low_lv4" }
+    })).unwrap();
+
+    // 4) ベルモットの宣言効果がすべて終わった後に、待機していたウォッカ(B03116)の自己蘇生選択が表示されること！
+    let obs4 = build_player_observation(&engine, "p1");
+    assert_eq!(obs4["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+    assert_eq!(obs4["pendingDecision"]["options"]["actorId"].as_str(), Some("vodka_lv5"));
+}
+

@@ -244,6 +244,10 @@ impl MatchEngine {
             let _ = self.remove_evidence_and_trigger_hirameki(player_id, 1, "MAIN");
         }
         for did in removed_hand {
+            if let Some(d) = self.catalog.get(&did) {
+                self.last_chosen_level = Some(d.level);
+                self.last_removed_level_sum = d.level;
+            }
             let n = self.card_name_by_def(&did);
             self.log(format!("💸 コスト支払い: {} の手札から [{}] をリムーブしました", player_id, n));
         }

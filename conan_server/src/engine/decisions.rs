@@ -714,6 +714,7 @@ impl MatchEngine {
                     }
                     if !discarded_defs.is_empty() {
                         applied = true;
+                        self.last_chosen_level = Some(removed_lv_sum);
                         self.last_removed_level_sum = removed_lv_sum;
                         self.last_removed_ap_sum = removed_ap_sum;
                         for did in discarded_defs {
@@ -745,6 +746,14 @@ impl MatchEngine {
             self.last_deployed_count = 0;
             let mut removed_lv_sum = 0i32;
             let mut removed_ap_sum = 0i32;
+            let has_continuation = opts.get("followUpTarget").filter(|v| !v.is_null()).is_some()
+                || opts.get("followUpDeckSearch").filter(|v| !v.is_null()).is_some()
+                || opts.get("pendingClausePlan").filter(|v| !v.is_null()).is_some()
+                || opts.get("followUpOps").and_then(|v| v.as_array()).map(|a| !a.is_empty()).unwrap_or(false);
+            let prev_exec = self.is_executing_clause_plan;
+            if has_continuation {
+                self.is_executing_clause_plan = true;
+            }
             for (sel_idx, tid) in valid_chosen.iter().enumerate() {
                 if chosen_def_for_cond.is_none() {
                     chosen_def_for_cond = self.find_card_def_id(tid);
@@ -767,6 +776,7 @@ impl MatchEngine {
                     &mut deployed_list,
                 );
             }
+            self.is_executing_clause_plan = prev_exec;
             if effect_type == "REMOVE" {
                 self.last_removed_level_sum = removed_lv_sum;
                 self.last_removed_ap_sum = removed_ap_sum;

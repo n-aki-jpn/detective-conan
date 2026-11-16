@@ -84,10 +84,16 @@ pub fn parse_target_filter(
     let distinct_colors = phrase.contains("同じ色を持たない");
     let max_total_level = extract_number_before(phrase, "レベルの合計が", "以下");
     let min_level_from_prev = phrase.contains("そのカードのレベル以上");
-    let max_level_from_prev = phrase.contains("そのキャラのレベル以下");
+    let max_level_from_prev = phrase.contains("そのキャラのレベル以下")
+        || phrase.contains("リムーブしたキャラのレベル以下")
+        || phrase.contains("リムーブしたカードのレベル以下")
+        || phrase.contains("デッキの下に移したキャラのレベル以下")
+        || phrase.contains("スタンさせたキャラのレベル以下");
     let max_level_from_removed_sum =
         phrase.contains("移したカードのレベルの合計以下")
-            || phrase.contains("リムーブしたカードのレベルの合計以下");
+            || phrase.contains("リムーブしたカードのレベルの合計以下")
+            || phrase.contains("重ねたキャラのレベルの合計以下")
+            || phrase.contains("発見されたカードのレベルの合計以下");
     let same_name_as_prev = phrase.contains("登場させたキャラと同じカード名");
     let require_no_other_ability =
         phrase.contains("【カットイン】と【ヒラメキ】以外の元の能力を持たない")
