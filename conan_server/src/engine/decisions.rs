@@ -1172,25 +1172,23 @@ impl MatchEngine {
                     if chosen_set.contains(iid) {
                         match pick_action {
                             "PLAY_ACTIVE" | "PLAY_SLEEP" => {
-                                if ps.field.len() < 5 {
-                                    card.zone = Zone::FIELD;
-                                    card.orientation = if pick_action == "PLAY_SLEEP" {
-                                        CardOrientation::SLEEP
-                                    } else {
-                                        CardOrientation::ACTIVE
-                                    };
-                                    card.entered_turn = turn;
-                                    card.face_up = true;
-                                    deployed_count_delta += 1;
-                                    if let Some(d) = self.catalog.get(&card.definition_id) {
-                                        last_chosen_lv = Some(d.level);
-                                    }
-                                    last_chosen_def = Some(card.definition_id.clone());
-                                    last_chosen_inst = Some(card.instance_id.clone());
-                                    picked_defs.push((card.instance_id.clone(), card.definition_id.clone()));
-                                    ps.field.push(card);
-                                    continue;
+                                card.zone = Zone::FIELD;
+                                card.orientation = if pick_action == "PLAY_SLEEP" {
+                                    CardOrientation::SLEEP
+                                } else {
+                                    CardOrientation::ACTIVE
+                                };
+                                card.entered_turn = turn;
+                                card.face_up = true;
+                                deployed_count_delta += 1;
+                                if let Some(d) = self.catalog.get(&card.definition_id) {
+                                    last_chosen_lv = Some(d.level);
                                 }
+                                last_chosen_def = Some(card.definition_id.clone());
+                                last_chosen_inst = Some(card.instance_id.clone());
+                                picked_defs.push((card.instance_id.clone(), card.definition_id.clone()));
+                                ps.field.push(card);
+                                continue;
                             }
                             _ => {
                                 card.zone = Zone::HAND;
@@ -1215,7 +1213,6 @@ impl MatchEngine {
             let can_b09033_continue = b09033_rem_repeats > 0
                 && !picked_defs.is_empty()
                 && !ps.file.is_empty()
-                && ps.field.len() < 5
                 && !remaining_cards.is_empty();
 
             let mut remaining_opt = Some(remaining_cards);
@@ -1485,7 +1482,14 @@ impl MatchEngine {
                         "definitionId": c.definition_id,
                         "name": self.card_name_by_def(&c.definition_id),
                         "level": def.map(|d| d.level).unwrap_or(0),
-                        "ap": def.map(|d| d.ap).unwrap_or(0),
+                        "ap": self.get_effective_ap(&target_pid, c),
+                        "orientation": match c.orientation {
+                            CardOrientation::ACTIVE => "ACTIVE",
+                            CardOrientation::SLEEP => "SLEEP",
+                            CardOrientation::STUN => "STUN",
+                        },
+                        "isOpponent": false,
+                        "zoneLabel": "現場",
                         "traits": def.map(|d| d.traits.clone()).unwrap_or_default(),
                     })
                 })
@@ -1496,17 +1500,19 @@ impl MatchEngine {
         if candidates.is_empty() {
             return false;
         }
+        let dec_id = self.generate_decision_id();
         self.pending_decision = Some(json!({
-            "decisionId": format!("dec_{}", self.revision + 1),
+            "decisionId": dec_id,
+            "revision": self.revision,
             "playerId": target_pid,
             "kind": "targetSelect",
             "options": {
-                "title": "場のキャラが上限(5体)を超えたため、場外に移すキャラを1体選択してください",
+                "title": "場のキャラが上限(5体)を超えたため、場外(リムーブ)に移すキャラを1体選択してください",
                 "actorId": "",
                 "actorName": "ルール処理",
                 "effectType": "FIELD_OVERFLOW_REMOVE",
-                "zone": "FIELD",
-                "maxCount": 1,
+                "targetZone": "FIELD",
+                "maxSelect": 1,
                 "optional": false,
                 "candidates": candidates,
                 "resumeContext": resume_context,

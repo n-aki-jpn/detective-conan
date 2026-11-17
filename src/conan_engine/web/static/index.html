@@ -3270,7 +3270,8 @@
       // Field
       const meField = document.getElementById('me-field');
       meField.innerHTML = '';
-      for (let i = 0; i < 5; i++) {
+      const meSlots = Math.max(5, (me.field || []).length);
+      for (let i = 0; i < meSlots; i++) {
         meField.appendChild(createCardEl(me.field[i], false, false, { zone: 'FIELD', isMine: true }));
       }
       document.getElementById('me-case').replaceWith(createCardSlot('me-case', me.case, { zone: 'CASE', isMine: true }));
@@ -3279,7 +3280,8 @@
 
       const oppField = document.getElementById('opp-field');
       oppField.innerHTML = '';
-      for (let i = 0; i < 5; i++) {
+      const oppSlots = Math.max(5, (opp.field || []).length);
+      for (let i = 0; i < oppSlots; i++) {
         oppField.appendChild(createCardEl(opp.field[i], false, false, { zone: 'FIELD', isMine: false }));
       }
       document.getElementById('opp-case').replaceWith(createCardSlot('opp-case', opp.case, { zone: 'CASE', isMine: false }));
@@ -3623,8 +3625,9 @@
           const maxSelect = Number(pd.options.maxSelect || 1);
           const candidates = pd.options.candidates || [];
           const hasOffBoard = candidates.some(c => c.zoneLabel === 'リムーブ' || (c.zoneLabel === '手札' && c.isOpponent));
+          const isFieldOverflow = pd.options.effectType === 'FIELD_OVERFLOW_REMOVE';
           if (isNewOverlayKey) {
-            window.decisionOverlayHidden = (maxSelect === 1 && !hasOffBoard);
+            window.decisionOverlayHidden = isFieldOverflow ? false : (maxSelect === 1 && !hasOffBoard);
           }
 
           document.getElementById('decision-title').innerText = isDiscard

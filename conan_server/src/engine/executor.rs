@@ -577,16 +577,14 @@ impl MatchEngine {
                     let turn = self.turn;
                     let mut revived = false;
                     if let Some(ps) = self.players.get_mut(player_id) {
-                        if ps.field.len() < 5 {
-                            if let Some(pos) = ps.remove.iter().position(|c| c.instance_id == actor_id) {
-                                let mut card = ps.remove.remove(pos);
-                                card.zone = Zone::FIELD;
-                                card.orientation = if *sleep { CardOrientation::SLEEP } else { CardOrientation::ACTIVE };
-                                card.entered_turn = turn;
-                                card.face_up = true;
-                                ps.field.push(card);
-                                revived = true;
-                            }
+                        if let Some(pos) = ps.remove.iter().position(|c| c.instance_id == actor_id) {
+                            let mut card = ps.remove.remove(pos);
+                            card.zone = Zone::FIELD;
+                            card.orientation = if *sleep { CardOrientation::SLEEP } else { CardOrientation::ACTIVE };
+                            card.entered_turn = turn;
+                            card.face_up = true;
+                            ps.field.push(card);
+                            revived = true;
                         }
                     }
                     if revived {
@@ -599,16 +597,14 @@ impl MatchEngine {
                     let turn = self.turn;
                     let mut played = false;
                     if let Some(ps) = self.players.get_mut(player_id) {
-                        if ps.field.len() < 5 {
-                            if let Some(pos) = ps.hand.iter().position(|c| c.instance_id == actor_id) {
-                                let mut card = ps.hand.remove(pos);
-                                card.zone = Zone::FIELD;
-                                card.orientation = if *sleep { CardOrientation::SLEEP } else { CardOrientation::ACTIVE };
-                                card.entered_turn = turn;
-                                card.face_up = true;
-                                ps.field.push(card);
-                                played = true;
-                            }
+                        if let Some(pos) = ps.hand.iter().position(|c| c.instance_id == actor_id) {
+                            let mut card = ps.hand.remove(pos);
+                            card.zone = Zone::FIELD;
+                            card.orientation = if *sleep { CardOrientation::SLEEP } else { CardOrientation::ACTIVE };
+                            card.entered_turn = turn;
+                            card.face_up = true;
+                            ps.field.push(card);
+                            played = true;
                         }
                     }
                     if played {
@@ -621,16 +617,14 @@ impl MatchEngine {
                     if let Some(eid) = evidence_source_inst_id {
                         let turn = self.turn;
                         if let Some(ps) = self.players.get_mut(player_id) {
-                            if ps.field.len() < 5 {
-                                if let Some(pos) = ps.remove.iter().position(|c| c.instance_id == eid) {
-                                    let mut card = ps.remove.remove(pos);
-                                    card.zone = Zone::FIELD;
-                                    card.orientation = CardOrientation::SLEEP;
-                                    card.entered_turn = turn;
-                                    card.face_up = true;
-                                    ps.field.push(card);
-                                    self.log(format!("💡 【ヒラメキ】[{}] が証拠から現場へスリープ状態で登場！", actor_name));
-                                }
+                            if let Some(pos) = ps.remove.iter().position(|c| c.instance_id == eid) {
+                                let mut card = ps.remove.remove(pos);
+                                card.zone = Zone::FIELD;
+                                card.orientation = CardOrientation::SLEEP;
+                                card.entered_turn = turn;
+                                card.face_up = true;
+                                ps.field.push(card);
+                                self.log(format!("💡 【ヒラメキ】[{}] が証拠から現場へスリープ状態で登場！", actor_name));
                             }
                         }
                     }

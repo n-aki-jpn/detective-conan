@@ -23,7 +23,7 @@ impl MatchEngine {
         // 1. End turn
         actions.push(json!({"type": "END_TURN"}));
 
-        // 2. Hand Play (キャラ・イベント合わせて通常手札使用は1ターン1回、キャラは現場5枚未満)
+        // 2. Hand Play (キャラ・イベント合わせて通常手札使用は1ターン1回、キャラは6体目以降も登場可→ルール処理で5体までリムーブ)
         {
             let cond_ctx = self.build_cond_info(player_id, None, CardOrientation::ACTIVE, None);
             let can_normal_play = !ps.normal_hand_played_this_turn && !ps.hint_played_this_turn;
@@ -458,6 +458,9 @@ impl MatchEngine {
                         }
                     }
                 }
+                if self.check_field_overflow(player_id, "MAIN") {
+                    return;
+                }
                 self.prompt_main_action(player_id);
             }
             "HINT_TAKE" => {
@@ -744,6 +747,9 @@ impl MatchEngine {
                         return;
                     }
                 }
+                if self.check_field_overflow(player_id, "MAIN") {
+                    return;
+                }
                 self.prompt_main_action(player_id);
             }
             _ => {
@@ -977,6 +983,9 @@ impl MatchEngine {
         if self.execute_clause_plan(player_id, actor_id, &card_name, Some(def.level), &plan, "MAIN", None) {
             return;
         }
+        if self.check_field_overflow(player_id, "MAIN") {
+            return;
+        }
         self.prompt_main_action(player_id);
     }
 
@@ -1010,22 +1019,20 @@ impl MatchEngine {
                 if let Some(idx) = ps.hand.iter().position(|c| c.instance_id == card_id) {
                     let def_id_peek = ps.hand[idx].definition_id.clone();
                     let card_type = self.catalog.get(&def_id_peek).map(|d| d.card_type).unwrap_or(CardType::CHARACTER);
-                    if true {
-                        let mut card = ps.hand.remove(idx);
-                        played_def_id = Some(card.definition_id.clone());
-                        played_inst_id = Some(card.instance_id.clone());
-                        card.face_up = true;
-                        if card_type == CardType::EVENT {
-                            is_event = true;
-                            card.zone = Zone::REMOVE;
-                            ps.remove.push(card);
-                            ps.normal_hand_played_this_turn = true;
-                        } else {
-                            card.zone = Zone::FIELD;
-                            card.orientation = CardOrientation::ACTIVE;
-                            card.entered_turn = turn;
-                            ps.field.push(card);
-                        }
+                    let mut card = ps.hand.remove(idx);
+                    played_def_id = Some(card.definition_id.clone());
+                    played_inst_id = Some(card.instance_id.clone());
+                    card.face_up = true;
+                    if card_type == CardType::EVENT {
+                        is_event = true;
+                        card.zone = Zone::REMOVE;
+                        ps.remove.push(card);
+                        ps.normal_hand_played_this_turn = true;
+                    } else {
+                        card.zone = Zone::FIELD;
+                        card.orientation = CardOrientation::ACTIVE;
+                        card.entered_turn = turn;
+                        ps.field.push(card);
                     }
                 }
             }
@@ -1052,21 +1059,32 @@ impl MatchEngine {
                     "MAIN",
                 )
             };
-            if need_target {
-                if let Some(ref mut pd) = self.pending_decision {
-                    if let Some(opts) = pd.get_mut("options").and_then(|v| v.as_object_mut()) {
-                        opts.insert("afterHintLevel".to_string(), json!(card_lv));
-                    }
-                }
-                return;
-            }
-            self.pending_hint_trigger = None;
-            if self.trigger_on_hint_use_with_colors(player_id, card_lv, &card_colors) {
-                return;
-            }
-        } else {
-            self.log(format!("{} はヒントからの登場をスキップしました", player_id));
-        }
-        self.prompt_main_action(player_id);
-    }
+           if need_target {
+               if let Some(ref mut pd) = self.pending_decision {
+                   if let Some(opts) = pd.get_mut("options").and_then(|v| v.as_object_mut()) {
+                       opts.insert("afterHintLevel".to_string(), json!(card_lv));
+                   }
+               }
+               return;
+           }
+           if self.check_field_overflow(player_id, "MAIN") {
+               if let Some(ref mut pd) = self.pending_decision {
+                   if let Some(opts) = pd.get_mut("options").and_then(|v| v.as_object_mut()) {
+                       opts.insert("afterHintLevel".to_string(), json!(card_lv));
+                   }
+               }
+               return;
+           }
+           self.pending_hint_trigger = None;
+           if self.trigger_on_hint_use_with_colors(player_id, card_lv, &card_colors) {
+               return;
+           }
+       } else {
+           self.log(format!("{} はヒントからの登場をスキップしました", player_id));
+       }
+       if self.check_field_overflow(player_id, "MAIN") {
+           return;
+       }
+       self.prompt_main_action(player_id);
+   }
 }

@@ -400,6 +400,11 @@ impl MatchEngine {
                 if let Some(ps) = self.players.get_mut(player_id) {
                     if let Some(idx) = ps.field.iter().position(|c| c.instance_id == tid) {
                         let mut card = ps.field.remove(idx);
+                        for mut sc in std::mem::take(&mut card.set_cards) {
+                            sc.zone = Zone::REMOVE;
+                            sc.face_up = true;
+                            ps.remove.push(sc);
+                        }
                         card.zone = Zone::REMOVE;
                         card.orientation = CardOrientation::ACTIVE;
                         card.face_up = true;
