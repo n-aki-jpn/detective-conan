@@ -583,6 +583,7 @@ impl MatchEngine {
                             card.orientation = if *sleep { CardOrientation::SLEEP } else { CardOrientation::ACTIVE };
                             card.entered_turn = turn;
                             card.face_up = true;
+                            self.field_overflow_excluded_ids.insert(card.instance_id.clone());
                             ps.field.push(card);
                             revived = true;
                         }
@@ -603,6 +604,7 @@ impl MatchEngine {
                             card.orientation = if *sleep { CardOrientation::SLEEP } else { CardOrientation::ACTIVE };
                             card.entered_turn = turn;
                             card.face_up = true;
+                            self.field_overflow_excluded_ids.insert(card.instance_id.clone());
                             ps.field.push(card);
                             played = true;
                         }
@@ -623,6 +625,7 @@ impl MatchEngine {
                                 card.orientation = CardOrientation::SLEEP;
                                 card.entered_turn = turn;
                                 card.face_up = true;
+                                self.field_overflow_excluded_ids.insert(card.instance_id.clone());
                                 ps.field.push(card);
                                 self.log(format!("💡 【ヒラメキ】[{}] が証拠から現場へスリープ状態で登場！", actor_name));
                             }

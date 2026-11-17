@@ -1181,6 +1181,7 @@ impl MatchEngine {
                                 card.entered_turn = turn;
                                 card.face_up = true;
                                 deployed_count_delta += 1;
+                                self.field_overflow_excluded_ids.insert(card.instance_id.clone());
                                 if let Some(d) = self.catalog.get(&card.definition_id) {
                                     last_chosen_lv = Some(d.level);
                                 }
@@ -1457,7 +1458,7 @@ impl MatchEngine {
         self.resume_after_decision(player_id, &resume_context);
     }
 
-    /// 現場のキャラが上限(5体)を超えている場合、場外(リムーブエリア)に移すキャラを1体選択させる（効果リムーブではない）
+    /// 現場のキャラが上限(5体)を超えている場合、場外(リムーブエリア)に移すキャラ（登場したキャラ以外）を1体選択させる（効果リムーブではない）
     pub(super) fn check_field_overflow(&mut self, player_id: &str, resume_context: &str) -> bool {
         let overflow_pids: Vec<String> = self
             .players
@@ -1470,11 +1471,14 @@ impl MatchEngine {
         } else if let Some(first) = overflow_pids.into_iter().next() {
             first
         } else {
+            self.field_overflow_excluded_ids.clear();
             return false;
         };
-        let candidates: Vec<Value> = if let Some(ps) = self.players.get(&target_pid) {
+
+        let mut candidates: Vec<Value> = if let Some(ps) = self.players.get(&target_pid) {
             ps.field
                 .iter()
+                .filter(|c| !self.field_overflow_excluded_ids.contains(&c.instance_id))
                 .map(|c| {
                     let def = self.catalog.get(&c.definition_id);
                     json!({
@@ -1497,6 +1501,35 @@ impl MatchEngine {
         } else {
             return false;
         };
+
+        // 万一すべて除外対象になった場合の安全フォールバック
+        if candidates.is_empty() {
+            if let Some(ps) = self.players.get(&target_pid) {
+                candidates = ps
+                    .field
+                    .iter()
+                    .map(|c| {
+                        let def = self.catalog.get(&c.definition_id);
+                        json!({
+                            "instanceId": c.instance_id,
+                            "definitionId": c.definition_id,
+                            "name": self.card_name_by_def(&c.definition_id),
+                            "level": def.map(|d| d.level).unwrap_or(0),
+                            "ap": self.get_effective_ap(&target_pid, c),
+                            "orientation": match c.orientation {
+                                CardOrientation::ACTIVE => "ACTIVE",
+                                CardOrientation::SLEEP => "SLEEP",
+                                CardOrientation::STUN => "STUN",
+                            },
+                            "isOpponent": false,
+                            "zoneLabel": "現場",
+                            "traits": def.map(|d| d.traits.clone()).unwrap_or_default(),
+                        })
+                    })
+                    .collect();
+            }
+        }
+
         if candidates.is_empty() {
             return false;
         }
@@ -1507,7 +1540,7 @@ impl MatchEngine {
             "playerId": target_pid,
             "kind": "targetSelect",
             "options": {
-                "title": "場のキャラが上限(5体)を超えたため、場外(リムーブ)に移すキャラを1体選択してください",
+                "title": "場のキャラが上限(5体)を超えたため、場外(リムーブ)に移すキャラ（登場したキャラ以外）を1体選択してください",
                 "actorId": "",
                 "actorName": "ルール処理",
                 "effectType": "FIELD_OVERFLOW_REMOVE",

@@ -385,6 +385,7 @@ impl MatchEngine {
                             card.orientation = ori;
                             card.entered_turn = turn;
                             card.face_up = true;
+                            self.field_overflow_excluded_ids.insert(iid.clone());
                             ps.field.push(card);
                             self.last_deployed_count += 1;
                             self.self_entered_field_players_this_turn.insert(player_id.to_string());
@@ -397,6 +398,7 @@ impl MatchEngine {
                 }
             }
             "FIELD_OVERFLOW_REMOVE" => {
+                let mut should_clear = false;
                 if let Some(ps) = self.players.get_mut(player_id) {
                     if let Some(idx) = ps.field.iter().position(|c| c.instance_id == tid) {
                         let mut card = ps.field.remove(idx);
@@ -409,8 +411,12 @@ impl MatchEngine {
                         card.orientation = CardOrientation::ACTIVE;
                         card.face_up = true;
                         ps.remove.push(card);
+                        should_clear = ps.field.len() <= 5;
                         self.log(format!("📤 ルール処理: {} の現場上限(5体)超過により [{}] を場外(リムーブエリア)に移しました（効果リムーブではないため誘発なし）", player_id, target_name));
                     }
+                }
+                if should_clear {
+                    self.field_overflow_excluded_ids.clear();
                 }
             }
             "RECOVER_TO_HAND" => {

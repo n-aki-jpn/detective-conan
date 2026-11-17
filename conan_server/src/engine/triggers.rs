@@ -1220,6 +1220,7 @@ impl MatchEngine {
         source_effect_level: Option<i32>,
         resume_context: &str,
     ) -> bool {
+        self.field_overflow_excluded_ids.insert(actor_id.to_string());
         // MRルール: 自分の現場に新たなMRが登場する場合、すでに現場かパートナーエリアにいるMRをリムーブする
         if self.is_mr_card(definition_id) {
             let mut old_field_mrs: Vec<(String, String)> = Vec::new();

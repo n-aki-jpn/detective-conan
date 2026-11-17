@@ -3,6 +3,7 @@ use super::*;
 impl MatchEngine {
 
     pub fn prompt_main_action(&mut self, player_id: &str) {
+        self.field_overflow_excluded_ids.clear();
         if self.phase == MatchPhase::FINISHED {
             return;
         }
@@ -437,6 +438,7 @@ impl MatchEngine {
                             card.zone = Zone::FIELD;
                             card.orientation = CardOrientation::ACTIVE;
                             card.entered_turn = turn;
+                            self.field_overflow_excluded_ids.insert(card.instance_id.clone());
                             ps.field.push(card);
                             ps.normal_hand_played_this_turn = true;
                         }
@@ -1032,6 +1034,7 @@ impl MatchEngine {
                         card.zone = Zone::FIELD;
                         card.orientation = CardOrientation::ACTIVE;
                         card.entered_turn = turn;
+                        self.field_overflow_excluded_ids.insert(card.instance_id.clone());
                         ps.field.push(card);
                     }
                 }

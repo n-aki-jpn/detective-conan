@@ -898,7 +898,10 @@ impl RandomAgent {
                         })
                         .collect();
 
-                    if effect_type == "DISCARD_HAND" || (effect_type == "REMOVE" && all_cand_are_my_field) {
+                    if effect_type == "DISCARD_HAND"
+                        || effect_type == "FIELD_OVERFLOW_REMOVE"
+                        || (effect_type == "REMOVE" && all_cand_are_my_field)
+                    {
                         scored.sort_by_key(|&(_, _, s)| s);
                     } else {
                         scored.sort_by(|a, b| b.2.cmp(&a.2));

@@ -146,6 +146,7 @@ pub struct MatchEngine {
     pub pending_clause_queue: Vec<PendingClauseTask>,
     pub pending_enter_field_queue: Vec<(String, String, String, CardOrientation, Option<i32>, String)>,
     pub pending_trigger_order_tasks: Vec<PendingClauseTask>,
+    pub field_overflow_excluded_ids: HashSet<String>,
     pub logs: Vec<String>,
     pub pending_file_logs: Vec<String>,
 }
@@ -221,6 +222,7 @@ impl MatchEngine {
             pending_clause_queue: vec![],
             pending_enter_field_queue: vec![],
             pending_trigger_order_tasks: vec![],
+            field_overflow_excluded_ids: HashSet::new(),
             logs: vec![],
             pending_file_logs: vec![],
         }
