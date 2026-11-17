@@ -2500,6 +2500,27 @@
       document.getElementById('card-modal').style.display = 'none';
     }
 
+    // 証拠スタックの位置ラベル（idx 0 = 上・最も古い, 最後 = 下・最新・リムーブされる側）
+    function evidencePosLabel(idx, total) {
+      const isTop = idx === 0;
+      const isBottom = idx === total - 1;
+      let tag = '';
+      if (isTop && isBottom) tag = '上＝下';
+      else if (isTop) tag = '上';
+      else if (isBottom) tag = '下';
+      return { label: tag ? `${tag} #${idx + 1}` : `#${idx + 1}`, isBottom };
+    }
+
+    // 証拠スタック内の位置情報を取得（targetSelect 候補の裏向き表示用）
+    function getEvidenceStackInfo(instanceId, isOpp) {
+      if (!lastObs) return null;
+      const ps = isOpp ? lastObs.opponent : lastObs.me;
+      if (!ps || !Array.isArray(ps.evidence)) return null;
+      const idx = ps.evidence.findIndex(c => c.instanceId === instanceId);
+      if (idx < 0) return null;
+      return { index: idx, total: ps.evidence.length };
+    }
+
     function openZoneModal(who, zoneType) {
       if (!lastObs) return;
       const ps = who === 'me' ? lastObs.me : lastObs.opponent;
@@ -2515,28 +2536,34 @@
         const faceUpCount = list.filter(c => c.faceUp).length;
         const faceDownCount = list.length - faceUpCount;
         titleEl.innerText = `🔍 ${whoLabel} の証拠エリア`;
-        subEl.innerText = `合計 ${list.length}枚（表向き: ${faceUpCount}枚 / 裏向き: ${faceDownCount}枚）※表向きのカードはタップで詳細を確認できます`;
+        subEl.innerText = `合計 ${list.length}枚（表向き: ${faceUpCount}枚 / 裏向き: ${faceDownCount}枚）※上から下へ並べられており、アタック成功時は「下」（最新）から順にリムーブされます。表向きのカードはタップで詳細を確認できます`;
 
         if (list.length === 0) {
           gridEl.innerHTML = '<div style="grid-column:1/-1; text-align:center; color:var(--text-muted); padding:20px;">証拠はありません</div>';
         } else {
           list.forEach((c, idx) => {
             const item = document.createElement('div');
+            const pos = evidencePosLabel(idx, list.length);
+            const bottomNote = pos.isBottom && list.length > 1
+              ? '<div style="font-size:0.62rem; color:#ef4444; font-weight:bold;">↓ アタック成功時、ここから順にリムーブ</div>'
+              : '';
             if (c.faceUp) {
               item.style.cssText = 'background:#0f172a; border:1px solid #38bdf8; border-radius:6px; padding:6px; cursor:pointer; display:flex; flex-direction:column; gap:4px; align-items:center;';
               const imgUrl = c.mainPath ? `/card-images/${c.mainPath}` : '';
               item.innerHTML = `
-                <div style="font-size:0.65rem; color:#38bdf8; font-weight:bold;">🔓 表向き #${idx + 1}</div>
+                <div style="font-size:0.65rem; color:#38bdf8; font-weight:bold;">🔓 表向き ${pos.label}</div>
                 ${imgUrl ? `<img src="${imgUrl}" style="width:72px; height:100px; object-fit:cover; border-radius:4px;">` : '<div style="width:72px; height:100px; background:#1e293b; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:0.7rem;">NoImg</div>'}
                 <div style="font-size:0.72rem; font-weight:bold; text-align:center; line-height:1.2; word-break:break-word;">${c.name || c.definitionId}</div>
                 <div style="font-size:0.65rem; color:var(--text-muted);">Lv.${c.level ?? '-'} / AP ${c.ap ?? '-'}</div>
+                ${bottomNote}
               `;
               item.onclick = () => showCardModal(c);
             } else {
               item.style.cssText = 'background:#0f172a; border:1px dashed #475569; border-radius:6px; padding:10px 6px; display:flex; flex-direction:column; gap:6px; align-items:center; justify-content:center; min-height:130px; opacity:0.85;';
               item.innerHTML = `
                 <div style="font-size:1.5rem;">🔒</div>
-                <div style="font-size:0.72rem; color:var(--text-muted); font-weight:bold;">裏向きの証拠 #${idx + 1}</div>
+                <div style="font-size:0.72rem; color:var(--text-muted); font-weight:bold;">裏向きの証拠 ${pos.label}</div>
+                ${bottomNote}
               `;
             }
             gridEl.appendChild(item);
@@ -3710,13 +3737,23 @@
             };
             btn.style.cssText = renderCandStyle(false);
 
-            const stateLabel = cand.orientation === 'SLEEP' ? ' 💤' : cand.orientation === 'STUN' ? ' 💫' : '';
-            const traitsStr = (cand.traits && cand.traits.length > 0) ? ` ［${cand.traits.join('/')}］` : '';
-            btn.innerHTML = `
-              <span style="font-weight:bold; display:flex; align-items:center; gap:4px;">${zoneBadge}${sideLabel} ${cand.name}${stateLabel}</span>
-              <span style="font-size:0.68rem; opacity:0.85;">Lv.${cand.level} / AP ${cand.ap}${traitsStr}</span>
-              <span class="split-role-tag" data-id="${cand.instanceId}" style="font-size:0.7rem; font-weight:bold; color:#fde047; margin-top:2px;"></span>
-            `;
+            if (cand.zoneLabel === '証拠' && cand.faceUp === false) {
+              // 裏向きの証拠は中身（名前・ステータス）を表示しない
+              const stackInfo = getEvidenceStackInfo(cand.instanceId, isOpp);
+              const posLabel = stackInfo ? evidencePosLabel(stackInfo.index, stackInfo.total).label : '';
+              btn.innerHTML = `
+                <span style="font-weight:bold; display:flex; align-items:center; gap:4px;">${zoneBadge}${sideLabel} 🔒 裏向きの証拠 ${posLabel}</span>
+                <span class="split-role-tag" data-id="${cand.instanceId}" style="font-size:0.7rem; font-weight:bold; color:#fde047; margin-top:2px;"></span>
+              `;
+            } else {
+              const stateLabel = cand.orientation === 'SLEEP' ? ' 💤' : cand.orientation === 'STUN' ? ' 💫' : '';
+              const traitsStr = (cand.traits && cand.traits.length > 0) ? ` ［${cand.traits.join('/')}］` : '';
+              btn.innerHTML = `
+                <span style="font-weight:bold; display:flex; align-items:center; gap:4px;">${zoneBadge}${sideLabel} ${cand.name}${stateLabel}</span>
+                <span style="font-size:0.68rem; opacity:0.85;">Lv.${cand.level} / AP ${cand.ap}${traitsStr}</span>
+                <span class="split-role-tag" data-id="${cand.instanceId}" style="font-size:0.7rem; font-weight:bold; color:#fde047; margin-top:2px;"></span>
+              `;
+            }
 
             const updateSplitRoleTags = () => {
               const effType = pd.options.effectType;

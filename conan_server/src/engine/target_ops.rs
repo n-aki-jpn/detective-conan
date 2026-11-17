@@ -997,14 +997,16 @@ impl MatchEngine {
                         .temp_name_override
                         .clone()
                         .unwrap_or_else(|| self.card_name_by_def(&c.definition_id));
+                    // 裏向きの証拠は中身（名前・ステータス・定義ID）を秘匿する（observation との整合）
+                    let mask_evidence = filter.zone == TargetZone::Evidence && !c.face_up;
                     candidates.push(json!({
                         "instanceId": c.instance_id,
-                        "definitionId": c.definition_id,
-                        "name": cname,
-                        "level": level,
-                        "ap": eff_ap,
-                        "colors": colors,
-                        "traits": traits,
+                        "definitionId": if mask_evidence { String::new() } else { c.definition_id.clone() },
+                        "name": if mask_evidence { "裏向きの証拠".to_string() } else { cname },
+                        "level": if mask_evidence { 0 } else { level },
+                        "ap": if mask_evidence { 0 } else { eff_ap },
+                        "colors": if mask_evidence { Vec::<String>::new() } else { colors },
+                        "traits": if mask_evidence { Vec::<String>::new() } else { traits },
                         "orientation": format!("{:?}", c.orientation),
                         "faceUp": c.face_up,
                         "isOpponent": is_opp,
