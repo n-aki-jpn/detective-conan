@@ -352,6 +352,10 @@ impl MatchEngine {
                             }
                         }
                     }
+                    // 任意リムーブ（コスト）で0枚になった瞬間に即座へリフレッシュ（docs/rules.md §リフレッシュ）
+                    if !milled.is_empty() {
+                        self.refresh_if_deck_emptied(player_id);
+                    }
                     let mut black_cutin_cnt = 0usize;
                     for did in &milled {
                         if let Some(d) = self.catalog.get(did) {

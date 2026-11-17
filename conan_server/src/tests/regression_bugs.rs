@@ -601,6 +601,10 @@ use super::*;
             ps1.field.push(test_inst("p1_genta", "B01014", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE)); // lv4 少年探偵団 (小嶋元太)
             ps1.hand.push(test_inst("h_b11009", "B11009", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
             ps1.deck.push(test_inst("dk1", "B01011", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+            // バッファ山札（B11009の【リムーブ時】1枚ドローで山札が0枚になった瞬間のリフレッシュを誘発させないための余裕）
+            for i in 0..3 {
+                ps1.deck.insert(0, test_inst(&format!("buf_cut_{}", i), "B01011", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+            }
 
             ps2.field.push(test_inst("p2_contact", "B01016", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP)); // lv4 AP4000
             ps2.field.push(test_inst("p2_idle", "B01014", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP));    // lv4 AP5000 (not contacting)
@@ -1574,6 +1578,16 @@ use super::*;
             zone: models::Zone::DECK,
             ..Default::default()
         });
+        // バッファ山札（B08089の1枚ドローで山札が0枚になった瞬間のリフレッシュを誘発させないための余裕）
+        for i in 0..3 {
+            ps1.deck.insert(0, models::CardInstance {
+                instance_id: format!("buf_ha_{}", i),
+                definition_id: "B01002".to_string(),
+                owner_id: "p1".to_string(),
+                zone: models::Zone::DECK,
+                ..Default::default()
+            });
+        }
         ps1.hand.push(models::CardInstance {
             instance_id: "h_1".to_string(),
             definition_id: "B01002".to_string(),
@@ -2658,5 +2672,67 @@ fn test_b11086_vermouth_declare_level_limit_and_trigger_order() {
     let obs4 = build_player_observation(&engine, "p1");
     assert_eq!(obs4["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
     assert_eq!(obs4["pendingDecision"]["options"]["actorId"].as_str(), Some("vodka_lv5"));
+}
+
+#[test]
+fn test_refresh_triggers_at_the_exact_moment_deck_hits_zero() {
+    let catalog = load_test_catalog();
+
+    // A) 山札が0枚になった瞬間にリフレッシュが発動し、removeが山札へ戻って続行する（docs/rules.md §リフレッシュ / docs/test-cases.md T024, T026）
+    {
+        let mut engine = MatchEngine::new(catalog.clone());
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        // 山札は最終1枚のみ。これを gain_evidence で引いた瞬間に0枚になる。
+        ps1.deck.push(test_inst("d_last", "B01011", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        // remove に1枚あるのでリフレッシュは成功し敗北しない。
+        ps1.remove.push(test_inst("r1", "B01011", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE));
+        engine.players.insert("p1".to_string(), ps1);
+
+        // 相手の cascade 敗北を防ぐため p2 には余裕の山札を持たせる。
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        for i in 0..5 {
+            ps2.deck.push(test_inst(&format!("p2_buf_{}", i), "B01011", "p2", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        }
+        engine.players.insert("p2".to_string(), ps2);
+
+        engine.gain_evidence("p1", 1);
+
+        // 0枚になった瞬間に割り込んでリフレッシュ済み → remove の r1 がシャッフルされて山札へ戻る（deck>=1）
+        let p1 = engine.players.get("p1").unwrap();
+        assert!(p1.deck.iter().any(|c| c.instance_id == "r1"), "0枚になった瞬間のリフレッシュで remove(r1) が山札へ戻ること");
+        assert!(!p1.remove.iter().any(|c| c.instance_id == "r1"), "リフレッシュで remove は空になること");
+        assert!(engine.refreshed_players.contains("p1"), "p1 がリフレッシュ済みとして記録されること");
+        assert_ne!(engine.phase, models::MatchPhase::FINISHED, "remove があれば敗北しない");
+        // リフレッシュの副次効果で相手に証拠1枚
+        assert_eq!(engine.players.get("p2").unwrap().evidence.len(), 1, "リフレッシュで相手の証拠が1枚増えること");
+    }
+
+    // B) remove が空のまま0枚になった瞬間は即敗北（docs/rules.md §リフレッシュ / docs/test-cases.md T025）
+    {
+        let mut engine = MatchEngine::new(catalog.clone());
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.deck.push(test_inst("d_last", "B01011", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        engine.players.insert("p1".to_string(), ps1);
+
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        for i in 0..5 {
+            ps2.deck.push(test_inst(&format!("p2_buf2_{}", i), "B01011", "p2", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        }
+        engine.players.insert("p2".to_string(), ps2);
+
+        // 最後の1枚を引いて deck=0 & remove=0 → 0枚になった瞬間にリフレッシュ発動できず敗北
+        engine.gain_evidence("p1", 1);
+
+        assert_eq!(engine.phase, models::MatchPhase::FINISHED, "remove 空で0枚になった瞬間に即敗北すること");
+        assert_eq!(engine.winner_id.as_deref(), Some("p2"), "リフレッシュ枯渇で相手(p2)の勝ちになること");
+    }
 }
 

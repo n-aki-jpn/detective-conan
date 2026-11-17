@@ -518,6 +518,10 @@ impl MatchEngine {
                         }
                     }
                 }
+                // 山札からキャラの下へセット（裏向き）して0枚になった瞬間に即座へリフレッシュ
+                if attached > 0 {
+                    self.refresh_if_deck_emptied(player_id);
+                }
                 if attached > 0 {
                     self.log(format!("🔧 [{}] の効果で [{}] に山札の上から{}枚裏向きでセットしました", actor_name, target_name, attached));
                 }

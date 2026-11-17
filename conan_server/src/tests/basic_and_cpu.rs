@@ -494,6 +494,19 @@ use super::*;
             used_declare_this_turn: false,
             ..Default::default()
         });
+        // バッファ山札（山札が0枚になった瞬間のリフレッシュでこのテスト本体の効果が干渉されないよう余裕を持たせる）
+        for i in 0..3 {
+            ps1.deck.insert(0, models::CardInstance {
+                instance_id: format!("p1_buf_{}", i),
+                definition_id: "B01005".to_string(),
+                owner_id: "p1".to_string(),
+                zone: models::Zone::DECK,
+                orientation: models::CardOrientation::ACTIVE,
+                entered_turn: 0,
+                face_up: false,
+                ..Default::default()
+            });
+        }
 
         ps2.field.push(models::CardInstance {
             instance_id: "p2_atk".to_string(),
@@ -832,6 +845,19 @@ use super::*;
             used_declare_this_turn: false,
             ..Default::default()
         });
+        // バッファ山札（1枚ドローで山札が0枚になった瞬間のリフレッシュが発動し、テスト本体の効果を邪魔しないように余裕を持たせる）
+        for i in 0..3 {
+            ps1.deck.insert(0, models::CardInstance {
+                instance_id: format!("p1_buf_ev_{}", i),
+                definition_id: "B01005".to_string(),
+                owner_id: "p1".to_string(),
+                zone: models::Zone::DECK,
+                orientation: models::CardOrientation::ACTIVE,
+                entered_turn: 0,
+                face_up: false,
+                ..Default::default()
+            });
+        }
 
         engine.players.insert("p1".to_string(), ps1);
         engine.players.insert("p2".to_string(), ps2);

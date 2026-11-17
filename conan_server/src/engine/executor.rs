@@ -178,6 +178,7 @@ impl MatchEngine {
         let mut removed_file = vec![];
         let mut milled = vec![];
 
+        let mut cost_milled_deck = false;
         if let Some(ps) = self.players.get_mut(player_id) {
             if cost.requires_sleep {
                 if let Some(ref mut p) = ps.partner {
@@ -222,6 +223,10 @@ impl MatchEngine {
                     ps.remove.push(d);
                 }
             }
+            // コストで山札からリムーブした（残りが0枚か判定し、借用解除後に即リフレッシュ）
+            if cost.deck_mill > 0 {
+                cost_milled_deck = true;
+            }
             if cost.sacrifice_self && !actor_id.is_empty() {
                 if let Some(idx) = ps.field.iter().position(|c| c.instance_id == actor_id) {
                     let mut c = ps.field.remove(idx);
@@ -238,6 +243,11 @@ impl MatchEngine {
                     ps.deck.insert(0, c);
                 }
             }
+        }
+
+        // コストで山札からリムーブして0枚になった瞬間に即座へリフレッシュ（docs/rules.md §リフレッシュ）
+        if cost_milled_deck {
+            self.refresh_if_deck_emptied(player_id);
         }
 
         for _ in 0..cost.evidence_remove {
@@ -505,6 +515,8 @@ impl MatchEngine {
                         }
                     }
                     self.log(format!("🗑️ [{}] の効果で山札から {} 枚をリムーブしました", actor_name, n));
+                    // 強制リムーブで山札が0枚になった瞬間に即座へリフレッシュ（docs/rules.md §リフレッシュ）
+                    self.refresh_if_deck_emptied(player_id);
                 }
                 ImmediateOp::MillDeckByLastChosenLevel => {
                     let n = self.last_chosen_level.unwrap_or(0).max(0) as usize;
@@ -518,6 +530,7 @@ impl MatchEngine {
                         }
                     }
                     self.log(format!("🗑️ [{}] の効果で選択カードと同じレベルの {} 枚を山札からリムーブしました", actor_name, n));
+                    self.refresh_if_deck_emptied(player_id);
                 }
                 ImmediateOp::OppMillDeck(n) => {
                     let opp_id = self.opponent_id_of(player_id);
@@ -533,6 +546,7 @@ impl MatchEngine {
                         }
                     }
                     self.log(format!("🗑️ [{}] の効果で {} の山札から {} 枚をリムーブしました", actor_name, opp_id, milled));
+                    self.refresh_if_deck_emptied(&opp_id);
                 }
                 ImmediateOp::OppDiscardHand(n) => {
                     let opp_id = self.opponent_id_of(player_id);
@@ -894,6 +908,8 @@ impl MatchEngine {
                             }
                         }
                         self.log(format!("🗑️ [{}] の効果で現場キャラ {} 体につき山札から合計 {} 枚リムーブしました", actor_name, field_cnt, mill_total));
+                        // 現場キャラ数に応じた強制リムーブで0枚になった瞬間に即座へリフレッシュ
+                        self.refresh_if_deck_emptied(player_id);
                     }
                 }
                 ImmediateOp::OppTopEvidenceRemove(n) => {

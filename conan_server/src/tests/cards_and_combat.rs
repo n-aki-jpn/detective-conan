@@ -68,6 +68,9 @@ use super::*;
         }
         ps1.deck.push(test_inst("d1", "B01007", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
         ps1.deck.push(test_inst("d2", "B01006", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        // バッファ山札（テスト本体の2枚ドローで山札が0枚になった瞬間にリフレッシュが発動しないよう余裕を持たせる）
+        ps1.deck.insert(0, test_inst("buf0", "B01005", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        ps1.deck.insert(0, test_inst("buf1", "B01005", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
         ps1.hand.push(test_inst("h_b04005", "B04005", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
         ps1.field.push(test_inst("p1_ran", "B01007", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
 
@@ -102,7 +105,8 @@ use super::*;
         }));
 
         let ps1_after = engine.players.get("p1").unwrap();
-        assert_eq!(ps1_after.deck.len(), 0);
+        // 2枚ドロー後、残りのバッファ山札が手札秘匿で残る（元来 deck0 だったがリフレッシュ回避のため余裕を持たせた）
+        assert_eq!(ps1_after.deck.len(), 2);
         assert_eq!(ps1_after.remove.len(), 2);
         assert_eq!(ps1_after.hand.len(), 0);
         // Should return cleanly to mainAction without opening Declare's targetSelect
@@ -282,6 +286,10 @@ use super::*;
         ps1.field.push(test_inst("p1_f1", "B01005", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
         ps1.hand.push(test_inst("h_kid", "B02038", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE)); // 【変装】【事件白】【FILE6】
         ps1.deck.push(test_inst("p1_d1", "B01005", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        // バッファ山札（変装時ドローで山札が0枚になった瞬間のリフレッシュを誘発させないための余裕）
+        for i in 0..3 {
+            ps1.deck.insert(0, test_inst(&format!("buf_hd_{}", i), "B01005", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        }
 
         // p2 has evidence D03013 (【ヒラメキ】キャラを1枚まで選び、スリープさせる) & active attacker
         ps2.r#case = Some(test_inst("p2_case", "B01002", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
@@ -653,6 +661,9 @@ use super::*;
             ps1_mut.hand.push(test_inst("h_green_ev", "B04026", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE)); // 緑イベント
             ps1_mut.deck.push(test_inst("d1", "B01021", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
             ps1_mut.deck.push(test_inst("d2", "B01021", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+            // バッファ山札（PR041の2枚ドローで山札が0枚になった瞬間のリフレッシュを誘発させないための余裕）
+            ps1_mut.deck.insert(0, test_inst("buf_pr_0", "B01021", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+            ps1_mut.deck.insert(0, test_inst("buf_pr_1", "B01021", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
         }
         let pd2 = engine.pending_decision.as_ref().unwrap().clone();
         let _ = engine.submit_decision("p1", &serde_json::json!({

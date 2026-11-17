@@ -265,6 +265,11 @@ impl MatchEngine {
                 card.face_up = true;
                 ps.hand.push(card);
             }
+            // 山札が0枚になった瞬間に即座へリフレッシュ（ルール手册 p.20 / F §2.3、残数は続行）
+            self.refresh_if_deck_emptied(player_id);
+            if self.phase == MatchPhase::FINISHED {
+                return;
+            }
         }
     }
 
@@ -281,6 +286,8 @@ impl MatchEngine {
             card.zone = Zone::FILE;
             ps.file.push(card);
         }
+        // 山札が0枚になった瞬間に即座へリフレッシュ
+        self.refresh_if_deck_emptied(player_id);
     }
 
     pub fn gain_evidence(&mut self, player_id: &str, count: usize) {
@@ -297,6 +304,24 @@ impl MatchEngine {
                 card.zone = Zone::EVIDENCE;
                 ps.evidence.push(card);
             }
+            // 山札が0枚になった瞬間に即座へリフレッシュ（ルール手册 p.20 / F §2.3、残数は続行）
+            self.refresh_if_deck_emptied(player_id);
+            if self.phase == MatchPhase::FINISHED {
+                return;
+            }
+        }
+    }
+
+    /// 1枚のカードが山札から「実際に離脱」した直後に呼び、山札が0枚になった瞬間かどうかを見る。
+    /// 「見る／公開」だけで山札に戻す処理（捜査・めくり）では呼ばない（docs/rules.md §リフレッシュ p.20）。
+    /// 0枚になったら即座へリフレッシュ（remove0なら敗北）。呼び出し側の残枚数処理はそのまま続行する。
+    pub(super) fn refresh_if_deck_emptied(&mut self, player_id: &str) {
+        if self.phase == MatchPhase::FINISHED {
+            return;
+        }
+        let deck_empty = self.players.get(player_id).map(|p| p.deck.is_empty()).unwrap_or(false);
+        if deck_empty {
+            self.trigger_refresh(player_id);
         }
     }
 
