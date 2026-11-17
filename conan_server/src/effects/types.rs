@@ -455,6 +455,7 @@ pub struct ParsedClausePlan {
 }
 
 /// 条件判定に必要なプレイヤー状態ビュー
+#[derive(Clone)]
 pub struct PlayerCondInfo<'a> {
     pub actor_id: Option<&'a str>,
     pub actor_orientation: CardOrientation,

@@ -238,7 +238,7 @@ impl MatchEngine {
             .unwrap_or(CardOrientation::ACTIVE)
     }
 
-    pub(super) fn build_cond_info<'a>(
+    pub fn build_cond_info<'a>(
         &'a self,
         player_id: &str,
         actor_id: Option<&'a str>,

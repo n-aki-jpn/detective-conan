@@ -40,11 +40,7 @@ impl MatchEngine {
                         }
                         let card_colors = normalize_color_set(&c_def.colors);
                         let color_ok = card_colors.is_empty() || case_colors.is_empty() || card_colors.is_subset(&case_colors);
-                        let eff_lv = if c_def.card_type == CardType::EVENT {
-                            card_effective_level(c_def, &cond_ctx)
-                        } else {
-                            c_def.level
-                        };
+                        let eff_lv = card_effective_level(c_def, &cond_ctx);
                         if eff_lv <= effective_file && color_ok {
                             if c_def.card_type == CardType::EVENT {
                                 if !event_blocked && check_event_play_conditions(&c_def.description, &cond_ctx).is_ok() {
@@ -496,11 +492,7 @@ impl MatchEngine {
                             let card_colors = normalize_color_set(&c_def.colors);
                             let color_ok = card_colors.is_empty() || case_colors.is_empty() || card_colors.is_subset(&case_colors);
                             let slot_ok = true;
-                            let eff_lv = if c_def.card_type == CardType::EVENT {
-                                card_effective_level(c_def, &cond_ctx)
-                            } else {
-                                c_def.level
-                            };
+                            let eff_lv = card_effective_level(c_def, &cond_ctx);
                             let ev_ok = c_def.card_type != CardType::EVENT
                                 || (!event_blocked && check_event_play_conditions(&c_def.description, &cond_ctx).is_ok());
                             if eff_lv <= effective_file && color_ok && slot_ok && ev_ok {

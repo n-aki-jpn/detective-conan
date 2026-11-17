@@ -47,12 +47,12 @@ pub fn check_event_play_conditions(description: &str, ctx: &PlayerCondInfo) -> R
     Ok(())
 }
 
-/// 手札にあるカードの実効レベル計算（B10033等のレベル－N能力を考慮）
+/// 手札にあるカードの実効レベル計算（B07008・B10033・B01009等の手札レベル変動能力を考慮）
 pub fn card_effective_level(def: &CardDefinition, ctx: &PlayerCondInfo) -> i32 {
     let mut lv = def.level;
     let clean = strip_parens(&def.description);
     for line in clean.lines().map(str::trim).filter(|l| !l.is_empty()) {
-        if line.contains("手札にあるこの") && line.contains("レベル－") {
+        if line.contains("手札にあるこの") && (line.contains("レベル－") || line.contains("レベル") && line.contains("になる")) {
             let tags_ok = extract_leading_bracket_tags(line)
                 .iter()
                 .all(|t| check_single_bracket_tag(t, ctx).is_ok());
@@ -60,20 +60,85 @@ pub fn card_effective_level(def: &CardDefinition, ctx: &PlayerCondInfo) -> i32 {
                 continue;
             }
             let body = strip_leading_tags(line);
-            let cond_ok = if let Some(idx) = body.find("場合、") {
-                eval_cond_phrase(&body[..idx], ctx)
+            let (cond_ok, effect_part) = if let Some(idx) = body.find("場合、") {
+                (eval_cond_phrase(&body[..idx], ctx), &body[idx + "場合、".len()..])
             } else {
-                true
+                (true, body)
             };
-            if cond_ok {
-                if let Some(delta) = extract_number_before(body, "レベル－", "され")
-                    .or_else(|| extract_number_before(body, "レベル－", "する"))
+            if !cond_ok {
+                continue;
+            }
+
+            // 1) 「〜1枚につき、レベル－Nされる」系（B07008 小嶋元太 など）
+            if let Some((scale_part, after_per)) = effect_part.split_once("につき、") {
+                let mult = if let Some(start) = scale_part.find("自分の現場にいる") {
+                    let rest = &scale_part[start + "自分の現場にいる".len()..];
+                    let phrase = rest.replace("このキャラ以外の", "").replace("1枚", "");
+                    let branches = parse_branches_from_phrase(&phrase, CardType::CHARACTER);
+                    ctx.field_cards
+                        .iter()
+                        .filter(|(inst, fdef)| {
+                            branches
+                                .iter()
+                                .any(|b| branch_matches(fdef, fdef.ap + inst.temp_ap_bonus, b))
+                        })
+                        .count() as i32
+                } else if scale_part.contains("自分の表向きの証拠1つ") {
+                    ctx.field_cards.len() as i32
+                } else {
+                    1
+                };
+                if let Some(delta) = extract_number_before(after_per, "レベル－", "され")
+                    .or_else(|| extract_number_before(after_per, "レベル－", "する"))
                 {
-                    lv = (lv - delta).max(0);
+                    lv = (lv - delta * mult).max(1);
+                }
+                continue;
+            }
+
+            // 2) 「レベル－Nされる / する」系（B10033・B09095・B11032 など）
+            if let Some(delta) = extract_number_before(effect_part, "レベル－", "され")
+                .or_else(|| extract_number_before(effect_part, "レベル－", "する"))
+            {
+                lv = (lv - delta).max(1);
+            } else if let Some(fixed_lv) = extract_number_before(effect_part, "レベル", "になる") {
+                // 3) 「手札にあるこのキャラはレベル4になる」系（B01009 工藤新一 など）
+                lv = fixed_lv.max(1);
+            }
+        }
+    }
+
+    // 場のキャラによる手札レベル軽減（B06047 鉄刃 など）
+    for (inst, fdef) in &ctx.field_cards {
+        let f_clean = strip_parens(&fdef.description);
+        for line in f_clean.lines().map(str::trim).filter(|l| !l.is_empty()) {
+            if line.contains("自分の手札にある") && line.contains("レベル－") {
+                let f_ctx = PlayerCondInfo {
+                    actor_id: Some(&inst.instance_id),
+                    actor_orientation: inst.orientation,
+                    ..ctx.clone()
+                };
+                let tags_ok = extract_leading_bracket_tags(line)
+                    .iter()
+                    .all(|t| check_single_bracket_tag(t, &f_ctx).is_ok());
+                if !tags_ok {
+                    continue;
+                }
+                let body = strip_leading_tags(line);
+                if let Some(after_hand) = body.strip_prefix("自分の手札にある") {
+                    if let Some((target_phrase, eff)) = after_hand.split_once("を") {
+                        let branches = parse_branches_from_phrase(target_phrase, def.card_type);
+                        if branches.iter().any(|b| branch_matches(def, def.ap, b)) {
+                            if let Some(delta) = extract_number_before(eff, "レベル－", "する") {
+                                lv = (lv - delta).max(1);
+                            }
+                        }
+                    }
                 }
             }
         }
     }
+
     lv
 }
 

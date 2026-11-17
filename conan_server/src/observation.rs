@@ -1,5 +1,6 @@
+use crate::effects::card_effective_level;
 use crate::engine::{MatchEngine, PlayerState};
-use crate::models::{CardInstance, CardOrientation, CasePhase, MatchPhase};
+use crate::models::{CardInstance, CardOrientation, CasePhase, MatchPhase, Zone};
 use serde_json::{json, Value};
 
 pub fn build_player_observation(engine: &MatchEngine, viewing_player_id: &str) -> Value {
@@ -33,7 +34,18 @@ pub fn build_player_observation(engine: &MatchEngine, viewing_player_id: &str) -
         let card_type = c_def.map(|d| format!("{:?}", d.card_type)).unwrap_or_else(|| "CHARACTER".to_string());
         let main_thumb = c_def.and_then(|d| d.main_thumb.clone());
         let main_path = c_def.and_then(|d| d.main_path.clone());
-        let effective_level = if level > 0 { (level + c.temp_level_delta).max(1) } else { 0 };
+        let effective_level = if c.zone == Zone::HAND {
+            if let Some(d) = c_def {
+                let cond_ctx = engine.build_cond_info(&c.owner_id, Some(&c.instance_id), c.orientation, None);
+                card_effective_level(d, &cond_ctx)
+            } else {
+                level
+            }
+        } else if level > 0 {
+            (level + c.temp_level_delta).max(1)
+        } else {
+            0
+        };
         let set_cards_json: Vec<Value> = c.set_cards.iter().map(|sc| {
             if !sc.face_up && c.owner_id != viewing_player_id {
                 return json!({
