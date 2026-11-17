@@ -1559,19 +1559,24 @@ impl MatchEngine {
     }
 
     pub(super) fn resume_after_decision(&mut self, decision_player_id: &str, resume_context: &str) {
+        let effective_ctx = if self.phase == MatchPhase::END_TRIGGERS {
+            "END_TURN"
+        } else {
+            resume_context
+        };
         if self.drain_pending_clause_queue() {
             return;
         }
-        if self.try_fire_pending_ally_play(resume_context) {
+        if self.try_fire_pending_ally_play(effective_ctx) {
             return;
         }
-        if self.check_field_overflow(decision_player_id, resume_context) {
+        if self.check_field_overflow(decision_player_id, effective_ctx) {
             return;
         }
-        if resume_context == "MAIN" && self.try_fire_pending_hint_trigger(decision_player_id, None) {
+        if effective_ctx == "MAIN" && self.try_fire_pending_hint_trigger(decision_player_id, None) {
             return;
         }
-        if resume_context == "GUARD" {
+        if effective_ctx == "GUARD" {
             let pending_trigger = self.action_context.as_mut().and_then(|ctx| {
                 let obj = ctx.as_object_mut()?;
                 obj.remove("pendingCutinTrigger")
@@ -1623,7 +1628,7 @@ impl MatchEngine {
             } else {
                 self.prompt_guard_or_cutin(decision_player_id);
             }
-        } else if let Some(def_pid) = resume_context.strip_prefix("START_GUARD:") {
+        } else if let Some(def_pid) = effective_ctx.strip_prefix("START_GUARD:") {
             if self.is_action_target_still_valid() {
                 self.prompt_guard_or_cutin(def_pid);
             } else {
@@ -1632,12 +1637,12 @@ impl MatchEngine {
                 self.log("⚠️ 指定されていた対象が現場を離れたためアクションを終了します");
                 self.prompt_main_action(&self.turn_player_id.clone());
             }
-        } else if resume_context == "END_TURN" {
+        } else if effective_ctx == "END_TURN" {
             let next_turn = self.turn + 1;
             let cur_turn_pid = self.turn_player_id.clone();
             let next_pid = self.player_order.iter().find(|pid| *pid != &cur_turn_pid).cloned().unwrap_or(cur_turn_pid);
             self.start_turn(next_turn, &next_pid);
-        } else if let Some(attacker_pid) = resume_context.strip_prefix("CASE_ATTACK:") {
+        } else if let Some(attacker_pid) = effective_ctx.strip_prefix("CASE_ATTACK:") {
             self.prompt_main_action(attacker_pid);
         } else if self.action_context.is_some() && self.turn_player_id != decision_player_id {
             self.prompt_guard_or_cutin(decision_player_id);

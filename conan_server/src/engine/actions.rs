@@ -7,6 +7,21 @@ impl MatchEngine {
         if self.phase == MatchPhase::FINISHED {
             return;
         }
+        if self.phase == MatchPhase::END_TRIGGERS {
+            if self.check_field_overflow(player_id, "END_TURN") {
+                return;
+            }
+            let next_turn = self.turn + 1;
+            let cur_turn_pid = self.turn_player_id.clone();
+            let next_pid = self
+                .player_order
+                .iter()
+                .find(|pid| *pid != &cur_turn_pid)
+                .cloned()
+                .unwrap_or(cur_turn_pid);
+            self.start_turn(next_turn, &next_pid);
+            return;
+        }
 
         let ps = match self.players.get(player_id) {
             Some(p) => p,
@@ -382,6 +397,10 @@ impl MatchEngine {
 
         match action_type {
             "END_TURN" => {
+                if self.phase == MatchPhase::END_TRIGGERS || self.phase == MatchPhase::FINISHED {
+                    return;
+                }
+                self.phase = MatchPhase::END_TRIGGERS;
                 self.log(format!("⏭ {} がターンを終了しました", player_id));
                 // ターン終了時トリガーの解決
                 self.trigger_on_turn_end(player_id);
