@@ -318,6 +318,39 @@ impl MatchEngine {
             .unwrap_or(0) as usize;
 
         match special_kind {
+            "DECLARE_CLAUSE_SELECT" => {
+                if let Some(chosen_clause) = modes.get(single_idx).cloned() {
+                    let def_id = opts
+                        .get("definitionId")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let is_hand_event_declare = opts
+                        .get("isHandEventDeclare")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    let set_host_id = opts
+                        .get("setHostId")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+                    let ori = self.find_actor_orientation(
+                        player_id,
+                        set_host_id.as_deref().unwrap_or(&actor_id),
+                    );
+                    self.execute_declare_clause(
+                        player_id,
+                        &actor_id,
+                        &def_id,
+                        is_hand_event_declare,
+                        set_host_id,
+                        ori,
+                        &chosen_clause,
+                    );
+                } else {
+                    self.prompt_main_action(player_id);
+                }
+                return;
+            }
             "OPTIONAL_ALL_COST" => {
                 if let Ok(mut mc) = serde_json::from_value::<EventModeChoice>(opts.get("eventModeChoice").cloned().unwrap_or(json!({}))) {
                     let cost_text = opts.get("optionalCostText").and_then(|v| v.as_str()).unwrap_or("");
@@ -741,6 +774,95 @@ impl MatchEngine {
                     }
                 }
             }
+        } else if effect_type == "REVIVE_SPLIT_GONIN" {
+            if !valid_chosen.is_empty() {
+                self.prompt_gonin_pick_step(
+                    player_id,
+                    &actor_id,
+                    &actor_name,
+                    source_level,
+                    &valid_chosen,
+                    &[],
+                    false,
+                    &resume_context,
+                    after_hint_level,
+                );
+                return;
+            }
+            self.log(format!("{} は [{}] の対象を選択しませんでした（スキップ）", player_id, actor_name));
+        } else if effect_type == "REVIVE_SPLIT_PICK_ACTIVE" || effect_type == "REVIVE_SPLIT_PICK_SLEEP" {
+            let is_sleep_step = effect_type == "REVIVE_SPLIT_PICK_SLEEP";
+            let pool_ids: Vec<String> = opts
+                .get("splitPool")
+                .and_then(|v| v.as_array())
+                .map(|a| a.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect())
+                .unwrap_or_default();
+            if let Some(arr) = opts.get("splitDeployed").and_then(|v| v.as_array()) {
+                for item in arr {
+                    if let (Some(iid), Some(did), Some(ori_s)) = (
+                        item.get("instanceId").and_then(|v| v.as_str()),
+                        item.get("definitionId").and_then(|v| v.as_str()),
+                        item.get("orientation").and_then(|v| v.as_str()),
+                    ) {
+                        let ori = if ori_s == "SLEEP" {
+                            CardOrientation::SLEEP
+                        } else {
+                            CardOrientation::ACTIVE
+                        };
+                        deployed_list.push((iid.to_string(), did.to_string(), ori));
+                    }
+                }
+            }
+            let picked_id = valid_chosen.first().cloned();
+            if let Some(ref tid) = picked_id {
+                let single_action = if is_sleep_step { "REVIVE_SLEEP" } else { "REVIVE_ACTIVE" };
+                self.apply_single_target_action(
+                    player_id,
+                    &actor_id,
+                    &actor_name,
+                    single_action,
+                    "REMOVE",
+                    tid,
+                    0,
+                    &opts,
+                    &mut deployed_list,
+                );
+                applied = true;
+            }
+            let rem_pool: Vec<String> = pool_ids
+                .into_iter()
+                .filter(|id| picked_id.as_deref() != Some(id.as_str()))
+                .collect();
+            if !is_sleep_step && !rem_pool.is_empty() {
+                self.prompt_gonin_pick_step(
+                    player_id,
+                    &actor_id,
+                    &actor_name,
+                    source_level,
+                    &rem_pool,
+                    &deployed_list,
+                    true,
+                    &resume_context,
+                    after_hint_level,
+                );
+                return;
+            }
+            if is_sleep_step && !rem_pool.is_empty() {
+                for tid in &rem_pool {
+                    self.apply_single_target_action(
+                        player_id,
+                        &actor_id,
+                        &actor_name,
+                        "RECOVER_TO_HAND",
+                        "REMOVE",
+                        tid,
+                        0,
+                        &opts,
+                        &mut deployed_list,
+                    );
+                }
+                applied = true;
+            }
         } else if !valid_chosen.is_empty() {
             if effect_type == "SLEEP" {
                 self.last_slept_names.clear();
@@ -957,92 +1079,9 @@ impl MatchEngine {
             }
         }
 
-        // 登場させたキャラの登場時効果（複数体が同時にOnPlayを持つ場合は発動順をプレイヤーが選択）
-        if deployed_list.len() >= 2 {
-            let mut on_play_tasks: Vec<PendingClauseTask> = Vec::new();
-            for (dep_inst, dep_def, _) in &deployed_list {
-                if let Some(def) = self.catalog.get(dep_def).cloned() {
-                    let on_play_clauses = extract_clauses(&def.description, TriggerKind::OnPlay, def.card_type);
-                    let dep_name = self.card_name_by_def(dep_def);
-                    for cl in on_play_clauses {
-                        on_play_tasks.push(PendingClauseTask {
-                            player_id: player_id.to_string(),
-                            actor_id: dep_inst.clone(),
-                            actor_name: dep_name.clone(),
-                            source_level,
-                            card_type: def.card_type,
-                            clause: cl,
-                            resume_context: resume_context.clone(),
-                            evidence_source_inst_id: None,
-                            post_target_ops: vec![],
-                            plan: None,
-                        });
-                    }
-                }
-            }
-            if on_play_tasks.len() >= 2 {
-                let triggers_json: Vec<Value> = on_play_tasks
-                    .iter()
-                    .enumerate()
-                    .map(|(i, t)| {
-                        json!({
-                            "index": i,
-                            "actorId": t.actor_id,
-                            "actorName": t.actor_name,
-                            "clause": t.clause,
-                        })
-                    })
-                    .collect();
-                self.pending_trigger_order_tasks = on_play_tasks;
-                self.pending_decision = Some(json!({
-                    "decisionId": format!("dec_{}", self.revision + 1),
-                    "playerId": player_id,
-                    "kind": "triggerOrder",
-                    "options": {
-                        "title": "同時に誘発した【登場時】効果のうち、先に発動する能力を選んでください",
-                        "triggers": triggers_json,
-                    }
-                }));
-                return;
-            }
-        }
-
-        for (didx, (dep_inst, dep_def, dep_ori)) in deployed_list.iter().enumerate() {
-            if self.resolve_character_enter_field_with_source(
-                player_id,
-                dep_inst,
-                dep_def,
-                *dep_ori,
-                source_level,
-                &resume_context,
-            ) {
-                let mut rem_tasks: Vec<PendingClauseTask> = Vec::new();
-                for (rem_inst, rem_def, _) in &deployed_list[didx + 1..] {
-                    if let Some(def) = self.catalog.get(rem_def).cloned() {
-                        let on_play_clauses = extract_clauses(&def.description, TriggerKind::OnPlay, def.card_type);
-                        let rem_name = self.card_name_by_def(rem_def);
-                        for cl in on_play_clauses {
-                            rem_tasks.push(PendingClauseTask {
-                                player_id: player_id.to_string(),
-                                actor_id: rem_inst.clone(),
-                                actor_name: rem_name.clone(),
-                                source_level,
-                                card_type: def.card_type,
-                                clause: cl,
-                                resume_context: resume_context.clone(),
-                                evidence_source_inst_id: None,
-                                post_target_ops: vec![],
-                                plan: None,
-                            });
-                        }
-                    }
-                }
-                if !rem_tasks.is_empty() {
-                    rem_tasks.extend(std::mem::take(&mut self.pending_clause_queue));
-                    self.pending_clause_queue = rem_tasks;
-                }
-                return;
-            }
+        // 登場させたキャラの登場時効果（突撃/迅速のみを除き2体以上同時にOnPlayを持つ場合のみ発動順をプレイヤーが選択）
+        if self.resolve_deployed_characters(player_id, source_level, &deployed_list, &resume_context) {
+            return;
         }
 
         if (applied || !abort_on_skip) && self.drain_pending_clause_queue() {
@@ -1058,6 +1097,179 @@ impl MatchEngine {
         }
 
         self.resume_after_decision(player_id, &resume_context);
+    }
+
+    fn is_simple_rush_or_swift_clause(clause: &str, card_type: CardType) -> bool {
+        let plan = parse_effect_steps(clause, None, card_type);
+        plan.target_step.is_none()
+            && plan.follow_up_target.is_none()
+            && plan.deck_search.is_none()
+            && plan.post_target_ops.is_empty()
+            && plan.extra_clauses.is_empty()
+            && !plan.immediate_before.is_empty()
+            && plan
+                .immediate_before
+                .iter()
+                .all(|op| matches!(op, ImmediateOp::SelfGiveRush(_)))
+    }
+
+    pub fn resolve_deployed_characters(
+        &mut self,
+        player_id: &str,
+        source_level: Option<i32>,
+        deployed_list: &[(String, String, CardOrientation)],
+        resume_context: &str,
+    ) -> bool {
+        if deployed_list.is_empty() {
+            return false;
+        }
+        // 全登場キャラを先に場入場準備（MR整理 + pending_ally_play 登録）し、後から順番にOnPlay・ウォッチャーを発火させる
+        for (dep_inst, dep_def, dep_ori) in deployed_list {
+            self.prepare_character_enter_field(player_id, dep_inst, dep_def, *dep_ori, source_level);
+        }
+
+        let mut on_play_tasks: Vec<PendingClauseTask> = Vec::new();
+        let mut non_rush_count = 0usize;
+        for (dep_inst, dep_def, _) in deployed_list {
+            if let Some(def) = self.catalog.get(dep_def).cloned() {
+                let on_play_clauses = extract_clauses(&def.description, TriggerKind::OnPlay, def.card_type);
+                let dep_name = self.card_name_by_def(dep_def);
+                for cl in on_play_clauses {
+                    if !Self::is_simple_rush_or_swift_clause(&cl, def.card_type) {
+                        non_rush_count += 1;
+                    }
+                    on_play_tasks.push(PendingClauseTask {
+                        player_id: player_id.to_string(),
+                        actor_id: dep_inst.clone(),
+                        actor_name: dep_name.clone(),
+                        source_level,
+                        card_type: def.card_type,
+                        clause: cl,
+                        resume_context: resume_context.to_string(),
+                        evidence_source_inst_id: None,
+                        post_target_ops: vec![],
+                        plan: None,
+                    });
+                }
+            }
+        }
+
+        if non_rush_count >= 2 && on_play_tasks.len() >= 2 {
+            let triggers_json: Vec<Value> = on_play_tasks
+                .iter()
+                .enumerate()
+                .map(|(i, t)| {
+                    json!({
+                        "index": i,
+                        "actorId": t.actor_id,
+                        "actorName": t.actor_name,
+                        "clause": t.clause,
+                    })
+                })
+                .collect();
+            self.pending_trigger_order_tasks = on_play_tasks;
+            let dec_id = self.generate_decision_id();
+            self.pending_decision = Some(json!({
+                "decisionId": dec_id,
+                "revision": self.revision,
+                "playerId": player_id,
+                "kind": "triggerOrder",
+                "options": {
+                    "title": "同時に誘発した【登場時】効果のうち、先に発動する能力を選んでください",
+                    "triggers": triggers_json,
+                }
+            }));
+            return true;
+        }
+
+        if !on_play_tasks.is_empty() {
+            for t in on_play_tasks.into_iter().rev() {
+                self.pending_clause_queue.insert(0, t);
+            }
+            if self.drain_pending_clause_queue() {
+                return true;
+            }
+        }
+
+        self.try_fire_pending_ally_play(resume_context)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn prompt_gonin_pick_step(
+        &mut self,
+        player_id: &str,
+        actor_id: &str,
+        actor_name: &str,
+        source_level: Option<i32>,
+        pool_ids: &[String],
+        deployed: &[(String, String, CardOrientation)],
+        pick_sleep: bool,
+        resume_context: &str,
+        after_hint_level: Option<i32>,
+    ) {
+        let candidates: Vec<Value> = pool_ids
+            .iter()
+            .filter_map(|iid| {
+                let ps = self.players.get(player_id)?;
+                let c = ps.remove.iter().find(|rc| &rc.instance_id == iid)?;
+                let def = self.catalog.get(&c.definition_id)?;
+                let cname = def.names.first().cloned().unwrap_or_else(|| c.definition_id.clone());
+                Some(json!({
+                    "instanceId": c.instance_id,
+                    "definitionId": c.definition_id,
+                    "name": cname,
+                    "level": def.level,
+                    "ap": def.ap,
+                    "traits": def.traits,
+                    "colors": def.colors,
+                    "ownerId": player_id,
+                    "orientation": "ACTIVE",
+                    "zone": "REMOVE",
+                    "faceUp": true,
+                }))
+            })
+            .collect();
+        let deployed_json: Vec<Value> = deployed
+            .iter()
+            .map(|(iid, did, ori)| {
+                json!({
+                    "instanceId": iid,
+                    "definitionId": did,
+                    "orientation": match ori {
+                        CardOrientation::SLEEP => "SLEEP",
+                        _ => "ACTIVE",
+                    }
+                })
+            })
+            .collect();
+        let dec_id = self.generate_decision_id();
+        let title = if pick_sleep {
+            "残りから【スリープ状態】で登場させるキャラを1枚まで選択（スキップで残りを手札に加える）"
+        } else {
+            "選んだ中から【アクティブ状態】で登場させるキャラを1枚まで選択（スキップ可）"
+        };
+        self.pending_decision = Some(json!({
+            "decisionId": dec_id,
+            "revision": self.revision,
+            "playerId": player_id,
+            "kind": "targetSelect",
+            "options": {
+                "actorId": actor_id,
+                "actorName": actor_name,
+                "sourceLevel": source_level,
+                "effectType": if pick_sleep { "REVIVE_SPLIT_PICK_SLEEP" } else { "REVIVE_SPLIT_PICK_ACTIVE" },
+                "targetZone": "REMOVE",
+                "maxSelect": 1,
+                "optional": true,
+                "abortOnSkip": false,
+                "candidates": candidates,
+                "splitPool": pool_ids,
+                "splitDeployed": deployed_json,
+                "resumeContext": resume_context,
+                "afterHintLevel": after_hint_level,
+                "title": title,
+            }
+        }));
     }
 
     /// 同時誘発した能力の発動順選択を処理する

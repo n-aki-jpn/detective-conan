@@ -845,8 +845,8 @@ impl MatchEngine {
             }
         }
 
-        // 実行可能な宣言句を選出（複数宣言がある場合はターン制限・コストを満たす最初の有効句を優先）
-        let mut chosen_clause: Option<String> = None;
+        // 実行可能な宣言句をすべて収集（複数ある場合はプレイヤーに選択させる）
+        let mut usable_clauses: Vec<String> = Vec::new();
         for cl in &cond_ok_clauses {
             if single_clause_legacy_used || !self.can_use_clause_this_turn(actor_id, cl) {
                 continue;
@@ -861,16 +861,67 @@ impl MatchEngine {
                     .map(|ps| self.can_pay_clause_cost(ps, cost_actor, &cost))
                     .unwrap_or(false);
             if can_pay {
-                chosen_clause = Some(cl.clone());
-                break;
+                usable_clauses.push(cl.clone());
             }
         }
 
-        let Some(clause) = chosen_clause else {
+        if usable_clauses.is_empty() {
             self.log(format!("⚠️ [{}] の【宣言】条件またはコストを満たしていません", card_name));
             self.prompt_main_action(player_id);
             return;
+        }
+        if usable_clauses.len() >= 2 {
+            let dec_id = self.generate_decision_id();
+            self.pending_decision = Some(json!({
+                "decisionId": dec_id,
+                "revision": self.revision,
+                "playerId": player_id,
+                "kind": "modeSelect",
+                "options": {
+                    "specialKind": "DECLARE_CLAUSE_SELECT",
+                    "actorId": actor_id,
+                    "actorName": card_name,
+                    "definitionId": def_id,
+                    "isHandEventDeclare": is_hand_event_declare,
+                    "setHostId": set_host_id,
+                    "minPick": 1,
+                    "maxPick": 1,
+                    "modes": usable_clauses,
+                    "resumeContext": "MAIN",
+                    "title": format!("[{}] 使用する【宣言】効果を選択してください", card_name)
+                }
+            }));
+            return;
+        }
+
+        let clause = usable_clauses.remove(0);
+        self.execute_declare_clause(
+            player_id,
+            actor_id,
+            &def_id,
+            is_hand_event_declare,
+            set_host_id,
+            ori,
+            &clause,
+        );
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn execute_declare_clause(
+        &mut self,
+        player_id: &str,
+        actor_id: &str,
+        def_id: &str,
+        is_hand_event_declare: bool,
+        set_host_id: Option<String>,
+        ori: CardOrientation,
+        clause: &str,
+    ) {
+        let Some(def) = self.catalog.get(def_id).cloned() else {
+            self.prompt_main_action(player_id);
+            return;
         };
+        let card_name = self.card_name_by_def(def_id);
 
         let cost = parse_clause_cost(&clause);
         let pay_auto = cost.hand_remove == 0 && cost.evidence_flip_up == 0 && cost.field_sleep == 0;

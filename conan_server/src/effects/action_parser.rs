@@ -552,6 +552,9 @@ pub fn parse_immediate_ops(sentence: &str) -> Vec<ImmediateOp> {
             if let Some(lp_buff) = parse_signed_lp(p, true) {
                 ops.push(ImmediateOp::SelfLpBuff(lp_buff));
             }
+            if let Some(lv_delta) = parse_signed_level(p, true).or_else(|| parse_signed_level(p, false)) {
+                ops.push(ImmediateOp::SelfLevelDelta(lv_delta));
+            }
         }
 
         if p.contains("このキャラをアクティブに") {

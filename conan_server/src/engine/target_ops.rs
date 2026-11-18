@@ -179,6 +179,7 @@ impl MatchEngine {
                                 ps.remove.push(sc);
                             } else {
                                 let mut card = ps.field.remove(idx);
+                                Self::reset_turn_card_modifiers(&mut card);
                                 for mut sc in card.set_cards.drain(..) {
                                     sc.zone = Zone::REMOVE;
                                     sc.face_up = true;
@@ -402,6 +403,7 @@ impl MatchEngine {
                 if let Some(ps) = self.players.get_mut(player_id) {
                     if let Some(idx) = ps.field.iter().position(|c| c.instance_id == tid) {
                         let mut card = ps.field.remove(idx);
+                        Self::reset_turn_card_modifiers(&mut card);
                         for mut sc in std::mem::take(&mut card.set_cards) {
                             sc.zone = Zone::REMOVE;
                             sc.face_up = true;
@@ -1440,7 +1442,7 @@ pub(super) fn target_action_prompt_title(action: &TargetAction, filter: &TargetF
         TargetAction::LevelDelta(d) => format!("レベル{}する{}キャラを選択してください", d, prefix),
         TargetAction::ReviveActive => format!("リムーブエリアから登場させるカードを{}枚選択してください", max_n),
         TargetAction::ReviveSleep => format!("リムーブエリアからスリープ状態で登場させるカードを{}枚選択してください", max_n),
-        TargetAction::ReviveSplitGonin => "選択順に【1枚目:登場(アクティブ)】【2枚目:スリープ登場】【3枚目:手札に加える】を3枚まで選択してください".to_string(),
+        TargetAction::ReviveSplitGonin => "リムーブエリアから3枚まで選択してください（次のステップで登場・手札を選択します）".to_string(),
         TargetAction::ReviveSplitBakana => "選択順に【1枚目:登場(アクティブ)】【2枚目:スリープ登場】を合計Lv10以下で2枚まで選択してください".to_string(),
         TargetAction::RecoverToHand => format!("リムーブエリアから手札に加えるカードを{}枚選択してください", max_n),
         TargetAction::PlayFromHand => format!("手札から登場させるキャラを{}枚選択してください", max_n),

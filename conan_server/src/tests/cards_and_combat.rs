@@ -1650,6 +1650,24 @@ use super::*;
             }
         }));
 
+        // ステップ2: アクティブ登場を選択
+        let pd_act = engine.pending_decision.as_ref().expect("step2 must prompt REVIVE_SPLIT_PICK_ACTIVE").clone();
+        assert_eq!(pd_act["options"]["effectType"], "REVIVE_SPLIT_PICK_ACTIVE");
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd_act["decisionId"],
+            "revision": engine.revision,
+            "value": { "targetId": "r_conan1" }
+        }));
+
+        // ステップ3: スリープ登場を選択（残りは自動で手札へ）
+        let pd_slp = engine.pending_decision.as_ref().expect("step3 must prompt REVIVE_SPLIT_PICK_SLEEP").clone();
+        assert_eq!(pd_slp["options"]["effectType"], "REVIVE_SPLIT_PICK_SLEEP");
+        let _ = engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": pd_slp["decisionId"],
+            "revision": engine.revision,
+            "value": { "targetId": "r_genta" }
+        }));
+
         let ps1_after = engine.players.get("p1").unwrap();
         let conan = ps1_after.field.iter().find(|c| c.instance_id == "r_conan1").expect("1st pick must deploy to field");
         assert_eq!(conan.orientation, models::CardOrientation::ACTIVE);

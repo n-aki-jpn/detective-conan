@@ -461,23 +461,32 @@ pub fn card_matches_filter_with_ctx(
             }
         }
     }
+    let eff_def_owned;
+    let eff_def = if card.temp_level_delta != 0 {
+        let mut d = def.clone();
+        d.level = (d.level + card.temp_level_delta).max(1);
+        eff_def_owned = d;
+        &eff_def_owned
+    } else {
+        def
+    };
     filter.branches.iter().any(|b| {
         if card.temp_name_override.is_some() {
             if let Some(ref nm) = b.name_req {
-                if !has_instance_name_match(card, def, nm) {
+                if !has_instance_name_match(card, eff_def, nm) {
                     return false;
                 }
                 let mut b_copy = b.clone();
                 b_copy.name_req = None;
-                return branch_matches_with_ctx(def, effective_ap, &b_copy, self_file_count);
+                return branch_matches_with_ctx(eff_def, effective_ap, &b_copy, self_file_count);
             }
             if let Some(ref ex_nm) = b.exclude_name {
-                if has_instance_name_match(card, def, ex_nm) {
+                if has_instance_name_match(card, eff_def, ex_nm) {
                     return false;
                 }
             }
         }
-        branch_matches_with_ctx(def, effective_ap, b, self_file_count)
+        branch_matches_with_ctx(eff_def, effective_ap, b, self_file_count)
     })
 }
 

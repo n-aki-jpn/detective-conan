@@ -106,7 +106,7 @@ impl MatchEngine {
         }
     }
 
-    pub(super) fn start_turn(&mut self, turn: i32, turn_player_id: &str) {
+    pub(crate) fn start_turn(&mut self, turn: i32, turn_player_id: &str) {
         self.turn = turn;
         self.turn_player_id = turn_player_id.to_string();
         self.turn_clause_usage.clear();
@@ -123,6 +123,21 @@ impl MatchEngine {
 
         for ps in self.players.values_mut() {
             for c in &mut ps.field {
+                Self::reset_turn_card_modifiers(c);
+            }
+            for c in &mut ps.remove {
+                Self::reset_turn_card_modifiers(c);
+            }
+            for c in &mut ps.hand {
+                Self::reset_turn_card_modifiers(c);
+            }
+            for c in &mut ps.deck {
+                Self::reset_turn_card_modifiers(c);
+            }
+            for c in &mut ps.file {
+                Self::reset_turn_card_modifiers(c);
+            }
+            for c in &mut ps.evidence {
                 Self::reset_turn_card_modifiers(c);
             }
             if let Some(ref mut p) = ps.partner {

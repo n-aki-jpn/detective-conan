@@ -3278,3 +3278,259 @@ fn test_b11022_deployed_char_with_on_play_discard_resumes_contact() {
     );
 }
 
+#[test]
+fn test_b11003_multi_declare_self_lv4_minus_and_b11057_b11017_full_scenario() {
+    let catalog = load_test_catalog();
+
+    // 1) B11003 灰原哀の2つの宣言効果の選択・レベル-4発動・B11057のレベル-1がリムーブ後/ターン経過後に残らないこと・B11017(2枚出してもB11003発火&手札送り&突撃のみtriggerOrder抑制)
+    {
+        let mut engine = MatchEngine::new(catalog.clone());
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn = 6;
+        engine.turn_player_id = "p2".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.partner = Some(test_inst("p1_p", "B03001", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE)); // 青パートナー
+        for i in 0..7 {
+            ps1.file.push(test_inst(&format!("f1_{}", i), "B01021", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+        }
+        ps1.field.push(test_inst("genta_old", "B11008", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        ps1.field.push(test_inst("ayumi_1", "D08008", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        for i in 0..8 {
+            ps1.deck.push(test_inst(&format!("p1d_{}", i), "B01005", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        }
+
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        ps2.field.push(test_inst("akai_57", "B11057", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        for i in 0..5 {
+            ps2.deck.push(test_inst(&format!("p2d_{}", i), "B01005", "p2", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        }
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        // ターン6 (p2): B11057 の登場時で p1 の B11008 のレベルを -1 し、その後リムーブする
+        assert!(engine.resolve_on_play_effects_with_source("p2", "akai_57", "B11057", false, None, "MAIN"));
+        let obs_akai = build_player_observation(&engine, "p2");
+        engine.submit_decision("p2", &serde_json::json!({
+            "decisionId": obs_akai["pendingDecision"]["decisionId"],
+            "revision": engine.revision,
+            "value": { "targetId": "genta_old" }
+        })).unwrap();
+        assert_eq!(engine.players["p1"].field.iter().find(|c| c.instance_id == "genta_old").unwrap().temp_level_delta, -1);
+
+        // リムーブされた時点で temp_level_delta は 0 にクリアされること
+        assert!(engine.move_field_char_to_remove("p1", "genta_old", true, false).is_some());
+        let genta_rm = engine.players["p1"].remove.iter().find(|c| c.instance_id == "genta_old").unwrap();
+        assert_eq!(genta_rm.temp_level_delta, 0, "現場を離れてリムーブされたキャラのtemp_level_deltaは即クリアされること");
+
+        // ターン7 (p1) 開始シミュレーション
+        engine.start_turn(7, "p1");
+        engine.players.get_mut("p1").unwrap().field.push(test_inst("ai_03", "B11003", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        engine.players.get_mut("p1").unwrap().hand.push(test_inst("gonin", "B11017", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        engine.players.get_mut("p1").unwrap().remove.push(test_inst("mitsu_9", "B11009", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE));
+        engine.prompt_main_action("p1");
+
+        // B11003 の【宣言】を発動 -> 2つの宣言効果があるため modeSelect で選択できること！
+        let obs_m1 = build_player_observation(&engine, "p1");
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": obs_m1["pendingDecision"]["decisionId"],
+            "revision": engine.revision,
+            "value": { "type": "DECLARE", "actorId": "ai_03" }
+        })).unwrap();
+
+        let obs_dec_mode = build_player_observation(&engine, "p1");
+        assert_eq!(obs_dec_mode["pendingDecision"]["kind"].as_str(), Some("modeSelect"));
+        assert_eq!(obs_dec_mode["pendingDecision"]["options"]["specialKind"].as_str(), Some("DECLARE_CLAUSE_SELECT"));
+        let modes = obs_dec_mode["pendingDecision"]["options"]["modes"].as_array().unwrap();
+        assert_eq!(modes.len(), 2, "B11003の2つの宣言効果が選択肢に表示されること");
+        let lv_idx = modes.iter().position(|m| m.as_str().unwrap_or("").contains("レベル－4")).unwrap();
+
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": obs_dec_mode["pendingDecision"]["decisionId"],
+            "revision": engine.revision,
+            "value": { "modeIndex": lv_idx }
+        })).unwrap();
+
+        // デッキ3枚リムーブ＋自身のレベルが 8 -> 4 になっていること！
+        let ai_after_dec = engine.players["p1"].field.iter().find(|c| c.instance_id == "ai_03").unwrap();
+        assert_eq!(ai_after_dec.temp_level_delta, -4, "B11003のレベル-4効果が適用されていること (logs: {:?})", engine.logs);
+
+        // 2つ目の【宣言】（【スリープ】：Lv4少年探偵団 AP+2000）も同ターン中に発動でき、B11003自身(Lv4になった)や他を強化できること！
+        let obs_m2 = build_player_observation(&engine, "p1");
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": obs_m2["pendingDecision"]["decisionId"],
+            "revision": engine.revision,
+            "value": { "type": "DECLARE", "actorId": "ai_03" }
+        })).unwrap();
+        let obs_buff = build_player_observation(&engine, "p1");
+        assert_eq!(obs_buff["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": obs_buff["pendingDecision"]["decisionId"],
+            "revision": engine.revision,
+            "value": { "targetId": "ai_03" }
+        })).unwrap();
+        assert_eq!(engine.players["p1"].field.iter().find(|c| c.instance_id == "ai_03").unwrap().temp_ap_bonus, 2000);
+
+        // 五人囃子 (B11017) でリムーブエリアの B11008 と B11009 を登場させる
+        let obs_gonin = build_player_observation(&engine, "p1");
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": obs_gonin["pendingDecision"]["decisionId"],
+            "revision": engine.revision,
+            "value": { "type": "HAND_PLAY", "cardId": "gonin" }
+        })).unwrap();
+
+        let obs_g1 = build_player_observation(&engine, "p1");
+        assert_eq!(obs_g1["pendingDecision"]["options"]["effectType"].as_str(), Some("REVIVE_SPLIT_GONIN"));
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": obs_g1["pendingDecision"]["decisionId"],
+            "revision": engine.revision,
+            "value": { "targetIds": ["genta_old", "mitsu_9"] }
+        })).unwrap();
+
+        let obs_g2 = build_player_observation(&engine, "p1");
+        assert_eq!(obs_g2["pendingDecision"]["options"]["effectType"].as_str(), Some("REVIVE_SPLIT_PICK_ACTIVE"));
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": obs_g2["pendingDecision"]["decisionId"],
+            "revision": engine.revision,
+            "value": { "targetId": "genta_old" }
+        })).unwrap();
+
+        let obs_g3 = build_player_observation(&engine, "p1");
+        assert_eq!(obs_g3["pendingDecision"]["options"]["effectType"].as_str(), Some("REVIVE_SPLIT_PICK_SLEEP"));
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": obs_g3["pendingDecision"]["decisionId"],
+            "revision": engine.revision,
+            "value": { "targetId": "mitsu_9" }
+        })).unwrap();
+
+        // B11008(突撃のみ) と B11009(突撃のみ) が登場した際、triggerOrder選択肢は出ず、そのまま B11003 のリムーブ効果の targetSelect が表示されること！
+        let obs_ai_rem = build_player_observation(&engine, "p1");
+        assert_eq!(
+            obs_ai_rem["pendingDecision"]["kind"].as_str(),
+            Some("targetSelect"),
+            "突撃のみ同士でtriggerOrderが出ず、即座にB11003のリムーブ効果が発火すること (logs: {:?})",
+            engine.logs
+        );
+        assert_eq!(obs_ai_rem["pendingDecision"]["options"]["actorId"].as_str(), Some("ai_03"));
+        assert_eq!(obs_ai_rem["pendingDecision"]["options"]["effectType"].as_str(), Some("REMOVE"));
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": obs_ai_rem["pendingDecision"]["decisionId"],
+            "revision": engine.revision,
+            "value": { "targetId": "akai_57" }
+        })).unwrap();
+        assert!(engine.players["p2"].remove.iter().any(|c| c.instance_id == "akai_57"));
+    }
+
+    // 2) B11017 でリムーブエリアに2枚しかないときでも「1枚登場＋スリープ登場スキップ ➔ 残り1枚を手札に加える」ができること
+    {
+        let mut engine = MatchEngine::new(catalog.clone());
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn = 4;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.hand.push(test_inst("gonin2", "B11017", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        ps1.remove.push(test_inst("r1", "B11008", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE));
+        ps1.remove.push(test_inst("r2", "B11009", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE));
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+        engine.prompt_main_action("p1");
+
+        let obs1 = build_player_observation(&engine, "p1");
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": obs1["pendingDecision"]["decisionId"],
+            "revision": engine.revision,
+            "value": { "type": "HAND_PLAY", "cardId": "gonin2" }
+        })).unwrap();
+
+        let obs2 = build_player_observation(&engine, "p1");
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": obs2["pendingDecision"]["decisionId"],
+            "revision": engine.revision,
+            "value": { "targetIds": ["r1", "r2"] }
+        })).unwrap();
+
+        let obs3 = build_player_observation(&engine, "p1");
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": obs3["pendingDecision"]["decisionId"],
+            "revision": engine.revision,
+            "value": { "targetId": "r1" }
+        })).unwrap();
+
+        // スリープ登場をスキップ
+        let obs4 = build_player_observation(&engine, "p1");
+        assert_eq!(obs4["pendingDecision"]["options"]["effectType"].as_str(), Some("REVIVE_SPLIT_PICK_SLEEP"));
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": obs4["pendingDecision"]["decisionId"],
+            "revision": engine.revision,
+            "value": { "targetIds": [] }
+        })).unwrap();
+
+        let p1 = &engine.players["p1"];
+        assert!(p1.field.iter().any(|c| c.instance_id == "r1"));
+        assert!(p1.hand.iter().any(|c| c.instance_id == "r2"), "2枚しかない状態でもスリープ登場をスキップして残りを手札に加えられること");
+    }
+
+    // 3) 登場時効果1件(非突撃) + 突撃のみ1件が同時に出ても triggerOrder 選択肢が出ないこと
+    {
+        let mut engine = MatchEngine::new(catalog.clone());
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn = 4;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        for i in 0..5 {
+            ps1.file.push(test_inst(&format!("f_{}", i), "B01021", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+        }
+        ps1.field.push(test_inst("c_rush", "B11008", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE)); // 【FILE5】【登場時】突撃
+        ps1.field.push(test_inst("c_debuff", "B11057", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE)); // 【自分ターン中】【登場時】レベル-1
+        engine.players.insert("p1".to_string(), ps1);
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        ps2.field.push(test_inst("opp_c", "B05055", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        engine.players.insert("p2".to_string(), ps2);
+
+        let deployed = vec![
+            ("c_rush".to_string(), "B11008".to_string(), models::CardOrientation::ACTIVE),
+            ("c_debuff".to_string(), "B11057".to_string(), models::CardOrientation::ACTIVE),
+        ];
+        engine.resolve_deployed_characters("p1", None, &deployed, "MAIN");
+        let obs = build_player_observation(&engine, "p1");
+        assert_ne!(
+            obs["pendingDecision"]["kind"].as_str(),
+            Some("triggerOrder"),
+            "突撃のみと非突撃の同時登場時はtriggerOrderを出さずに直接解決へ進むこと (logs: {:?})",
+            engine.logs
+        );
+        assert_eq!(obs["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+        assert!(engine.players["p1"].field.iter().find(|c| c.instance_id == "c_rush").unwrap().has_rush);
+    }
+
+    // 4) 非突撃の登場時効果2件が同時に出た場合は従来通り triggerOrder 選択肢が出ること
+    {
+        let mut engine = MatchEngine::new(catalog.clone());
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn = 4;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.field.push(test_inst("c_1", "B11057", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        ps1.field.push(test_inst("c_2", "B11057", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        engine.players.insert("p1".to_string(), ps1);
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        ps2.field.push(test_inst("opp_c", "B05055", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        engine.players.insert("p2".to_string(), ps2);
+
+        let deployed = vec![
+            ("c_1".to_string(), "B11057".to_string(), models::CardOrientation::ACTIVE),
+            ("c_2".to_string(), "B11057".to_string(), models::CardOrientation::ACTIVE),
+        ];
+        engine.resolve_deployed_characters("p1", None, &deployed, "MAIN");
+        let obs = build_player_observation(&engine, "p1");
+        assert_eq!(obs["pendingDecision"]["kind"].as_str(), Some("triggerOrder"));
+    }
+}
+

@@ -3757,10 +3757,8 @@
 
             const updateSplitRoleTags = () => {
               const effType = pd.options.effectType;
-              if (effType !== 'REVIVE_SPLIT_GONIN' && effType !== 'REVIVE_SPLIT_BAKANA') return;
-              const labels = effType === 'REVIVE_SPLIT_GONIN'
-                ? ['1枚目: 登場', '2枚目: スリープ登場', '3枚目: 手札']
-                : ['1枚目: 登場', '2枚目: スリープ登場'];
+              if (effType !== 'REVIVE_SPLIT_BAKANA') return;
+              const labels = ['1枚目: 登場', '2枚目: スリープ登場'];
               wrap.querySelectorAll('.split-role-tag').forEach(el => {
                 const i = selectedIds.indexOf(el.dataset.id);
                 el.innerText = i >= 0 ? `✓ ${labels[i] || `${i + 1}枚目`}` : '';

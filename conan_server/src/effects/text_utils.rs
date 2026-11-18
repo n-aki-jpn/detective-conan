@@ -389,6 +389,20 @@ pub fn parse_signed_lp(text: &str, positive: bool) -> Option<i32> {
     None
 }
 
+pub fn parse_signed_level(text: &str, positive: bool) -> Option<i32> {
+    let markers: &[&str] = if positive {
+        &["レベル＋", "レベル+"]
+    } else {
+        &["レベル－", "レベル-", "レベルー"]
+    };
+    for m in markers {
+        if let Some(val) = extract_number_before(text, m, "") {
+            return Some(if positive { val } else { -val });
+        }
+    }
+    None
+}
+
 pub fn extract_bracketed_value<'a>(text: &'a str, start_pat: &str, end_pat: &str) -> Option<&'a str> {
     let idx = text.find(start_pat)?;
     let rest = &text[idx + start_pat.len()..];

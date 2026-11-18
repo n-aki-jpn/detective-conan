@@ -512,6 +512,15 @@ impl MatchEngine {
                         }
                     }
                 }
+                ImmediateOp::SelfLevelDelta(amt) => {
+                    if let Some(ps) = self.players.get_mut(player_id) {
+                        if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == actor_id) {
+                            c.temp_level_delta += *amt;
+                            let sign = if *amt >= 0 { "+" } else { "" };
+                            self.log(format!("📉 [{}] の効果で [{}] のレベルを {}{} しました", actor_name, actor_name, sign, amt));
+                        }
+                    }
+                }
                 ImmediateOp::SelfActivate => {
                     if let Some(ps) = self.players.get_mut(player_id) {
                         if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == actor_id) {

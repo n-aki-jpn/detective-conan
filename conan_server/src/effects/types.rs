@@ -338,6 +338,7 @@ pub enum ImmediateOp {
     SelfRemoveEvidence { count: usize, trigger_hirameki: bool },
     SelfApBuff(i32),
     SelfLpBuff(i32),
+    SelfLevelDelta(i32),
     SelfActivate,
     SelfGiveRush(Option<String>),
     MillDeck(usize),

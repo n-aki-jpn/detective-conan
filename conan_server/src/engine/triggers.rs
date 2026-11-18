@@ -13,7 +13,7 @@ impl MatchEngine {
         self.resolve_on_play_effects_with_source(player_id, actor_id, definition_id, is_event, None, "MAIN")
     }
 
-    pub(super) fn resolve_on_play_effects_with_source(
+    pub(crate) fn resolve_on_play_effects_with_source(
         &mut self,
         player_id: &str,
         actor_id: &str,
@@ -198,6 +198,7 @@ impl MatchEngine {
         if let Some(ps) = self.players.get_mut(owner_pid) {
             if let Some(idx) = ps.field.iter().position(|c| c.instance_id == char_inst_id) {
                 let mut card = ps.field.remove(idx);
+                Self::reset_turn_card_modifiers(&mut card);
                 removed_def = Some(card.definition_id.clone());
                 let mut transfer_kaito: Option<CardInstance> = None;
                 for mut sc in card.set_cards.drain(..) {
@@ -1134,9 +1135,16 @@ impl MatchEngine {
         is_first_play_this_turn: bool,
         resume_context: &str,
     ) -> bool {
-        let Some(played_def) = self.catalog.get(played_def_id).cloned() else {
+        let Some(mut played_def) = self.catalog.get(played_def_id).cloned() else {
             return false;
         };
+        if let Some(inst) = self
+            .players
+            .get(playing_pid)
+            .and_then(|ps| ps.field.iter().find(|c| c.instance_id == played_inst_id))
+        {
+            played_def.level += inst.temp_level_delta;
+        }
         let played_ap = self
             .players
             .get(playing_pid)
@@ -1239,15 +1247,14 @@ impl MatchEngine {
         opened_ui
     }
 
-    pub fn resolve_character_enter_field_with_source(
+    pub(super) fn prepare_character_enter_field(
         &mut self,
         player_id: &str,
         actor_id: &str,
         definition_id: &str,
         orientation: CardOrientation,
         source_effect_level: Option<i32>,
-        resume_context: &str,
-    ) -> bool {
+    ) {
         self.field_overflow_excluded_ids.insert(actor_id.to_string());
         // MRルール: 自分の現場に新たなMRが登場する場合、すでに現場かパートナーエリアにいるMRをリムーブする
         if self.is_mr_card(definition_id) {
@@ -1263,6 +1270,7 @@ impl MatchEngine {
                 while i < ps.extra_partners.len() {
                     if Self::is_mr_def(&self.catalog, &ps.extra_partners[i].definition_id) {
                         let mut ep = ps.extra_partners.remove(i);
+                        Self::reset_turn_card_modifiers(&mut ep);
                         old_partner_mrs.push(ep.definition_id.clone());
                         ep.zone = Zone::REMOVE;
                         ep.face_up = true;
@@ -1310,6 +1318,24 @@ impl MatchEngine {
             source_effect_level,
             is_first,
         ));
+    }
+
+    pub fn resolve_character_enter_field_with_source(
+        &mut self,
+        player_id: &str,
+        actor_id: &str,
+        definition_id: &str,
+        orientation: CardOrientation,
+        source_effect_level: Option<i32>,
+        resume_context: &str,
+    ) -> bool {
+        self.prepare_character_enter_field(
+            player_id,
+            actor_id,
+            definition_id,
+            orientation,
+            source_effect_level,
+        );
 
         if self.resolve_on_play_effects_with_source(
             player_id,
