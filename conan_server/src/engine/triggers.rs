@@ -803,6 +803,7 @@ impl MatchEngine {
         });
 
         let watch_sides: Vec<(String, bool)> = vec![(player_id.to_string(), true), (opp_pid.clone(), false)];
+        let mut opened_ui = false;
         for (watch_pid, owner_is_acting) in watch_sides {
             let watchers: Vec<(String, String, CardOrientation, bool)> = self
                 .players
@@ -889,7 +890,20 @@ impl MatchEngine {
                         }
                         continue;
                     }
-                    if self.execute_clause_plan(
+                    if opened_ui || self.pending_decision.is_some() {
+                        self.pending_clause_queue.push(PendingClauseTask {
+                            player_id: watch_pid.clone(),
+                            actor_id: watcher_id.clone(),
+                            actor_name: watcher_name.clone(),
+                            source_level: Some(def.level),
+                            card_type: def.card_type,
+                            clause: String::new(),
+                            resume_context: resume_context.to_string(),
+                            evidence_source_inst_id: None,
+                            post_target_ops: vec![],
+                            plan: Some(plan),
+                        });
+                    } else if self.execute_clause_plan(
                         &watch_pid,
                         &watcher_id,
                         &watcher_name,
@@ -898,12 +912,12 @@ impl MatchEngine {
                         resume_context,
                         None,
                     ) {
-                        return true;
+                        opened_ui = true;
                     }
                 }
             }
         }
-        false
+        opened_ui
     }
 
     /// コンタクト突入時トリガーを解決する
@@ -1132,6 +1146,7 @@ impl MatchEngine {
 
         let opp_pid = self.opponent_id_of(playing_pid);
         let watch_sides: Vec<(String, bool)> = vec![(playing_pid.to_string(), true), (opp_pid, false)];
+        let mut opened_ui = false;
 
         for (watch_pid, owner_is_playing) in watch_sides {
             let watchers: Vec<(String, String, CardOrientation, bool)> = self
@@ -1194,7 +1209,20 @@ impl MatchEngine {
                     self.mark_clause_used_this_turn(&watcher_id, &clause);
                     self.log(format!("✨ [{}] の誘発効果（キャラ登場時）が発動！", watcher_name));
                     let plan = parse_effect_steps(&clause, Some(played_def.level), def.card_type);
-                    if self.execute_clause_plan(
+                    if opened_ui || self.pending_decision.is_some() {
+                        self.pending_clause_queue.push(PendingClauseTask {
+                            player_id: watch_pid.clone(),
+                            actor_id: watcher_id.clone(),
+                            actor_name: watcher_name.clone(),
+                            source_level: Some(def.level),
+                            card_type: def.card_type,
+                            clause: String::new(),
+                            resume_context: resume_context.to_string(),
+                            evidence_source_inst_id: None,
+                            post_target_ops: vec![],
+                            plan: Some(plan),
+                        });
+                    } else if self.execute_clause_plan(
                         &watch_pid,
                         &watcher_id,
                         &watcher_name,
@@ -1203,12 +1231,12 @@ impl MatchEngine {
                         resume_context,
                         None,
                     ) {
-                        return true;
+                        opened_ui = true;
                     }
                 }
             }
         }
-        false
+        opened_ui
     }
 
     pub fn resolve_character_enter_field_with_source(
