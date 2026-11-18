@@ -46,6 +46,7 @@ impl MatchEngine {
                 let replace_count = returned.len();
                 for mut c in returned {
                     c.zone = Zone::DECK;
+                    c.face_up = false;
                     ps.deck.push(c);
                 }
 
@@ -284,6 +285,7 @@ impl MatchEngine {
         let ps = self.players.get_mut(player_id).unwrap();
         if let Some(mut card) = ps.deck.pop() {
             card.zone = Zone::FILE;
+            card.face_up = false;
             ps.file.push(card);
         }
         // 山札が0枚になった瞬間に即座へリフレッシュ
@@ -302,6 +304,7 @@ impl MatchEngine {
             let ps = self.players.get_mut(player_id).unwrap();
             if let Some(mut card) = ps.deck.pop() {
                 card.zone = Zone::EVIDENCE;
+                card.face_up = false;
                 ps.evidence.push(card);
             }
             // 山札が0枚になった瞬間に即座へリフレッシュ（ルール手册 p.20 / F §2.3、残数は続行）
@@ -338,6 +341,7 @@ impl MatchEngine {
         let ps = self.players.get_mut(player_id).unwrap();
         while let Some(mut c) = ps.remove.pop() {
             c.zone = Zone::DECK;
+            c.face_up = false;
             ps.deck.push(c);
         }
         let mut rng = rand::thread_rng();

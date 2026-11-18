@@ -309,7 +309,7 @@ pub fn check_ally_play_match(
     played_by_effect_level: Option<i32>,
     is_first_play_this_turn: bool,
 ) -> bool {
-    if clause.contains("【疾風】") {
+    if clause.contains("【疾風】") && !clause.contains("【疾風】を持つ") {
         return owner_is_playing
             && is_first_play_this_turn
             && self_instance_id == played_instance_id;

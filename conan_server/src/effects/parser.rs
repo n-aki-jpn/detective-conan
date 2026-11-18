@@ -140,7 +140,6 @@ pub fn parse_clause_cost(clause: &str) -> ClauseCost {
         let opt_prefix = &clean[..opt_idx];
         let seg = opt_prefix.rsplit('。').next().unwrap_or(opt_prefix);
         cost.evidence_remove = extract_count_around(seg, "証拠を", "つリムーブ");
-        cost.evidence_flip_up = extract_count_around(seg, "裏向きの証拠を", "つ表向き");
         cost.file_remove = extract_count_around(seg, "FILEを", "枚リムーブ")
             .max(extract_count_around(seg, "FILEエリアのカードを", "枚リムーブ"));
     }
@@ -977,6 +976,31 @@ pub fn try_parse_leading_optional_cost_clause(
             count,
             then_clause: then_rest.to_string(),
         });
+        return Some(plan);
+    }
+
+    // 3.5) 裏向きの証拠をNつ表向きにしてもよい（B09113, B11002, B11097）
+    if seg.contains("裏向きの証拠を") && seg.contains("表向き") {
+        let count = extract_count_around(seg, "裏向きの証拠を", "つ表向き").max(1);
+        let mut filter = TargetFilter::default();
+        filter.owner = OwnerScope::SelfOnly;
+        filter.zone = TargetZone::Evidence;
+        filter.count = count;
+        filter.up_to = false;
+        filter.face_down_only = true;
+        plan.target_step = Some(TargetStep {
+            action: TargetAction::FlipEvidenceFaceUp,
+            filter,
+            bonuses: Vec::new(),
+            follow_up: Vec::new(),
+            conditional_follow_up: None,
+            optional: true,
+            then_abort_if_skipped: true,
+            scale_by_cost_flipped_evidence: false,
+        });
+        if !then_rest.is_empty() {
+            plan.extra_clauses.push(then_rest.to_string());
+        }
         return Some(plan);
     }
 

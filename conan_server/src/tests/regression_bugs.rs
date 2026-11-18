@@ -2807,3 +2807,203 @@ fn test_b11056_actor_ap_or_less_remove_targets_opponent_not_self() {
     assert!(engine.players["p1"].field.iter().any(|c| c.instance_id == "haneda"));
 }
 
+#[test]
+fn test_mulligan_and_refresh_cards_gained_as_evidence_stay_face_down_and_b11099_flips_exact_two() {
+    let catalog = load_test_catalog();
+
+    // 1) start_match -> マリガンで手札(face_up=true)を山札へ戻し、その後 gain_evidence してもすべて裏向きであること
+    {
+        let mut engine = MatchEngine::new(catalog.clone());
+        let deck = models::DeckDefinition {
+            deck_id: None,
+            deck_name: None,
+            catalog_version: None,
+            partner_id: "B01001".to_string(),
+            case_id: "B11099".to_string(),
+            main_deck: vec![
+                models::DeckCardItem {
+                    definition_id: "B01005".to_string(),
+                    count: 10,
+                },
+                models::DeckCardItem {
+                    definition_id: "B11056".to_string(),
+                    count: 10,
+                },
+            ],
+        };
+        engine.add_player("p1", &deck);
+        engine.add_player("p2", &deck);
+        engine.start_match();
+
+        let first_pid = engine.player_order[0].clone();
+        let all_hand_ids: Vec<String> = engine.players[&first_pid]
+            .hand
+            .iter()
+            .map(|c| c.instance_id.clone())
+            .collect();
+        assert_eq!(all_hand_ids.len(), 5);
+        let obs_mul = build_player_observation(&engine, &first_pid);
+        engine.submit_decision(&first_pid, &serde_json::json!({
+            "decisionId": obs_mul["pendingDecision"]["decisionId"],
+            "revision": engine.revision,
+            "value": { "cardIds": all_hand_ids }
+        })).unwrap();
+        assert!(
+            engine.players[&first_pid].deck.iter().all(|c| !c.face_up),
+            "マリガンで山札へ戻したカードの face_up は false にリセットされること"
+        );
+
+        let deck_len = engine.players[&first_pid].deck.len();
+        engine.gain_evidence(&first_pid, deck_len);
+        let evs = &engine.players[&first_pid].evidence;
+        assert_eq!(evs.len(), deck_len);
+        assert!(
+            evs.iter().all(|e| !e.face_up),
+            "マリガン後の山札から獲得した証拠はすべて裏向きであること"
+        );
+    }
+
+    // 2) リフレッシュでリムーブ(face_up=true)から山札に戻したカードも、獲得された証拠は裏向きであること
+    {
+        let mut engine = MatchEngine::new(catalog.clone());
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        for i in 0..3 {
+            ps1.remove.push(test_inst(&format!("rm_{}", i), "B01005", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE));
+            // test_inst 側で face_up=true になっていることも確認しつつリフレッシュへ送る
+            ps1.remove[i].face_up = true;
+        }
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        for i in 0..5 {
+            ps2.deck.push(test_inst(&format!("p2d_{}", i), "B01005", "p2", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        }
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        engine.gain_evidence("p1", 2);
+        let p1 = &engine.players["p1"];
+        assert_eq!(p1.evidence.len(), 2);
+        assert!(
+            p1.evidence.iter().all(|e| !e.face_up),
+            "リフレッシュ直後に獲得した証拠はすべて裏向きであること"
+        );
+        assert!(p1.deck.iter().all(|d| !d.face_up));
+    }
+
+    // 3) B11099（あんた何者や）で裏向き証拠を2つ表向きにすると、正確に2枚だけ表向きになること
+    {
+        let mut engine = MatchEngine::new(catalog.clone());
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn = 4;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.case_phase = models::CasePhase::RESOLUTION;
+        ps1.r#case = Some(test_inst("p1_case", "B11099", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        for i in 0..4 {
+            let mut ev = test_inst(&format!("ev_{}", i), "B01005", "p1", models::Zone::EVIDENCE, models::CardOrientation::ACTIVE);
+            ev.face_up = false;
+            ps1.evidence.push(ev);
+        }
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        ps2.field.push(test_inst("opp_c", "B05055", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+        engine.prompt_main_action("p1");
+
+        let obs1 = build_player_observation(&engine, "p1");
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": obs1["pendingDecision"]["decisionId"],
+            "revision": engine.revision,
+            "value": { "type": "DECLARE", "actorId": "p1_case" }
+        })).unwrap();
+
+        let obs2 = build_player_observation(&engine, "p1");
+        assert_eq!(obs2["pendingDecision"]["options"]["effectType"].as_str(), Some("FLIP_EVIDENCE_FACE_UP"));
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": obs2["pendingDecision"]["decisionId"],
+            "revision": engine.revision,
+            "value": { "targetIds": ["ev_0", "ev_1"] }
+        })).unwrap();
+
+        let obs3 = build_player_observation(&engine, "p1");
+        assert_eq!(obs3["pendingDecision"]["options"]["effectType"].as_str(), Some("AP_DEBUFF"));
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": obs3["pendingDecision"]["decisionId"],
+            "revision": engine.revision,
+            "value": { "targetId": "opp_c" }
+        })).unwrap();
+
+        let face_up_cnt = engine.players["p1"].evidence.iter().filter(|e| e.face_up).count();
+        assert_eq!(face_up_cnt, 2, "B11099で2枚選んだら表向き証拠は正確に2枚であること");
+    }
+
+    // 4) 横展開: B11097（諸伏景光＆スコッチ）の「自分の裏向きの証拠を2つ表向きにしてもよい。そうした場合、カードを1枚引く。」で2枚だけ表向きになり1ドローされること
+    {
+        let mut engine = MatchEngine::new(catalog.clone());
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn = 4;
+        engine.turn_player_id = "p2".to_string(); // 相手ターン中
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.field.push(test_inst("scotch", "B11097", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        ps1.field.push(test_inst("swift_ally", "B09084", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        for i in 0..4 {
+            let mut ev = test_inst(&format!("s_ev_{}", i), "B01005", "p1", models::Zone::EVIDENCE, models::CardOrientation::ACTIVE);
+            ev.face_up = false;
+            ps1.evidence.push(ev);
+        }
+        for i in 0..4 {
+            let mut dc = test_inst(&format!("s_d_{}", i), "B01005", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE);
+            dc.face_up = false;
+            ps1.deck.push(dc);
+        }
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        for i in 0..4 {
+            ps2.deck.push(test_inst(&format!("p2_d_{}", i), "B01005", "p2", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        }
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        engine.resolve_character_enter_field_with_source(
+            "p1",
+            "swift_ally",
+            "B09084",
+            models::CardOrientation::ACTIVE,
+            None,
+            "MAIN",
+        );
+
+        let obs_flip = build_player_observation(&engine, "p1");
+        assert_eq!(
+            obs_flip["pendingDecision"]["kind"].as_str(),
+            Some("targetSelect"),
+            "B11097の『自分の裏向きの証拠を2つ表向きにしてもよい』の選択が表示されること (logs: {:?})",
+            engine.logs
+        );
+        assert_eq!(
+            obs_flip["pendingDecision"]["options"]["effectType"].as_str(),
+            Some("FLIP_EVIDENCE_FACE_UP")
+        );
+        assert_eq!(obs_flip["pendingDecision"]["options"]["maxSelect"].as_u64(), Some(2));
+        // 1つ目の「カードを1枚引く。」で1枚引いているはず
+        assert_eq!(engine.players["p1"].hand.len(), 1);
+
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": obs_flip["pendingDecision"]["decisionId"],
+            "revision": engine.revision,
+            "value": { "targetIds": ["s_ev_0", "s_ev_1"] }
+        })).unwrap();
+
+        let p1 = &engine.players["p1"];
+        let face_up_cnt = p1.evidence.iter().filter(|e| e.face_up).count();
+        assert_eq!(face_up_cnt, 2, "B11097で2つ選択した場合、二重表向きにならず正確に2枚のみ表向きになること");
+        assert_eq!(p1.hand.len(), 2, "そうした場合の1ドローで合計2枚手札になること");
+    }
+}
+
