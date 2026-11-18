@@ -1425,29 +1425,42 @@ pub(super) fn target_action_prompt_title(action: &TargetAction, filter: &TargetF
         TargetZone::SetCards => "セットされている",
     };
     let max_n = filter.count.max(1);
-    match action {
-        TargetAction::Sleep => format!("スリープさせる{}キャラを{}体選択してください", prefix, max_n),
-        TargetAction::Stun => format!("スタンさせる{}キャラを{}体選択してください", prefix, max_n),
-        TargetAction::Activate => format!("アクティブにする{}キャラを{}体選択してください", prefix, max_n),
-        TargetAction::Remove => format!("リムーブする{}カードを{}枚選択してください", prefix, max_n),
-        TargetAction::BottomDeck => format!("デッキの下に移す{}キャラを{}体選択してください", prefix, max_n),
-        TargetAction::BounceToHand => format!("手札に戻す{}カードを{}枚選択してください", prefix, max_n),
-        TargetAction::ApBuff(v) => format!("AP＋{}する{}キャラを{}体選択してください", v, prefix, max_n),
-        TargetAction::ApDebuff(v) => format!("AP－{}する{}キャラを{}体選択してください", v, prefix, max_n),
+    let count_phrase = |unit: &str| {
+        if filter.any_count {
+            "好きなだけ".to_string()
+        } else {
+            format!("{}{}", max_n, unit)
+        }
+    };
+    let base = match action {
+        TargetAction::Sleep => format!("スリープさせる{}キャラを{}選択してください", prefix, count_phrase("体")),
+        TargetAction::Stun => format!("スタンさせる{}キャラを{}選択してください", prefix, count_phrase("体")),
+        TargetAction::Activate => format!("アクティブにする{}キャラを{}選択してください", prefix, count_phrase("体")),
+        TargetAction::Remove => format!("リムーブする{}カードを{}選択してください", prefix, count_phrase("枚")),
+        TargetAction::BottomDeck => format!("デッキの下に移す{}キャラを{}選択してください", prefix, count_phrase("体")),
+        TargetAction::BounceToHand => format!("手札に戻す{}カードを{}選択してください", prefix, count_phrase("枚")),
+        TargetAction::ApBuff(v) => format!("AP＋{}する{}キャラを{}選択してください", v, prefix, count_phrase("体")),
+        TargetAction::ApDebuff(v) => format!("AP－{}する{}キャラを{}選択してください", v, prefix, count_phrase("体")),
         TargetAction::GiveRush(_) => format!("突撃/迅速を与える{}キャラを選択してください", prefix),
         TargetAction::GiveBullet => format!("〚ブレット〛を与える{}キャラを選択してください", prefix),
         TargetAction::GiveMustGuard => format!("必ずガードさせる{}キャラを選択してください", prefix),
         TargetAction::GiveCanAttackActive => format!("アクティブ状態攻撃権を与える{}キャラを選択してください", prefix),
         TargetAction::SetBaseApZero => format!("元のAPを0にする{}キャラを選択してください", prefix),
-        TargetAction::LevelDelta(d) => format!("レベル{}する{}キャラを選択してください", d, prefix),
-        TargetAction::ReviveActive => format!("リムーブエリアから登場させるカードを{}枚選択してください", max_n),
-        TargetAction::ReviveSleep => format!("リムーブエリアからスリープ状態で登場させるカードを{}枚選択してください", max_n),
+        TargetAction::LevelDelta(d) => {
+            if *d >= 0 {
+                format!("レベル＋{}する{}キャラを選択してください", d, prefix)
+            } else {
+                format!("レベル－{}する{}キャラを選択してください", -d, prefix)
+            }
+        }
+        TargetAction::ReviveActive => format!("リムーブエリアから登場させるカードを{}選択してください", count_phrase("枚")),
+        TargetAction::ReviveSleep => format!("リムーブエリアからスリープ状態で登場させるカードを{}選択してください", count_phrase("枚")),
         TargetAction::ReviveSplitGonin => "リムーブエリアから3枚まで選択してください（次のステップで登場・手札を選択します）".to_string(),
         TargetAction::ReviveSplitBakana => "選択順に【1枚目:登場(アクティブ)】【2枚目:スリープ登場】を合計Lv10以下で2枚まで選択してください".to_string(),
-        TargetAction::RecoverToHand => format!("リムーブエリアから手札に加えるカードを{}枚選択してください", max_n),
-        TargetAction::PlayFromHand => format!("手札から登場させるキャラを{}枚選択してください", max_n),
+        TargetAction::RecoverToHand => format!("リムーブエリアから手札に加えるカードを{}選択してください", count_phrase("枚")),
+        TargetAction::PlayFromHand => format!("手札から登場させるキャラを{}選択してください", count_phrase("枚")),
         TargetAction::PlayEventFromHand => "手札から使用するイベントカードを選択してください".to_string(),
-        TargetAction::DiscardHand => format!("リムーブする手札を{}枚選択してください", max_n),
+        TargetAction::DiscardHand => format!("リムーブする手札を{}選択してください", count_phrase("枚")),
         TargetAction::SetThisEvent => format!("このイベントをセットする{}キャラを選択してください", prefix),
         TargetAction::SetDeckTopFaceDown(n) => format!("デッキの上から{}枚裏向きでセットする{}キャラを選択してください", n, prefix),
         TargetAction::FlipEvidenceFaceUp => "表向きにする証拠を選択してください".to_string(),
@@ -1462,5 +1475,79 @@ pub(super) fn target_action_prompt_title(action: &TargetAction, filter: &TargetF
         TargetAction::RemoveSetCards(n) => format!("リムーブするセットカードを{}枚選択してください", n),
         TargetAction::StunAndGrantOnRemoveDraw => "スタンさせて「【現場リムーブ時】カードを1枚引く。」を与えるキャラを1枚選択してください".to_string(),
         TargetAction::StackUnderSelf => "下に重ねるカードをリムーブエリアから選択してください".to_string(),
+    };
+    let mut constraints: Vec<String> = Vec::new();
+    if !matches!(action, TargetAction::ReviveSplitBakana) {
+        if let Some(max_lv) = filter.max_total_level {
+            constraints.push(format!("合計Lv.{}以下", max_lv));
+        }
+    }
+    if filter.distinct_names {
+        constraints.push("同名不可".to_string());
+    }
+    if filter.distinct_levels {
+        constraints.push("異なるLv".to_string());
+    }
+    if filter.distinct_colors {
+        constraints.push("異なる色".to_string());
+    }
+    if constraints.is_empty() {
+        base
+    } else {
+        format!("{}（{}）", base, constraints.join("・"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_target_action_prompt_title_variants_and_constraints() {
+        let mut f_pos = TargetFilter::default();
+        f_pos.zone = TargetZone::Field;
+        f_pos.owner = OwnerScope::SelfOnly;
+        assert_eq!(
+            target_action_prompt_title(&TargetAction::LevelDelta(2), &f_pos),
+            "レベル＋2する自分のキャラを選択してください"
+        );
+
+        let mut f_neg = TargetFilter::default();
+        f_neg.zone = TargetZone::Field;
+        f_neg.owner = OwnerScope::OppOnly;
+        assert_eq!(
+            target_action_prompt_title(&TargetAction::LevelDelta(-1), &f_neg),
+            "レベル－1する相手のキャラを選択してください"
+        );
+
+        let mut f_any = TargetFilter::default();
+        f_any.zone = TargetZone::Field;
+        f_any.owner = OwnerScope::OppOnly;
+        f_any.any_count = true;
+        assert_eq!(
+            target_action_prompt_title(&TargetAction::Sleep, &f_any),
+            "スリープさせる相手のキャラを好きなだけ選択してください"
+        );
+
+        let mut f_cons = TargetFilter::default();
+        f_cons.zone = TargetZone::Remove;
+        f_cons.owner = OwnerScope::SelfOnly;
+        f_cons.count = 3;
+        f_cons.max_total_level = Some(10);
+        f_cons.distinct_names = true;
+        f_cons.distinct_levels = true;
+        f_cons.distinct_colors = true;
+        assert_eq!(
+            target_action_prompt_title(&TargetAction::RecoverToHand, &f_cons),
+            "リムーブエリアから手札に加えるカードを3枚選択してください（合計Lv.10以下・同名不可・異なるLv・異なる色）"
+        );
+
+        let mut f_bakana = TargetFilter::default();
+        f_bakana.max_total_level = Some(10);
+        f_bakana.count = 2;
+        assert_eq!(
+            target_action_prompt_title(&TargetAction::ReviveSplitBakana, &f_bakana),
+            "選択順に【1枚目:登場(アクティブ)】【2枚目:スリープ登場】を合計Lv10以下で2枚まで選択してください"
+        );
     }
 }

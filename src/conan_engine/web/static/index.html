@@ -28,6 +28,10 @@
       -webkit-tap-highlight-color: transparent;
     }
 
+    html {
+      scroll-padding-bottom: calc(260px + var(--safe-bottom));
+    }
+
     body {
       background-color: var(--bg-color);
       color: var(--text);
@@ -505,6 +509,9 @@
       padding: 6px 10px calc(6px + var(--safe-bottom)) 10px;
       box-shadow: 0 -4px 15px rgba(0, 0, 0, 0.5);
     }
+    .bottom-dock.is-prompt-active {
+      border-top-color: var(--prompt-accent, var(--accent));
+    }
 
     .dock-tabs {
       display: flex;
@@ -561,16 +568,79 @@
     }
 
     .decision-title {
-      font-size: 0.88rem;
+      font-size: 0.94rem;
       font-weight: bold;
       color: var(--accent);
+      line-height: 1.35;
+      text-wrap: balance;
       margin-bottom: 4px;
     }
 
     .decision-desc {
-      font-size: 0.75rem;
-      color: var(--text-muted);
+      font-size: 0.86rem;
+      font-weight: 600;
+      color: #f1f5f9;
+      line-height: 1.45;
+      white-space: normal;
+      overflow-wrap: break-word;
+      text-wrap: pretty;
       margin-bottom: 8px;
+    }
+
+    .decision-actor-card {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      border-radius: 8px;
+      padding: 6px 8px;
+      margin-bottom: 8px;
+    }
+    .decision-actor-thumb {
+      width: 38px;
+      height: 54px;
+      object-fit: cover;
+      border-radius: 4px;
+      flex-shrink: 0;
+      cursor: pointer;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: #0f172a;
+    }
+    .decision-actor-meta {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .decision-actor-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .decision-actor-name {
+      font-size: 0.78rem;
+      font-weight: bold;
+      color: #bae6fd;
+    }
+    .decision-actor-details summary {
+      font-size: 0.72rem;
+      color: #93c5fd;
+      cursor: pointer;
+      user-select: none;
+    }
+    .decision-actor-text {
+      font-size: 0.74rem;
+      line-height: 1.42;
+      color: #e2e8f0;
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
+      margin-top: 4px;
+      max-height: 100px;
+      overflow-y: auto;
     }
 
     .decision-actions {
@@ -1211,7 +1281,7 @@
       display: flex;
       flex-direction: column;
       gap: 6px;
-      padding-bottom: calc(200px + var(--safe-bottom));
+      padding-bottom: calc(260px + var(--safe-bottom));
     }
     .battle-main-col {
       display: flex;
@@ -1226,21 +1296,62 @@
       min-width: 0;
     }
     .dock-command-bar {
+      display: block;
+      padding-bottom: 6px;
+      margin-bottom: 5px;
+      border-bottom: 1px solid rgba(56, 189, 248, 0.28);
+    }
+    .dock-command-bar.is-prompt-active {
+      background: rgba(20, 35, 58, 0.96);
+      background: linear-gradient(135deg, color-mix(in srgb, var(--prompt-accent, #22c55e) 18%, #0f172a), rgba(15, 23, 42, 0.98));
+      border: 1.5px solid var(--prompt-accent, #22c55e);
+      border-left: 4px solid var(--prompt-accent, #22c55e);
+      border-radius: 10px;
+      padding: 8px 10px;
+      margin-bottom: 6px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+    }
+    .dock-cmd-top {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      width: 100%;
+    }
+    .dock-actor-thumb-wrap {
+      flex-shrink: 0;
+      position: relative;
+      cursor: pointer;
+    }
+    .dock-actor-thumb {
+      width: 38px;
+      height: 54px;
+      object-fit: cover;
+      border-radius: 5px;
+      border: 1.5px solid rgba(255, 255, 255, 0.35);
+      display: block;
+      background: #0f172a;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+    }
+    .dock-cmd-main {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .dock-cmd-header {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
       gap: 6px;
-      padding-bottom: 6px;
-      margin-bottom: 5px;
-      border-bottom: 1px solid rgba(56, 189, 248, 0.28);
     }
     .dock-cmd-status {
       display: flex;
       align-items: center;
       gap: 6px;
       min-width: 0;
-      flex: 1 1 170px;
+      flex: 0 1 auto;
     }
     .dock-status-badge {
       font-size: 0.72rem;
@@ -1252,20 +1363,85 @@
       white-space: nowrap;
       flex-shrink: 0;
     }
+    .dock-command-bar.is-prompt-active .dock-status-badge {
+      font-size: 0.78rem;
+      font-weight: 800;
+      padding: 3px 9px;
+      white-space: normal;
+      line-height: 1.25;
+      overflow-wrap: break-word;
+      max-width: 100%;
+    }
+    .dock-status-badge.is-clickable {
+      cursor: pointer;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+    }
     .dock-status-desc {
-      font-size: 0.72rem;
+      font-size: 0.75rem;
       color: #cbd5e1;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      white-space: normal;
+      overflow-wrap: break-word;
+      line-height: 1.35;
+    }
+    .dock-command-bar.is-prompt-active .dock-status-desc {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: #f8fafc;
+      line-height: 1.45;
+      white-space: normal;
+      overflow: visible;
+      text-overflow: clip;
+      overflow-wrap: break-word;
+      text-wrap: pretty;
+    }
+    .dock-cmd-footer {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      margin-top: 1px;
+    }
+    .dock-status-sub {
+      font-size: 0.74rem;
+      color: #86efac;
+      line-height: 1.35;
+      overflow-wrap: break-word;
+    }
+    .dock-effect-toggle {
+      background: rgba(15, 23, 42, 0.75);
+      color: #bae6fd;
+      border: 1px solid rgba(56, 189, 248, 0.45);
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      cursor: pointer;
+      min-height: 26px;
       white-space: nowrap;
+    }
+    .dock-effect-text {
+      font-size: 0.76rem;
+      line-height: 1.45;
+      color: #e2e8f0;
+      background: rgba(2, 6, 23, 0.78);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      border-radius: 6px;
+      padding: 6px 8px;
+      margin-top: 3px;
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
+      max-height: 110px;
+      overflow-y: auto;
     }
     .dock-command-actions {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
       gap: 5px;
-      max-height: 76px;
+      max-height: 84px;
       overflow-y: auto;
+      margin-left: auto;
     }
     .dock-command-actions .btn {
       min-height: 28px;
@@ -1273,6 +1449,11 @@
       font-size: 0.74rem;
       border-radius: 6px;
       white-space: nowrap;
+    }
+    .dock-command-bar.is-prompt-active .dock-command-actions .btn {
+      min-height: 30px;
+      padding: 4px 10px;
+      font-size: 0.76rem;
     }
 
     /* Anchored Card Action Popover */
@@ -1328,7 +1509,8 @@
         left: 8px;
         right: 8px;
         z-index: 120;
-        max-height: calc(100vh - 245px - var(--safe-bottom));
+        max-height: calc(100vh - 275px - var(--safe-bottom));
+        max-height: calc(100dvh - 275px - var(--safe-bottom));
         overflow-y: auto;
         margin-bottom: 0;
         box-shadow: 0 12px 32px rgba(0, 0, 0, 0.85);
@@ -1590,11 +1772,25 @@
         <!-- Player Command Bar & Hand Dock -->
         <div class="bottom-dock">
           <div id="dock-command-bar" class="dock-command-bar">
-            <div class="dock-cmd-status">
-              <span id="dock-status-badge" class="dock-status-badge">⏳ 待機中</span>
-              <span id="dock-status-desc" class="dock-status-desc">盤面を読み込み中...</span>
+            <div class="dock-cmd-top">
+              <div id="dock-actor-thumb-wrap" class="dock-actor-thumb-wrap" style="display:none;" title="タップでカード詳細を表示">
+                <img id="dock-actor-thumb" class="dock-actor-thumb" alt="発動カード" />
+              </div>
+              <div class="dock-cmd-main">
+                <div class="dock-cmd-header">
+                  <div class="dock-cmd-status">
+                    <span id="dock-status-badge" class="dock-status-badge">⏳ 待機中</span>
+                  </div>
+                  <div id="dock-command-actions" class="dock-command-actions"></div>
+                </div>
+                <div id="dock-status-desc" class="dock-status-desc">盤面を読み込み中...</div>
+                <div id="dock-cmd-footer" class="dock-cmd-footer" style="display:none;">
+                  <span id="dock-status-sub" class="dock-status-sub"></span>
+                  <button id="dock-effect-toggle" class="dock-effect-toggle" type="button" style="display:none;" aria-expanded="false">▸ 効果文を見る</button>
+                </div>
+                <div id="dock-effect-text" class="dock-effect-text" style="display:none;"></div>
+              </div>
             </div>
-            <div id="dock-command-actions" class="dock-command-actions"></div>
           </div>
           <div class="dock-tabs">
             <div class="dock-title" style="min-width:0;">
@@ -1618,6 +1814,7 @@
               style="display:none; padding:2px 8px; font-size:0.7rem; min-height:24px; flex-shrink:0;">👀 盤面を見る</button>
           </div>
           <div id="decision-desc" class="decision-desc"></div>
+          <div id="decision-actor-card" class="decision-actor-card" style="display:none;"></div>
           <div id="decision-actions" class="decision-actions"></div>
         </div>
 
@@ -3183,18 +3380,236 @@
 
     window.addEventListener('resize', syncDecisionOverlayVisibility);
 
-    function setDockCommand(badgeText, badgeColor, descText, buildFn) {
+    window.lastDockPromptKey = null;
+    window.dockEffectTextExpanded = false;
+
+    function findActorCardForPrompt(obs, opts) {
+      if (!opts) return null;
+      const actorId = opts.actorId || '';
+      const defIdFromOpts = opts.definitionId || '';
+      const actorName = opts.actorName || '';
+
+      let matchedZoneCard = null;
+      if (actorId && obs) {
+        const players = [obs.me, obs.opponent].filter(Boolean);
+        for (const ps of players) {
+          const buckets = [
+            ps.field,
+            ps.hand,
+            ps.remove,
+            ps.evidence,
+            ps.extraPartners,
+            ps.partner ? [ps.partner] : [],
+            ps.case ? [ps.case] : []
+          ];
+          for (const list of buckets) {
+            if (!Array.isArray(list)) continue;
+            for (const c of list) {
+              if (!c) continue;
+              if (c.instanceId === actorId && c.faceUp !== false && (c.name || c.definitionId || c.description)) {
+                matchedZoneCard = c;
+                break;
+              }
+              if (Array.isArray(c.setCards)) {
+                const sc = c.setCards.find(s => s && s.instanceId === actorId && s.faceUp !== false);
+                if (sc) {
+                  matchedZoneCard = sc;
+                  break;
+                }
+              }
+            }
+            if (matchedZoneCard) break;
+          }
+          if (matchedZoneCard) break;
+        }
+      }
+
+      let defId = defIdFromOpts || (matchedZoneCard && matchedZoneCard.definitionId) || '';
+      if (!defId && actorName) {
+        const m = String(actorName).match(/\(([A-Za-z0-9_-]+)\)\s*$/);
+        if (m) defId = m[1];
+      }
+      const catCard = (defId && Array.isArray(catalogData))
+        ? catalogData.find(c => c && c.definitionId === defId)
+        : null;
+
+      if (matchedZoneCard && catCard) {
+        return {
+          ...catCard,
+          ...matchedZoneCard,
+          description: matchedZoneCard.description || catCard.description,
+          mainPath: matchedZoneCard.mainPath || catCard.mainPath
+        };
+      }
+      return matchedZoneCard || catCard || null;
+    }
+
+    function renderDecisionActorCard(actorCard, actorName) {
+      const box = document.getElementById('decision-actor-card');
+      if (!box) return;
+      box.innerHTML = '';
+      if (!actorCard || (!actorCard.description && !actorCard.mainPath)) {
+        box.style.display = 'none';
+        return;
+      }
+      box.style.display = 'flex';
+      if (actorCard.mainPath) {
+        const img = document.createElement('img');
+        img.className = 'decision-actor-thumb';
+        img.src = `/card-images/${actorCard.mainPath}`;
+        img.alt = actorName || actorCard.title || actorCard.name || '発動カード';
+        img.loading = 'lazy';
+        img.onclick = () => showCardModal(actorCard);
+        img.onerror = () => { img.style.display = 'none'; };
+        box.appendChild(img);
+      }
+      const meta = document.createElement('div');
+      meta.className = 'decision-actor-meta';
+
+      const head = document.createElement('div');
+      head.className = 'decision-actor-head';
+
+      const nameEl = document.createElement('span');
+      nameEl.className = 'decision-actor-name';
+      nameEl.innerText = actorName || actorCard.title || actorCard.name || actorCard.definitionId || '発動カード';
+      head.appendChild(nameEl);
+
+      const detailBtn = document.createElement('button');
+      detailBtn.type = 'button';
+      detailBtn.className = 'btn btn-secondary';
+      detailBtn.style.cssText = 'font-size:0.68rem; padding:2px 8px; min-height:24px;';
+      detailBtn.innerText = '🔍 カード詳細';
+      detailBtn.onclick = () => showCardModal(actorCard);
+      head.appendChild(detailBtn);
+
+      meta.appendChild(head);
+
+      if (actorCard.description) {
+        const det = document.createElement('details');
+        det.className = 'decision-actor-details';
+        const sum = document.createElement('summary');
+        sum.innerText = '効果テキストを表示';
+        const txt = document.createElement('div');
+        txt.className = 'decision-actor-text';
+        txt.innerText = actorCard.description;
+        det.appendChild(sum);
+        det.appendChild(txt);
+        meta.appendChild(det);
+      }
+
+      box.appendChild(meta);
+    }
+
+    function setDockCommand(badgeText, badgeColor, descText, buildFn, promptOpts = {}) {
+      const {
+        prominent = false,
+        subHint = '',
+        actorCard = null,
+        decisionKey = null
+      } = (promptOpts || {});
+
+      if (decisionKey !== window.lastDockPromptKey) {
+        window.lastDockPromptKey = decisionKey;
+        window.dockEffectTextExpanded = false;
+      }
+
+      const dockBar = document.getElementById('dock-command-bar');
+      const bottomDock = document.querySelector('.bottom-dock');
       const dockBadge = document.getElementById('dock-status-badge');
       const dockDesc = document.getElementById('dock-status-desc');
       const dockActs = document.getElementById('dock-command-actions');
+      const thumbWrap = document.getElementById('dock-actor-thumb-wrap');
+      const thumbImg = document.getElementById('dock-actor-thumb');
+      const footerEl = document.getElementById('dock-cmd-footer');
+      const subEl = document.getElementById('dock-status-sub');
+      const effToggleBtn = document.getElementById('dock-effect-toggle');
+      const effTextEl = document.getElementById('dock-effect-text');
+      const accent = badgeColor || '#38bdf8';
+
+      [dockBar, bottomDock].forEach(el => {
+        if (!el) return;
+        if (el.classList) {
+          if (prominent) el.classList.add('is-prompt-active');
+          else el.classList.remove('is-prompt-active');
+        }
+        if (el.style) {
+          if (prominent && typeof el.style.setProperty === 'function') {
+            el.style.setProperty('--prompt-accent', accent);
+          } else if (!prominent && typeof el.style.removeProperty === 'function') {
+            el.style.removeProperty('--prompt-accent');
+          }
+        }
+      });
+
+      if (thumbWrap && thumbImg) {
+        if (prominent && actorCard && actorCard.mainPath) {
+          thumbImg.src = `/card-images/${actorCard.mainPath}`;
+          thumbImg.alt = actorCard.title || actorCard.name || badgeText || '発動カード';
+          thumbWrap.style.display = 'block';
+          thumbWrap.onclick = () => showCardModal(actorCard);
+          thumbImg.onerror = () => { thumbWrap.style.display = 'none'; };
+        } else {
+          thumbWrap.style.display = 'none';
+          thumbWrap.onclick = null;
+        }
+      }
+
       if (dockBadge) {
-        dockBadge.innerText = badgeText || '待機';
+        const badgeLabel = badgeText || '待機';
+        dockBadge.innerText = (prominent && actorCard) ? `${badgeLabel} 🔍` : badgeLabel;
         dockBadge.style.background = badgeColor || '#334155';
         dockBadge.style.color = '#ffffff';
+        if (prominent && actorCard) {
+          if (dockBadge.classList) dockBadge.classList.add('is-clickable');
+          dockBadge.onclick = () => showCardModal(actorCard);
+          dockBadge.title = 'タップでカード詳細を表示';
+        } else {
+          if (dockBadge.classList) dockBadge.classList.remove('is-clickable');
+          dockBadge.onclick = null;
+          dockBadge.title = '';
+        }
       }
       if (dockDesc) {
         dockDesc.innerText = descText || '';
       }
+
+      const hasEffDesc = Boolean(prominent && actorCard && actorCard.description);
+      const hasSubHint = Boolean(prominent && subHint);
+      if (subEl) {
+        subEl.innerText = hasSubHint ? subHint : '';
+        subEl.style.display = hasSubHint ? 'inline' : 'none';
+      }
+      if (effToggleBtn && effTextEl) {
+        if (hasEffDesc) {
+          const syncEffExpanded = () => {
+            const exp = !!window.dockEffectTextExpanded;
+            effTextEl.style.display = exp ? 'block' : 'none';
+            effTextEl.innerText = actorCard.description;
+            effToggleBtn.innerText = exp ? '▾ 効果文を閉じる' : '▸ 効果文を見る';
+            if (typeof effToggleBtn.setAttribute === 'function') {
+              effToggleBtn.setAttribute('aria-expanded', exp ? 'true' : 'false');
+            }
+          };
+          effToggleBtn.style.display = 'inline-flex';
+          syncEffExpanded();
+          effToggleBtn.onclick = () => {
+            window.dockEffectTextExpanded = !window.dockEffectTextExpanded;
+            syncEffExpanded();
+          };
+        } else {
+          effToggleBtn.style.display = 'none';
+          effToggleBtn.onclick = null;
+          if (typeof effToggleBtn.setAttribute === 'function') {
+            effToggleBtn.setAttribute('aria-expanded', 'false');
+          }
+          effTextEl.style.display = 'none';
+          effTextEl.innerText = '';
+        }
+      }
+      if (footerEl) {
+        footerEl.style.display = (hasSubHint || hasEffDesc) ? 'flex' : 'none';
+      }
+
       if (dockActs) {
         dockActs.innerHTML = '';
         if (typeof buildFn === 'function') {
@@ -3205,6 +3620,7 @@
 
     function render(obs) {
       window.latestObs = obs;
+      renderDecisionActorCard(null);
       if (window.pendingBoardMode && (window.pendingBoardMode.revision !== obs.revision || !obs.pendingDecision || obs.pendingDecision.kind !== 'mainAction')) {
         window.pendingBoardMode = null;
       }
@@ -3430,7 +3846,17 @@
           btnRow.appendChild(btnPass);
 
           decActs.appendChild(btnRow);
-          setDockCommand('🃏 マリガン', '#0284c7', '戻す手札を選んで確定してください', null);
+          setDockCommand(
+            '🃏 マリガン',
+            '#0284c7',
+            '戻す初期手札を選んで確定してください',
+            null,
+            {
+              prominent: true,
+              subHint: '📋 選択パネル内で戻すカードを選んで確定してください',
+              decisionKey: overlayKey
+            }
+          );
 
         } else if (pd.kind === 'mainAction') {
           decBox.dataset.hasOverlay = '0';
@@ -3440,19 +3866,32 @@
           const mode = window.pendingBoardMode;
 
           if (mode && mode.revision === obs.revision) {
-            const modeDesc = mode.type === 'DISGUISE_TARGET'
-              ? `🎭 [${mode.label}] の変装先の味方キャラ（緑枠）をクリック`
-              : `⚔️ [${mode.label}] のアタック対象（緑枠）を相手の場または事件からクリック`;
-            setDockCommand('🎯 対象選択', '#16a34a', modeDesc, (wrap) => {
-              const bCancel = document.createElement('button');
-              bCancel.className = 'btn btn-secondary';
-              bCancel.innerText = '✖ 対象選択をキャンセル';
-              bCancel.onclick = () => {
-                window.pendingBoardMode = null;
-                render(window.latestObs);
-              };
-              wrap.appendChild(bCancel);
-            });
+            const isDisguiseMode = mode.type === 'DISGUISE_TARGET';
+            const modeDesc = isDisguiseMode
+              ? `[${mode.label}] の変装先にする味方キャラを選択してください`
+              : `[${mode.label}] のアタック対象を相手の現場または事件から選択してください`;
+            const boardActorCard = findActorCardForPrompt(obs, { actorId: mode.actorId || mode.cardId });
+            setDockCommand(
+              isDisguiseMode ? '🎭 変装先を選択' : '⚔️ アタック対象を選択',
+              '#16a34a',
+              modeDesc,
+              (wrap) => {
+                const bCancel = document.createElement('button');
+                bCancel.className = 'btn btn-secondary';
+                bCancel.innerText = '✖ キャンセル';
+                bCancel.onclick = () => {
+                  window.pendingBoardMode = null;
+                  render(window.latestObs);
+                };
+                wrap.appendChild(bCancel);
+              },
+              {
+                prominent: true,
+                subHint: '🟢 盤面の緑枠カードを直接タップして選択できます',
+                actorCard: boardActorCard,
+                decisionKey: `boardMode:${obs.revision}:${mode.type}:${mode.actorId || mode.cardId || ''}`
+              }
+            );
           } else {
             const actions = pd.options.actions || [];
             setDockCommand(
@@ -3516,7 +3955,9 @@
               ? ((hasCutins || hasDisguises) ? '対応カードをタップまたはボタン選択' : 'ガードキャラ選択またはスルー')
               : 'カットイン/変装を使用またはスルー');
 
-          setDockCommand(badgeText, badgeCol, contactInfo ? `${contactInfo} (${descSuffix})` : descSuffix, (wrap) => {
+          const guardDescText = contactInfo || descSuffix;
+          const guardSubHint = contactInfo ? descSuffix : '';
+          setDockCommand(badgeText, badgeCol, guardDescText, (wrap) => {
             if (!mustGuard) {
               const btnPass = document.createElement('button');
               btnPass.className = 'btn btn-secondary';
@@ -3563,16 +4004,30 @@
                 wrap.appendChild(btn);
               });
             }
+          }, {
+            prominent: true,
+            subHint: guardSubHint,
+            decisionKey: overlayKey
           });
         } else if (pd.kind === 'hintPlay') {
           decBox.dataset.hasOverlay = '0';
-          setDockCommand('💡 ネクストヒント', '#0284c7', '回収後、手札の青枠をタップして登場させられます', (wrap) => {
-            const btnPass = document.createElement('button');
-            btnPass.className = 'btn btn-secondary';
-            btnPass.innerText = '⏭ スキップ';
-            btnPass.onclick = () => submitDecision({ cardId: null });
-            wrap.appendChild(btnPass);
-          });
+          setDockCommand(
+            '💡 ネクストヒント',
+            '#0284c7',
+            'ネクストヒント回収後、手札からキャラを1体登場させられます',
+            (wrap) => {
+              const btnPass = document.createElement('button');
+              btnPass.className = 'btn btn-secondary';
+              btnPass.innerText = '⏭ スキップ';
+              btnPass.onclick = () => submitDecision({ cardId: null });
+              wrap.appendChild(btnPass);
+            },
+            {
+              prominent: true,
+              subHint: '🔵 下の手札の青枠をタップ（またはスキップ）',
+              decisionKey: overlayKey
+            }
+          );
         } else if (pd.kind === 'triggerOrder') {
           decBox.dataset.hasOverlay = '1';
           if (isNewOverlayKey) window.decisionOverlayHidden = false;
@@ -3587,15 +4042,29 @@
             btn.onclick = () => submitDecision({ index: tr.index });
             decActs.appendChild(btn);
           });
+          setDockCommand(
+            '⚡ 発動順の選択',
+            '#d97706',
+            pd.options.title || '先に発動する能力を選んでください',
+            null,
+            {
+              prominent: true,
+              subHint: '📋 選択パネルから先に処理する効果を選んでください',
+              decisionKey: overlayKey
+            }
+          );
         } else if (pd.kind === 'modeSelect') {
           decBox.dataset.hasOverlay = '1';
           if (isNewOverlayKey) window.decisionOverlayHidden = false;
           const actorName = pd.options.actorName || '効果';
+          const modeActorCard = findActorCardForPrompt(obs, pd.options);
           const modes = pd.options.modes || [];
           const maxPick = Number(pd.options.maxPick || 1);
           const minPick = Number(pd.options.minPick ?? 1);
+          const modePromptDesc = pd.options.title || (maxPick > 1 ? `発動する効果を${minPick}〜${maxPick}つ選んでください` : '発動する効果を1つ選んでください');
           document.getElementById('decision-title').innerText = `💡 モード選択: ${actorName}`;
-          document.getElementById('decision-desc').innerText = pd.options.title || (maxPick > 1 ? `発動する効果を${minPick}〜${maxPick}つ選んでください` : '発動する効果を1つ選んでください');
+          document.getElementById('decision-desc').innerText = modePromptDesc;
+          renderDecisionActorCard(modeActorCard, actorName);
           if (maxPick > 1) {
             const selectedModes = [];
             const btnConfirm = document.createElement('button');
@@ -3644,10 +4113,22 @@
               decActs.appendChild(btn);
             });
           }
-          setDockCommand('💡 モード選択', '#7c3aed', pd.options.title || '発動する効果を選択してください', null);
+          setDockCommand(
+            `💡 ${actorName}`,
+            '#7c3aed',
+            modePromptDesc,
+            null,
+            {
+              prominent: true,
+              subHint: '📋 選択パネルから発動する効果を選んでください',
+              actorCard: modeActorCard,
+              decisionKey: overlayKey
+            }
+          );
         } else if (pd.kind === 'targetSelect') {
           decBox.dataset.hasOverlay = '1';
           const actorName = pd.options.actorName || '効果';
+          const targetActorCard = findActorCardForPrompt(obs, pd.options);
           const isDiscard = pd.options.effectType === 'DISCARD_HAND';
           const maxSelect = Number(pd.options.maxSelect || 1);
           const candidates = pd.options.candidates || [];
@@ -3657,10 +4138,12 @@
             window.decisionOverlayHidden = isFieldOverflow ? false : (maxSelect === 1 && !hasOffBoard);
           }
 
+          const targetPromptTitle = pd.options.title || '効果の対象カードを選んでください';
           document.getElementById('decision-title').innerText = isDiscard
             ? `💸 手札リムーブ選択: ${actorName}`
             : `⚡ 対象選択: ${actorName}`;
-          document.getElementById('decision-desc').innerText = pd.options.title || '効果の対象カードを選んでください';
+          document.getElementById('decision-desc').innerText = targetPromptTitle;
+          renderDecisionActorCard(targetActorCard, actorName);
 
           if (pd.options.optional) {
             const btnSkip = document.createElement('button');
@@ -3768,7 +4251,7 @@
               const effType = pd.options.effectType;
               if (effType !== 'REVIVE_SPLIT_BAKANA') return;
               const labels = ['1枚目: 登場', '2枚目: スリープ登場'];
-              wrap.querySelectorAll('.split-role-tag').forEach(el => {
+              candContainer.querySelectorAll('.split-role-tag').forEach(el => {
                 const i = selectedIds.indexOf(el.dataset.id);
                 el.innerText = i >= 0 ? `✓ ${labels[i] || `${i + 1}枚目`}` : '';
               });
@@ -3805,10 +4288,17 @@
 
           decActs.appendChild(candContainer);
 
-          const dockTargetDesc = (maxSelect === 1 && !hasOffBoard)
-            ? `${pd.options.title || '対象選択'}（緑枠のカードを直接タップ可）`
-            : (pd.options.title || '効果の対象を選んでください');
-          setDockCommand(isDiscard ? '💸 手札破棄' : `⚡ ${actorName}`, '#16a34a', dockTargetDesc, (wrap) => {
+          let targetSubHint = '📋 「選択パネルを開く」から対象を選択できます';
+          if (maxSelect === 1 && !hasOffBoard) {
+            targetSubHint = pd.options.targetZone === 'HAND'
+              ? '🟢 下の手札の緑枠をタップして選択できます'
+              : '🟢 盤面の緑枠カードを直接タップして選択できます';
+          } else if (maxSelect > 1) {
+            targetSubHint = '📋 「選択パネルを開く」から複数対象を選択できます';
+          }
+          const dockAccent = isFieldOverflow ? '#dc2626' : (isDiscard ? '#d97706' : '#16a34a');
+          const dockBadgeText = isDiscard ? `💸 ${actorName}` : `⚡ ${actorName}`;
+          setDockCommand(dockBadgeText, dockAccent, targetPromptTitle, (wrap) => {
             if (pd.options.optional) {
               const bSkip = document.createElement('button');
               bSkip.className = 'btn btn-secondary';
@@ -3821,16 +4311,24 @@
               });
               wrap.appendChild(bSkip);
             }
+          }, {
+            prominent: true,
+            subHint: targetSubHint,
+            actorCard: targetActorCard,
+            decisionKey: overlayKey
           });
         } else if (pd.kind === 'deckSearch') {
           decBox.dataset.hasOverlay = '1';
           if (isNewOverlayKey) window.decisionOverlayHidden = false;
           const actorName = pd.options.actorName || '効果';
+          const deckActorCard = findActorCardForPrompt(obs, pd.options);
           const maxSelect = Number(pd.options.maxSelect || 1);
           const pickAction = pd.options.pickAction || 'TO_HAND';
           const isDeploy = pickAction === 'PLAY_ACTIVE' || pickAction === 'PLAY_SLEEP';
+          const deckPromptTitle = pd.options.title || 'カードを選んでください';
           document.getElementById('decision-title').innerText = `🔍 デッキ確認: ${actorName}`;
-          document.getElementById('decision-desc').innerText = pd.options.title || 'カードを選んでください';
+          document.getElementById('decision-desc').innerText = deckPromptTitle;
+          renderDecisionActorCard(deckActorCard, actorName);
 
           if (pd.options.optional) {
             const btnSkip = document.createElement('button');
@@ -3946,19 +4444,30 @@
           });
 
           decActs.appendChild(cardContainer);
-          setDockCommand('🔍 デッキ確認', '#0284c7', pd.options.title || 'カードを選択してください', (wrap) => {
-            if (pd.options.optional) {
-              const bSkip = document.createElement('button');
-              bSkip.className = 'btn btn-secondary';
-              bSkip.innerText = '⏭ スキップ';
-              bSkip.onclick = () => submitDecision({
-                chosenCardId: null,
-                chosenCardIds: [],
-                actorId: pd.options.actorId
-              });
-              wrap.appendChild(bSkip);
+          setDockCommand(
+            `🔍 ${actorName}`,
+            '#0284c7',
+            deckPromptTitle,
+            (wrap) => {
+              if (pd.options.optional) {
+                const bSkip = document.createElement('button');
+                bSkip.className = 'btn btn-secondary';
+                bSkip.innerText = '⏭ スキップ';
+                bSkip.onclick = () => submitDecision({
+                  chosenCardId: null,
+                  chosenCardIds: [],
+                  actorId: pd.options.actorId
+                });
+                wrap.appendChild(bSkip);
+              }
+            },
+            {
+              prominent: true,
+              subHint: '📋 選択パネルからカードを選んでください',
+              actorCard: deckActorCard,
+              decisionKey: overlayKey
             }
-          });
+          );
         }
       } else {
         window.lastOverlayDecisionKey = null;

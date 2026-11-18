@@ -1804,25 +1804,63 @@ use super::*;
             String::from_utf8_lossy(&check_out.stderr)
         );
 
-        // 2. モックDOM上でスクリプトを読み込み、createCardSlot / createCardEl をスモークテスト
+        // 2. モックDOM上でスクリプトを読み込み、createCardSlot / createCardEl / render のUI更新をスモークテスト
         let smoke_js = format!(
             r#"
-const makeEl = () => new Proxy({{
-  style: {{}}, classList: {{ add(){{}}, remove(){{}}, contains(){{ return false; }} }},
-  dataset: {{}}, children: [], appendChild(c){{ this.children.push(c); return c; }},
-  addEventListener(){{}}, querySelector(){{ return makeEl(); }}, querySelectorAll(){{ return []; }},
-  setAttribute(){{}}, getAttribute(){{ return ''; }}
-}}, {{ get(t, p) {{ return p in t ? t[p] : ''; }} }});
+const assert = require('node:assert/strict');
+const elsById = {{}};
+const makeEl = () => {{
+  const classes = new Set();
+  const styleProps = {{}};
+  const obj = {{
+    style: {{
+      setProperty(k, v) {{ styleProps[k] = v; }},
+      removeProperty(k) {{ delete styleProps[k]; }},
+      getPropertyValue(k) {{ return styleProps[k] || ''; }}
+    }},
+    classList: {{
+      add(...xs) {{ xs.forEach(x => classes.add(x)); }},
+      remove(...xs) {{ xs.forEach(x => classes.delete(x)); }},
+      contains(x) {{ return classes.has(x); }},
+      toggle(x, force) {{
+        if (force === true) classes.add(x);
+        else if (force === false) classes.delete(x);
+        else if (classes.has(x)) classes.delete(x);
+        else classes.add(x);
+      }}
+    }},
+    dataset: {{}},
+    children: [],
+    appendChild(c) {{ this.children.push(c); return c; }},
+    replaceWith() {{}},
+    addEventListener() {{}},
+    querySelector() {{ return makeEl(); }},
+    querySelectorAll() {{ return []; }},
+    setAttribute(k, v) {{ this['attr_' + k] = v; }},
+    getAttribute(k) {{ return this['attr_' + k] || ''; }},
+    getBoundingClientRect() {{ return {{ left: 0, top: 0, width: 100, height: 100 }}; }},
+    paused: true,
+    pause() {{ this.paused = true; }},
+    play() {{ this.paused = false; return Promise.resolve(); }}
+  }};
+  return new Proxy(obj, {{ get(t, p) {{ return p in t ? t[p] : ''; }} }});
+}};
+const bottomDockEl = makeEl();
+const getEl = (id) => {{
+  if (!elsById[id]) elsById[id] = makeEl();
+  return elsById[id];
+}};
 global.window = global;
+global.innerWidth = 390;
 global.addEventListener = () => {{}};
 global.setInterval = () => 0;
 global.setTimeout = () => 0;
 global.location = {{ search: '', href: 'http://localhost:8000/' }};
 global.localStorage = {{ getItem(){{ return null; }}, setItem(){{}}, removeItem(){{}} }};
 global.document = {{
-  getElementById: () => makeEl(),
+  getElementById: (id) => getEl(id),
   createElement: () => makeEl(),
-  querySelector: () => makeEl(),
+  querySelector: (sel) => sel === '.bottom-dock' ? bottomDockEl : makeEl(),
   querySelectorAll: () => [],
   addEventListener: () => {{}}
 }};
@@ -1831,6 +1869,122 @@ global.Audio = function() {{ return {{ play: async () => {{}}, pause: () => {{}}
 {js}
 createCardSlot('slot_1', {{ instanceId: 'c1', definitionId: 'B01001', name: '江戸川コナン', cardType: 'CHARACTER', level: 1, ap: 1000, lp: 1, orientation: 'ACTIVE', zone: 'FIELD' }}, {{ isMine: true, zone: 'FIELD' }});
 createCardEl(null, true, false, null);
+
+// targetSelect UI スモークテスト（全文表示・強調バー・効果文トグル）
+catalogData.push({{
+  definitionId: 'B11007P',
+  title: '吉田歩美',
+  cardType: 'CHARACTER',
+  level: 4,
+  ap: 3000,
+  lp: 1,
+  colors: ['青'],
+  description: '【登場時】リムーブする相手のキャラを1枚まで選ぶ。',
+  mainPath: 'sample_b11007p.jpg'
+}});
+const samplePlayers = () => ({{
+  me: {{
+    playerId: 'player1',
+    isFirstPlayer: false,
+    casePhase: 'RESOLUTION',
+    fileCount: 8,
+    rawFileCount: 7,
+    partnerInFile: true,
+    deckCount: 17,
+    evidenceCount: 0,
+    removeCount: 8,
+    handCount: 1,
+    hand: [{{ instanceId: 'h1', definitionId: 'B01001', name: '江戸川コナン', cardType: 'CHARACTER', level: 4, ap: 4000, lp: 1, orientation: 'ACTIVE', zone: 'HAND', faceUp: true }}],
+    field: [{{ instanceId: 'inst_ayumi', definitionId: 'B11007P', name: '吉田歩美', cardType: 'CHARACTER', level: 4, ap: 3000, lp: 1, orientation: 'ACTIVE', zone: 'FIELD', faceUp: true }}],
+    partner: {{ instanceId: 'p1_p', definitionId: 'B01001', name: '江戸川コナン', cardType: 'PARTNER', level: 0, ap: 0, lp: 1, orientation: 'ACTIVE', zone: 'PARTNER', faceUp: true }},
+    extraPartners: [],
+    case: {{ instanceId: 'p1_c', definitionId: 'B01024', name: '事件', cardType: 'CASE', level: 0, ap: 0, lp: 0, orientation: 'ACTIVE', zone: 'CASE', faceUp: true }},
+    evidence: [],
+    remove: []
+  }},
+  opponent: {{
+    playerId: 'player2',
+    isFirstPlayer: true,
+    casePhase: 'RESOLUTION',
+    fileCount: 6,
+    rawFileCount: 5,
+    partnerInFile: true,
+    deckCount: 19,
+    evidenceCount: 3,
+    removeCount: 6,
+    handCount: 4,
+    hand: [],
+    field: [{{ instanceId: 'opp_1', definitionId: 'B05055', name: '相手キャラ', cardType: 'CHARACTER', level: 4, ap: 4000, lp: 1, orientation: 'SLEEP', zone: 'FIELD', faceUp: true }}],
+    partner: {{ instanceId: 'p2_p', definitionId: 'B01001', name: '江戸川コナン', cardType: 'PARTNER', level: 0, ap: 0, lp: 1, orientation: 'ACTIVE', zone: 'PARTNER', faceUp: true }},
+    extraPartners: [],
+    case: {{ instanceId: 'p2_c', definitionId: 'B01024', name: '事件', cardType: 'CASE', level: 0, ap: 0, lp: 0, orientation: 'ACTIVE', zone: 'CASE', faceUp: true }},
+    evidence: [],
+    remove: []
+  }}
+}});
+
+render({{
+  revision: 12,
+  turn: 8,
+  turnPlayerId: 'player1',
+  decisionPlayerId: 'player1',
+  viewingPlayerId: 'player1',
+  logs: ['テスト開始'],
+  ...samplePlayers(),
+  pendingDecision: {{
+    decisionId: 'dec_target_1',
+    revision: 12,
+    playerId: 'player1',
+    kind: 'targetSelect',
+    options: {{
+      actorId: 'inst_ayumi',
+      actorName: '吉田歩美(B11007P)',
+      effectType: 'REMOVE',
+      targetZone: 'FIELD',
+      maxSelect: 1,
+      optional: true,
+      title: 'リムーブする相手のカードを1枚選択してください',
+      candidates: [
+        {{ instanceId: 'opp_1', definitionId: 'B05055', name: '相手キャラ', level: 4, ap: 4000, zoneLabel: '現場', zone: 'FIELD', isOpponent: true }}
+      ]
+    }}
+  }}
+}});
+
+assert.equal(getEl('dock-command-bar').classList.contains('is-prompt-active'), true);
+assert.equal(bottomDockEl.classList.contains('is-prompt-active'), true);
+assert.equal(getEl('dock-status-desc').innerText, 'リムーブする相手のカードを1枚選択してください');
+assert.ok(getEl('dock-status-badge').innerText.includes('吉田歩美(B11007P)'));
+assert.ok(getEl('dock-status-badge').innerText.includes('🔍'));
+assert.ok(getEl('dock-status-sub').innerText.includes('緑枠'));
+assert.equal(getEl('dock-effect-toggle').style.display, 'inline-flex');
+assert.equal(getEl('dock-effect-text').style.display, 'none');
+getEl('dock-effect-toggle').onclick();
+assert.equal(getEl('dock-effect-text').style.display, 'block');
+assert.ok(getEl('dock-effect-text').innerText.includes('リムーブする相手のキャラ'));
+
+// 通常手番に戻ったら強調状態と効果文トグルが解除されること
+render({{
+  revision: 13,
+  turn: 8,
+  turnPlayerId: 'player1',
+  decisionPlayerId: 'player1',
+  viewingPlayerId: 'player1',
+  logs: ['テスト開始'],
+  ...samplePlayers(),
+  pendingDecision: {{
+    decisionId: 'dec_main_1',
+    revision: 13,
+    playerId: 'player1',
+    kind: 'mainAction',
+    options: {{
+      actions: [{{ type: 'END_TURN' }}]
+    }}
+  }}
+}});
+assert.equal(getEl('dock-command-bar').classList.contains('is-prompt-active'), false);
+assert.equal(bottomDockEl.classList.contains('is-prompt-active'), false);
+assert.equal(getEl('dock-effect-toggle').style.display, 'none');
 "#,
             js = js_code
         );
@@ -3531,6 +3685,65 @@ fn test_b11003_multi_declare_self_lv4_minus_and_b11057_b11017_full_scenario() {
         engine.resolve_deployed_characters("p1", None, &deployed, "MAIN");
         let obs = build_player_observation(&engine, "p1");
         assert_eq!(obs["pendingDecision"]["kind"].as_str(), Some("triggerOrder"));
+    }
+}
+
+#[test]
+fn test_target_action_prompt_title_and_constraints_real_cards() {
+    let catalog = load_test_catalog();
+
+    // 1) B11057 のレベル-1 効果のタイトルに符号付きの「レベル－1」が入ること
+    {
+        let mut engine = MatchEngine::new(catalog.clone());
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn = 4;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.field.push(test_inst("c_debuff", "B11057", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        engine.players.insert("p1".to_string(), ps1);
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        ps2.field.push(test_inst("opp_c", "B05055", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        engine.players.insert("p2".to_string(), ps2);
+
+        let deployed = vec![("c_debuff".to_string(), "B11057".to_string(), models::CardOrientation::ACTIVE)];
+        engine.resolve_deployed_characters("p1", None, &deployed, "MAIN");
+        let obs = build_player_observation(&engine, "p1");
+        assert_eq!(obs["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+        let title = obs["pendingDecision"]["options"]["title"].as_str().unwrap_or("");
+        assert!(
+            title.contains("レベル－1"),
+            "LevelDelta(-1) prompt title should show 'レベル－1', got: {}",
+            title
+        );
+    }
+
+    // 2) B03006 の同名不可制約がタイトル末尾にヒント表記されること
+    {
+        let mut engine = MatchEngine::new(catalog);
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn = 4;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.field.push(test_inst("c_kessei", "B03006", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        ps1.remove.push(test_inst("r_ayumi", "B11007", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE));
+        ps1.remove.push(test_inst("r_genta", "B11008", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE));
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+
+        let deployed = vec![("c_kessei".to_string(), "B03006".to_string(), models::CardOrientation::ACTIVE)];
+        engine.resolve_deployed_characters("p1", None, &deployed, "MAIN");
+        let obs = build_player_observation(&engine, "p1");
+        assert_eq!(obs["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+        let title = obs["pendingDecision"]["options"]["title"].as_str().unwrap_or("");
+        assert!(
+            title.contains("同名不可"),
+            "distinct_names prompt title should include '同名不可', got: {}",
+            title
+        );
     }
 }
 
