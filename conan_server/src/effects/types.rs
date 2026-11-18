@@ -313,6 +313,8 @@ pub struct ClauseCost {
     pub requires_sleep: bool,
     pub hand_remove: usize,
     pub hand_filter: Option<TargetFilter>,
+    pub field_sleep: usize,
+    pub field_sleep_filter: Option<TargetFilter>,
     pub evidence_remove: usize,
     pub evidence_flip_up: usize,
     pub evidence_flip_up_any: bool,

@@ -150,6 +150,36 @@ impl MatchEngine {
         if cost.deck_mill > 0 && ps.deck.len() < cost.deck_mill {
             return false;
         }
+        if cost.field_sleep > 0 {
+            let fc = ps.effective_file_count() as i32;
+            let matched = if let Some(ref fsf) = cost.field_sleep_filter {
+                ps.field
+                    .iter()
+                    .filter(|c| {
+                        card_matches_filter_with_ctx(
+                            &self.catalog,
+                            Some(actor_id),
+                            &ps.player_id,
+                            &ps.player_id,
+                            c,
+                            self.catalog.get(&c.definition_id).map(|d| d.ap).unwrap_or(0),
+                            fsf,
+                            None,
+                            None,
+                            Some(fc),
+                        )
+                    })
+                    .count()
+            } else {
+                ps.field
+                    .iter()
+                    .filter(|c| c.orientation == CardOrientation::ACTIVE)
+                    .count()
+            };
+            if matched < cost.field_sleep {
+                return false;
+            }
+        }
         true
     }
 

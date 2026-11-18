@@ -117,6 +117,9 @@ pub fn parse_clause_cost(clause: &str) -> ClauseCost {
         let (hc, hf) = extract_hand_remove_spec(prefix);
         cost.hand_remove = hc;
         cost.hand_filter = hf;
+        let (fsc, fsf) = extract_field_sleep_spec(prefix);
+        cost.field_sleep = fsc;
+        cost.field_sleep_filter = fsf;
         cost.evidence_remove = extract_count_around(prefix, "証拠を", "つリムーブ");
         cost.evidence_flip_up = extract_count_around(prefix, "裏向きの証拠を", "つ表向き");
         if prefix.contains("裏向きの証拠を1つ以上表向き") {
@@ -145,6 +148,29 @@ pub fn parse_clause_cost(clause: &str) -> ClauseCost {
     }
 
     cost
+}
+
+/// `"〚...をN枚スリープさせる〛"` を解析する
+pub fn extract_field_sleep_spec(prefix: &str) -> (usize, Option<TargetFilter>) {
+    if !prefix.contains("スリープさせる") {
+        return (0, None);
+    }
+    let inner = prefix
+        .split('〚')
+        .filter_map(|seg| seg.split('〛').next())
+        .find(|seg| seg.contains("スリープさせる"))
+        .unwrap_or(prefix);
+    let Some(sleep_idx) = inner.find("スリープさせる") else {
+        return (0, None);
+    };
+    let scope = inner[..sleep_idx].trim();
+    let count = extract_count_around(inner, "を", "枚スリープ").max(1);
+    let mut f = parse_target_filter(scope, TargetZone::Field, true, None);
+    f.owner = OwnerScope::SelfOnly;
+    f.zone = TargetZone::Field;
+    f.count = count;
+    f.orientations = vec![CardOrientation::ACTIVE];
+    (count, Some(f))
 }
 
 /// `"手札をN枚リムーブ"` / `"手札から<条件>をN枚リムーブ"` を解析する

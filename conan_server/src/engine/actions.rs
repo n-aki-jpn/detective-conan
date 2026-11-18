@@ -873,7 +873,7 @@ impl MatchEngine {
         };
 
         let cost = parse_clause_cost(&clause);
-        let pay_auto = cost.hand_remove == 0 && cost.evidence_flip_up == 0;
+        let pay_auto = cost.hand_remove == 0 && cost.evidence_flip_up == 0 && cost.field_sleep == 0;
         self.last_cost_flipped_evidence_count = 0;
         let cost_actor = set_host_id.clone().unwrap_or_else(|| actor_id.to_string());
         // 証拠を表向きにするコストは後段のインタラクティブ選択（枚数分）で支払うため、ここでは自動で表向きにしない
@@ -964,6 +964,34 @@ impl MatchEngine {
                     &card_name,
                     Some(def.level),
                     &flip_step,
+                    None,
+                    Some(&plan),
+                    "MAIN",
+                    None,
+                ) {
+                    return;
+                }
+            }
+        }
+        if cost.field_sleep > 0 {
+            if let Some(mut sleep_filter) = cost.field_sleep_filter.clone() {
+                sleep_filter.count = cost.field_sleep;
+                let sleep_step = crate::effects::TargetStep {
+                    action: TargetAction::Sleep,
+                    filter: sleep_filter,
+                    bonuses: Vec::new(),
+                    follow_up: Vec::new(),
+                    conditional_follow_up: None,
+                    optional: false,
+                    then_abort_if_skipped: true,
+                    scale_by_cost_flipped_evidence: false,
+                };
+                if self.prompt_target_step_with_plan(
+                    player_id,
+                    actor_id,
+                    &card_name,
+                    Some(def.level),
+                    &sleep_step,
                     None,
                     Some(&plan),
                     "MAIN",

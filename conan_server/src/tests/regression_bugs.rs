@@ -3007,3 +3007,81 @@ fn test_mulligan_and_refresh_cards_gained_as_evidence_stay_face_down_and_b11099_
     }
 }
 
+#[test]
+fn test_b09058_declare_requires_sleeping_other_akai_family_char() {
+    let catalog = load_test_catalog();
+
+    // 1) 他にアクティブな特徴［赤井家］キャラがいない場合は宣言不可・ドロー不可
+    {
+        let mut engine = MatchEngine::new(catalog.clone());
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn = 4;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.field.push(test_inst("haneda_58", "B09058", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        ps1.field.push(test_inst("non_akai", "B01005", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        ps1.deck.push(test_inst("d1", "B01005", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+        engine.prompt_main_action("p1");
+
+        let obs = build_player_observation(&engine, "p1");
+        let actions = obs["pendingDecision"]["options"]["actions"].as_array().unwrap();
+        let has_declare = actions
+            .iter()
+            .find(|a| a["type"] == "DECLARE")
+            .and_then(|a| a["actors"].as_array())
+            .map(|arr| arr.iter().any(|x| x["actorId"] == "haneda_58"))
+            .unwrap_or(false);
+        assert!(!has_declare, "他に特徴［赤井家］のアクティブキャラがいない場合、B09058の宣言は使用不可であること");
+        assert_eq!(engine.players["p1"].hand.len(), 0);
+    }
+
+    // 2) 他にアクティブな特徴［赤井家］キャラがいる場合は、そのキャラをスリープさせてから1ドローすること
+    {
+        let mut engine = MatchEngine::new(catalog.clone());
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn = 4;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.field.push(test_inst("haneda_58", "B09058", "p1", models::Zone::FIELD, models::CardOrientation::SLEEP));
+        ps1.field.push(test_inst("other_akai", "B11056", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        ps1.deck.push(test_inst("d1", "B01005", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+        engine.prompt_main_action("p1");
+
+        let obs1 = build_player_observation(&engine, "p1");
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": obs1["pendingDecision"]["decisionId"],
+            "revision": engine.revision,
+            "value": { "type": "DECLARE", "actorId": "haneda_58" }
+        })).unwrap();
+
+        let obs2 = build_player_observation(&engine, "p1");
+        assert_eq!(obs2["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+        assert_eq!(obs2["pendingDecision"]["options"]["effectType"].as_str(), Some("SLEEP"));
+        let cands: Vec<&str> = obs2["pendingDecision"]["options"]["candidates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|c| c["instanceId"].as_str())
+            .collect();
+        assert_eq!(cands, vec!["other_akai"]);
+
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": obs2["pendingDecision"]["decisionId"],
+            "revision": engine.revision,
+            "value": { "targetId": "other_akai" }
+        })).unwrap();
+
+        let other = engine.players["p1"].field.iter().find(|c| c.instance_id == "other_akai").unwrap();
+        assert_eq!(other.orientation, models::CardOrientation::SLEEP, "コストで選んだ赤井家キャラがスリープすること");
+        assert_eq!(engine.players["p1"].hand.len(), 1, "コスト支払い後に1枚ドローすること");
+    }
+}
+
