@@ -10,7 +10,7 @@ impl MatchEngine {
         definition_id: &str,
         is_event: bool,
     ) -> bool {
-        self.resolve_on_play_effects_with_source(player_id, actor_id, definition_id, is_event, None)
+        self.resolve_on_play_effects_with_source(player_id, actor_id, definition_id, is_event, None, "MAIN")
     }
 
     pub(super) fn resolve_on_play_effects_with_source(
@@ -20,6 +20,7 @@ impl MatchEngine {
         definition_id: &str,
         is_event: bool,
         source_effect_level: Option<i32>,
+        resume_context: &str,
     ) -> bool {
         let Some(def) = self.catalog.get(definition_id).cloned() else {
             return false;
@@ -32,14 +33,13 @@ impl MatchEngine {
         // イベントの「以下から〜選んで行う」モード選択チェック
         if is_event {
             if let Some(mc) = parse_event_mode_choice(&def.description) {
-                let resume_ctx = "MAIN";
                 return self.start_event_mode_choice(
                     player_id,
                     actor_id,
                     &card_name,
                     Some(def.level),
                     &mc,
-                    resume_ctx,
+                    resume_context,
                 );
             }
         }
@@ -80,7 +80,7 @@ impl MatchEngine {
                             source_level: src_lv,
                             card_type: def.card_type,
                             clause: rem_cl.clone(),
-                            resume_context: "MAIN".to_string(),
+                            resume_context: resume_context.to_string(),
                             evidence_source_inst_id: None,
                             post_target_ops: vec![],
                             plan: None,
@@ -88,7 +88,7 @@ impl MatchEngine {
                     );
                 }
             }
-            if self.execute_clause_plan(player_id, actor_id, &card_name, src_lv, &plan, "MAIN", None) {
+            if self.execute_clause_plan(player_id, actor_id, &card_name, src_lv, &plan, resume_context, None) {
                 return true;
             }
             // 即時完結した場合は既にキューに入れた残り句をそのままループで処理するので一旦クリアは不要 — すでに execute_clause_plan が false ならここでキューを消化して戻す
@@ -1317,6 +1317,7 @@ impl MatchEngine {
             definition_id,
             false,
             source_effect_level,
+            resume_context,
         ) {
             return true;
         }

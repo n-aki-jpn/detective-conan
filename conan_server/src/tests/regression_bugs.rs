@@ -3189,3 +3189,92 @@ fn test_b11022_kazuha_action_trigger_fires_after_b11096_action_trigger() {
     );
 }
 
+#[test]
+fn test_b11022_deployed_char_with_on_play_discard_resumes_contact() {
+    let mut catalog = load_test_catalog();
+    catalog.definitions.insert(
+        "TEST_CASE_GR_22B".to_string(),
+        models::CardDefinition {
+            definition_id: "TEST_CASE_GR_22B".to_string(),
+            canonical_id: "TEST_CASE_GR_22B".to_string(),
+            card_type: models::CardType::CASE,
+            colors: vec!["緑".to_string(), "赤".to_string()],
+            level: 0,
+            ap: 0,
+            lp: 0,
+            names: vec!["緑赤事件".to_string()],
+            description: String::new(),
+            traits: vec![],
+            case_levels: None,
+            main_thumb: None,
+            main_path: None,
+        },
+    );
+
+    let mut engine = MatchEngine::new(catalog);
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn = 9;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    ps1.case_phase = models::CasePhase::RESOLUTION;
+    ps1.r#case = Some(test_inst("p1_case", "TEST_CASE_GR_22B", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    let mut kazuha = test_inst("kazuha_22", "B11022", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+    kazuha.has_rush = true;
+    ps1.field.push(kazuha);
+    ps1.remove.push(test_inst("james_61", "B11061", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE)); // Lv2 赤 登場時1ドロー1リムーブ
+    ps1.deck.push(test_inst("d1", "B01005", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    ps1.deck.push(test_inst("d2", "B01005", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+    let mut ps2 = engine::PlayerState::new("p2".to_string());
+    ps2.field.push(test_inst("opp_low", "B05054", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP)); // AP1000
+    ps2.deck.push(test_inst("p2_d1", "B01005", "p2", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), ps2);
+    engine.prompt_main_action("p1");
+
+    // 1) B11022 で AP1000 の相手キャラに攻撃
+    let obs1 = build_player_observation(&engine, "p1");
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": obs1["pendingDecision"]["decisionId"],
+        "revision": engine.revision,
+        "value": { "type": "ACTION", "actorId": "kazuha_22", "targetId": "opp_low" }
+    })).unwrap();
+
+    // 2) B11022 のアクション時誘発で B11061 をスリープ状態で登場させる
+    let obs2 = build_player_observation(&engine, "p1");
+    assert_eq!(obs2["pendingDecision"]["options"]["actorId"].as_str(), Some("kazuha_22"));
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": obs2["pendingDecision"]["decisionId"],
+        "revision": engine.revision,
+        "value": { "targetId": "james_61" }
+    })).unwrap();
+
+    // 3) B11061 の登場時効果（1ドロー後の手札1枚リムーブ）を解決
+    let obs3 = build_player_observation(&engine, "p1");
+    assert_eq!(obs3["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+    assert_eq!(obs3["pendingDecision"]["options"]["effectType"].as_str(), Some("DISCARD_HAND"));
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": obs3["pendingDecision"]["decisionId"],
+        "revision": engine.revision,
+        "value": { "targetId": "d2" }
+    })).unwrap();
+
+    // 4) 登場時効果の解決後、中断されていたコンタクトが再開・決着し、opp_low がリムーブされて mainAction に戻ること！
+    assert!(
+        engine.action_context.is_none(),
+        "コンタクトが完了し action_context がクリアされていること (logs: {:?})",
+        engine.logs
+    );
+    assert!(
+        engine.players["p2"].remove.iter().any(|c| c.instance_id == "opp_low"),
+        "コンタクト決着により opp_low がリムーブされていること"
+    );
+    assert_eq!(
+        build_player_observation(&engine, "p1")["pendingDecision"]["kind"].as_str(),
+        Some("mainAction")
+    );
+}
+
