@@ -3651,7 +3651,7 @@
           const isDiscard = pd.options.effectType === 'DISCARD_HAND';
           const maxSelect = Number(pd.options.maxSelect || 1);
           const candidates = pd.options.candidates || [];
-          const hasOffBoard = candidates.some(c => c.zoneLabel === 'リムーブ' || (c.zoneLabel === '手札' && c.isOpponent));
+          const hasOffBoard = pd.options.targetZone === 'REMOVE' || candidates.some(c => c.zoneLabel === 'リムーブ' || c.zone === 'REMOVE' || (c.zoneLabel === '手札' && c.isOpponent));
           const isFieldOverflow = pd.options.effectType === 'FIELD_OVERFLOW_REMOVE';
           if (isNewOverlayKey) {
             window.decisionOverlayHidden = isFieldOverflow ? false : (maxSelect === 1 && !hasOffBoard);

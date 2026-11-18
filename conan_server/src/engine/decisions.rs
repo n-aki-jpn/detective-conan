@@ -1225,6 +1225,7 @@ impl MatchEngine {
                     "ownerId": player_id,
                     "orientation": "ACTIVE",
                     "zone": "REMOVE",
+                    "zoneLabel": "リムーブ",
                     "faceUp": true,
                 }))
             })
