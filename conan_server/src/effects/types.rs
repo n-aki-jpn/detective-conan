@@ -210,6 +210,8 @@ pub struct TargetBranch {
     pub max_level_from_file: bool,
     pub min_level: Option<i32>,
     pub max_ap: Option<i32>,
+    #[serde(default)]
+    pub max_ap_from_actor: bool,
     pub min_ap: Option<i32>,
     pub exact_lp: Option<i32>,
     pub max_lp: Option<i32>,

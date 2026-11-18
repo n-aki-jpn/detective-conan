@@ -978,6 +978,20 @@ impl MatchEngine {
                 } else {
                     def_opt.map(|d| d.ap).unwrap_or(0)
                 };
+                if filter.branches.iter().any(|b| b.max_ap_from_actor) {
+                    if let Some(aid) = actor_id {
+                        if let Some(aap) = self
+                            .players
+                            .get(player_id)
+                            .and_then(|ps| ps.field.iter().find(|fc| fc.instance_id == aid))
+                            .map(|ac| self.get_effective_ap(player_id, ac))
+                        {
+                            if eff_ap > aap {
+                                continue;
+                            }
+                        }
+                    }
+                }
                 if card_matches_filter_with_ctx(
                     &self.catalog,
                     actor_id,

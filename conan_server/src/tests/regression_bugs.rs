@@ -2736,3 +2736,74 @@ fn test_refresh_triggers_at_the_exact_moment_deck_hits_zero() {
     }
 }
 
+#[test]
+fn test_b11056_actor_ap_or_less_remove_targets_opponent_not_self() {
+    let mut catalog = load_test_catalog();
+    catalog.definitions.insert(
+        "TEST_CASE_GR".to_string(),
+        models::CardDefinition {
+            definition_id: "TEST_CASE_GR".to_string(),
+            canonical_id: "TEST_CASE_GR".to_string(),
+            card_type: models::CardType::CASE,
+            colors: vec!["緑".to_string(), "赤".to_string()],
+            level: 0,
+            ap: 0,
+            lp: 0,
+            names: vec!["緑赤事件".to_string()],
+            description: String::new(),
+            traits: vec![],
+            case_levels: None,
+            main_thumb: None,
+            main_path: None,
+        },
+    );
+
+    let mut engine = MatchEngine::new(catalog);
+    engine.turn = 4;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+    engine.phase = models::MatchPhase::MAIN;
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    ps1.r#case = Some(test_inst("p1_case", "TEST_CASE_GR", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    ps1.field.push(test_inst("haneda", "B11056", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE)); // AP5000
+
+    let mut ps2 = engine::PlayerState::new("p2".to_string());
+    ps2.field.push(test_inst("opp_low", "B05055", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE)); // AP4000
+    ps2.field.push(test_inst("opp_high", "B05046", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE)); // AP7000
+
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), ps2);
+    engine.prompt_main_action("p1");
+
+    let obs1 = build_player_observation(&engine, "p1");
+    let dec1 = obs1["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec1,
+        "revision": engine.revision,
+        "value": { "type": "DECLARE", "actorId": "haneda" }
+    })).unwrap();
+
+    let obs2 = build_player_observation(&engine, "p1");
+    assert_eq!(obs2["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+    let cands: Vec<&str> = obs2["pendingDecision"]["options"]["candidates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|c| c["instanceId"].as_str())
+        .collect();
+    assert!(cands.contains(&"opp_low"), "AP4000の相手キャラが候補に含まれること: {:?}", cands);
+    assert!(!cands.contains(&"opp_high"), "AP7000の相手キャラは候補に含まれないこと: {:?}", cands);
+    assert!(!cands.contains(&"haneda"), "自分自身(haneda)が誤って候補に含まれないこと: {:?}", cands);
+
+    let dec2 = obs2["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec2,
+        "revision": engine.revision,
+        "value": { "targetId": "opp_low" }
+    })).unwrap();
+
+    assert!(engine.players["p2"].remove.iter().any(|c| c.instance_id == "opp_low"));
+    assert!(engine.players["p1"].field.iter().any(|c| c.instance_id == "haneda"));
+}
+

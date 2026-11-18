@@ -22,7 +22,7 @@ pub fn parse_target_filter(
 
     let exclude_self = phrase.contains("このキャラ以外の");
     let require_in_contact = phrase.contains("コンタクト中の");
-    let self_only = phrase.starts_with("このキャラ") && !exclude_self;
+    let self_only = phrase.starts_with("このキャラ") && !exclude_self && !phrase.starts_with("このキャラの");
 
     let owner = if zone == TargetZone::Hand || zone == TargetZone::Deck {
         OwnerScope::SelfOnly
@@ -358,6 +358,7 @@ pub fn parse_single_branch(
         }
     }
     b.max_ap = extract_number_before(part, "AP", "以下");
+    b.max_ap_from_actor = part.contains("このキャラのAP以下");
     b.min_ap = extract_number_before(part, "AP", "以上");
     b.max_lp = extract_number_before(part, "LP", "以下");
     b.min_lp = extract_number_before(part, "LP", "以上");
