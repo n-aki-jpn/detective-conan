@@ -3728,7 +3728,7 @@
             const isOpp = cand.isOpponent;
             const zoneBadge = cand.zoneLabel ? `[${cand.zoneLabel}] ` : '';
             const sideLabel = isOpp ? '【相手】' : '【味方】';
-            const catCard = cand.definitionId ? catalogMap[cand.definitionId] : null;
+            const catCard = cand.definitionId ? catalogData.find(c => c.definitionId === cand.definitionId) : null;
             const renderCandStyle = (isSelected) => {
               const base = isOpp
                 ? 'background:#991b1b; border:1px solid #ef4444;'
