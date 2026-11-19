@@ -1940,8 +1940,17 @@ impl MatchEngine {
             let cur_turn_pid = self.turn_player_id.clone();
             let next_pid = self.player_order.iter().find(|pid| *pid != &cur_turn_pid).cloned().unwrap_or(cur_turn_pid);
             self.start_turn(next_turn, &next_pid);
-        } else if let Some(attacker_pid) = effective_ctx.strip_prefix("CASE_ATTACK:") {
-            self.prompt_main_action(attacker_pid);
+        } else if let Some(rest) = effective_ctx.strip_prefix("CASE_ATTACK:") {
+            let (attacker_pid, actor_id_opt) = match rest.split_once(':') {
+                Some((p, a)) => (p, Some(a)),
+                None => (rest, None),
+            };
+            if let Some(aid) = actor_id_opt {
+                self.trigger_on_evidence_gain(attacker_pid, Some(aid), true);
+            }
+            if self.pending_decision.is_none() {
+                self.prompt_main_action(attacker_pid);
+            }
         } else if self.action_context.is_some() && self.turn_player_id != decision_player_id {
             self.prompt_guard_or_cutin(decision_player_id);
         } else {

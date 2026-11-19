@@ -605,18 +605,29 @@ impl MatchEngine {
             }
             let has_evidence = self.players.get(&defender_pid).map(|p| !p.evidence.is_empty()).unwrap_or(false);
             if has_evidence {
-                let resume_tag = format!("CASE_ATTACK:{}", attacker_pid);
+                let resume_tag = format!("CASE_ATTACK:{}:{}", attacker_pid, actor_id);
+                let prev_rem_len = self.players.get(&defender_pid).map(|p| p.remove.len()).unwrap_or(0);
                 let (opened_hirameki_ui, block_gain) =
                     self.remove_evidence_and_trigger_hirameki(&defender_pid, 1, &resume_tag);
+                let removed_card_name = self.players.get(&defender_pid)
+                    .and_then(|p| if p.remove.len() > prev_rem_len { p.remove.get(prev_rem_len) } else { None })
+                    .map(|c| self.card_name_by_def(&c.definition_id))
+                    .unwrap_or_else(|| "証拠カード".to_string());
                 if block_gain {
-                    self.log(format!("💥 事件への攻撃ヒット！ {} の証拠を1枚削りました（ヒラメキにより {} は証拠を獲得できません）", defender_pid, attacker_pid));
+                    self.log(format!("💥 事件への攻撃ヒット！ {} の証拠から [{}] をリムーブしました（ヒラメキにより {} は証拠を獲得できません）", defender_pid, removed_card_name, attacker_pid));
                 } else {
                     self.gain_evidence(&attacker_pid, 1);
-                    self.log(format!("💥 事件への攻撃ヒット！ {} の証拠を1枚削り、{} が証拠を1つ獲得！", defender_pid, attacker_pid));
+                    self.log(format!("💥 事件への攻撃ヒット！ {} の証拠から [{}] をリムーブし、{} が証拠を1つ獲得！", defender_pid, removed_card_name, attacker_pid));
                 }
                 self.action_hirameki_blocked_player = None;
                 if opened_hirameki_ui {
                     return;
+                }
+                if !block_gain {
+                    self.trigger_on_evidence_gain(&attacker_pid, Some(&actor_id), true);
+                    if self.pending_decision.is_some() {
+                        return;
+                    }
                 }
             } else {
                 self.action_hirameki_blocked_player = None;

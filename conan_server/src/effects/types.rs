@@ -13,6 +13,7 @@ pub enum TriggerKind {
     OnCharRemoved,
     OnTurnEnd,
     OnAction,
+    OnEvidenceGain,
     OnContact,
     OnContactWin,
     OnHintUse,

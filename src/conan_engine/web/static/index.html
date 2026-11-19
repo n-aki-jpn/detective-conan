@@ -297,20 +297,26 @@
     }
 
     .fixed-cards-col .card.PARTNER,
+    .partner-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 4px;
+    }
+
     .fixed-cards-col .card.EXTRA_PARTNER {
-      width: 72px;
-      height: 96px;
+      width: 58px;
+      height: 82px;
     }
 
     .extra-partners-wrap {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 3px;
+      gap: 2px;
       background: rgba(245, 158, 11, 0.12);
       border: 1.5px solid #f59e0b;
       border-radius: 6px;
-      padding: 3px;
+      padding: 2px 3px;
       box-shadow: 0 0 10px rgba(245, 158, 11, 0.25);
     }
 
@@ -1708,6 +1714,42 @@
         transform: scale(1.08);
       }
     }
+    /* 証拠リムーブ通知トースト */
+    #evidence-remove-toast {
+      position: fixed;
+      top: 56px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 940;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      background: rgba(15, 23, 42, 0.96);
+      border: 1.5px solid #f59e0b;
+      border-radius: 10px;
+      padding: 8px 14px;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.78);
+      max-width: min(340px, calc(100vw - 24px));
+      pointer-events: none;
+    }
+    #evidence-remove-toast.active {
+      display: flex;
+      animation: evidenceToastFade 2.6s ease-out forwards;
+    }
+    #evidence-remove-toast img {
+      width: 40px;
+      height: 56px;
+      object-fit: cover;
+      border-radius: 5px;
+      border: 1px solid rgba(251, 191, 36, 0.7);
+      flex-shrink: 0;
+    }
+    @keyframes evidenceToastFade {
+      0% { opacity: 0; transform: translate(-50%, -8px); }
+      10% { opacity: 1; transform: translate(-50%, 0); }
+      82% { opacity: 1; transform: translate(-50%, 0); }
+      100% { opacity: 0; transform: translate(-50%, -6px); }
+    }
   </style>
 </head>
 
@@ -1863,8 +1905,10 @@
             <div class="zone-content">
               <div class="fixed-cards-col">
                 <div id="opp-case" class="card"></div>
-                <div id="opp-partner" class="card"></div>
-                <div id="opp-extra-partners" style="display:none; flex-direction:column; gap:4px; margin-top:4px;"></div>
+                <div class="partner-row">
+                  <div id="opp-partner" class="card"></div>
+                  <div id="opp-extra-partners" style="display:none; flex-direction:column; gap:2px;"></div>
+                </div>
               </div>
               <div id="opp-field" class="field-slots"></div>
             </div>
@@ -1890,8 +1934,10 @@
             <div class="zone-content">
               <div class="fixed-cards-col">
                 <div id="me-case" class="card"></div>
-                <div id="me-partner" class="card"></div>
-                <div id="me-extra-partners" style="display:none; flex-direction:column; gap:4px; margin-top:4px;"></div>
+                <div class="partner-row">
+                  <div id="me-partner" class="card"></div>
+                  <div id="me-extra-partners" style="display:none; flex-direction:column; gap:2px;"></div>
+                </div>
               </div>
               <div id="me-field" class="field-slots"></div>
             </div>
@@ -3060,8 +3106,6 @@
               subLabel: 'FILE+1・解決編移行可（※今ターン推理不可）',
               className: 'btn action-menu-caution',
               isCaution: true,
-              confirmText: '⚠️ 誤タップ防止：もう一度タップでアシスト実行',
-              confirmSubLabel: '確認：FILE+1されますが、このターン推理できなくなります',
               onClick: () => submitDecision({ type: 'ASSIST' })
             });
           }
@@ -3815,7 +3859,30 @@
     }
 
     window.prevFieldIds = null;
+    window.prevLogCountForNotice = null;
     let cardPlayCutinTimer = null;
+    let evidenceToastTimer = null;
+
+    function showEvidenceRemoveToast(cardName, mainPath) {
+      const toast = document.getElementById('evidence-remove-toast');
+      const img = document.getElementById('evidence-remove-toast-img');
+      const nameEl = document.getElementById('evidence-remove-toast-name');
+      if (!toast || !img || !nameEl) return;
+      nameEl.innerText = cardName || '証拠カード';
+      if (mainPath) {
+        img.src = `/card-images/${mainPath}`;
+        img.style.display = 'block';
+      } else {
+        img.style.display = 'none';
+      }
+      toast.classList.remove('active');
+      void toast.offsetWidth;
+      toast.classList.add('active');
+      if (evidenceToastTimer && typeof clearTimeout === 'function') clearTimeout(evidenceToastTimer);
+      evidenceToastTimer = setTimeout(() => {
+        toast.classList.remove('active');
+      }, 2600);
+    }
 
     function showCardPlayCutin(card) {
       if (!card || !card.mainPath) return;
@@ -3828,7 +3895,7 @@
       overlay.classList.remove('active');
       void overlay.offsetWidth;
       overlay.classList.add('active');
-      if (cardPlayCutinTimer) clearTimeout(cardPlayCutinTimer);
+      if (cardPlayCutinTimer && typeof clearTimeout === 'function') clearTimeout(cardPlayCutinTimer);
       cardPlayCutinTimer = setTimeout(() => {
         overlay.classList.remove('active');
       }, 860);
@@ -3836,6 +3903,19 @@
 
     function render(obs) {
       window.latestObs = obs;
+      const curLogs = obs.logs || [];
+      if (window.prevLogCountForNotice !== null && curLogs.length > window.prevLogCountForNotice) {
+        const newLogs = curLogs.slice(window.prevLogCountForNotice);
+        const evHitLog = [...newLogs].reverse().find(l => String(l).includes('証拠から ['));
+        if (evHitLog) {
+          const m = String(evHitLog).match(/証拠から \[([^\]]+)\]/);
+          const cardName = m ? m[1] : '証拠カード';
+          const allRem = [...(obs.opponent?.remove || []), ...(obs.me?.remove || [])];
+          const matchedCard = [...allRem].reverse().find(c => (c.name || c.definitionId) === cardName);
+          showEvidenceRemoveToast(cardName, matchedCard?.mainPath || '');
+        }
+      }
+      window.prevLogCountForNotice = curLogs.length;
       const curFieldCards = [...(obs.me?.field || []), ...(obs.opponent?.field || [])];
       const curFieldIdSet = new Set(curFieldCards.map(c => c.instanceId));
       if (window.prevFieldIds !== null) {
@@ -3922,7 +4002,7 @@
         box.className = 'extra-partners-wrap';
         const lbl = document.createElement('div');
         lbl.className = 'extra-partners-label';
-        lbl.innerText = '🌟 パートナーエリア(MR)';
+        lbl.innerText = '🌟 パートナー(MR)';
         box.appendChild(lbl);
 
         const cardsRow = document.createElement('div');
@@ -6047,6 +6127,13 @@
           }
         }
   </script>
+  <div id="evidence-remove-toast" aria-live="polite">
+    <img id="evidence-remove-toast-img" src="" alt="" style="display:none;" />
+    <div style="display:flex; flex-direction:column; gap:2px; min-width:0;">
+      <span style="font-size:0.7rem; font-weight:800; color:#fbbf24;">💥 証拠からリムーブ</span>
+      <span id="evidence-remove-toast-name" style="font-size:0.86rem; font-weight:700; color:#f8fafc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></span>
+    </div>
+  </div>
   <div id="card-play-cutin" aria-hidden="true">
     <img id="card-play-cutin-img" src="" alt="" />
     <div id="card-play-cutin-label"></div>

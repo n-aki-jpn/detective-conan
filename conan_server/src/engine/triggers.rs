@@ -1001,6 +1001,69 @@ impl MatchEngine {
         }
     }
 
+    /// アクション［事件］や証拠獲得時の誘発効果（D04007 メアリー等）を解決する
+    pub fn trigger_on_evidence_gain(&mut self, player_id: &str, actor_id: Option<&str>, by_case_action: bool) {
+        let field_cards: Vec<(String, String, CardOrientation)> = self
+            .players
+            .get(player_id)
+            .map(|ps| {
+                ps.field
+                    .iter()
+                    .map(|c| (c.instance_id.clone(), c.definition_id.clone(), c.orientation))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        for (watcher_id, def_id, ori) in field_cards {
+            let Some(def) = self.catalog.get(&def_id).cloned() else {
+                continue;
+            };
+            let watcher_name = self.card_name_by_def(&def_id);
+            for clause in extract_clauses(&def.description, TriggerKind::OnEvidenceGain, def.card_type) {
+                let is_self_case_trigger = clause.contains("このキャラのアクション［事件］によって");
+                let is_ally_case_trigger = clause.contains("自分の現場にいるキャラのアクション［事件］によって");
+                let is_any_gain_trigger = clause.contains("自分が証拠を得たとき");
+
+                let matched = if is_self_case_trigger {
+                    by_case_action && actor_id == Some(watcher_id.as_str())
+                } else if is_ally_case_trigger {
+                    by_case_action
+                } else if is_any_gain_trigger {
+                    true
+                } else {
+                    by_case_action
+                };
+                if !matched {
+                    continue;
+                }
+
+                let ctx = self.build_cond_info(player_id, Some(&watcher_id), ori, None);
+                if check_clause_conditions(&clause, &ctx).is_err() {
+                    continue;
+                }
+                if !self.can_use_clause_this_turn(&watcher_id, &clause) {
+                    continue;
+                }
+                let cost = parse_clause_cost(&clause);
+                if !self.pay_clause_cost(player_id, &watcher_id, &cost) {
+                    continue;
+                }
+                self.mark_clause_used_this_turn(&watcher_id, &clause);
+                self.log(format!("✨ [{}] の誘発効果（証拠獲得時）が発動！", watcher_name));
+
+                let plan = parse_effect_steps(&clause, None, def.card_type);
+                self.execute_or_enqueue_plan(
+                    player_id,
+                    &watcher_id,
+                    &watcher_name,
+                    Some(def.level),
+                    def.card_type,
+                    plan,
+                );
+            }
+        }
+    }
+
     /// 変装時トリガー（【変装時】および独立した【登場時】）を解決する
     pub fn trigger_on_disguise(&mut self, player_id: &str, actor_id: &str, definition_id: &str) -> bool {
         self.trigger_on_disguise_with_ctx(player_id, actor_id, definition_id, "MAIN")

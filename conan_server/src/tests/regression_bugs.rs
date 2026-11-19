@@ -2084,20 +2084,22 @@ assert.equal(menuChildren[1].className, 'action-menu-divider');
 assert.equal(menuChildren[2].dataset.actionLabel, '🤝 アシスト（FILEへ移動）');
 assert.ok(menuChildren[2].className.includes('action-menu-caution'));
 
-// 1回目タップでは即送信されず確認状態に切り替わり、メニューも開いたままになること
-menuChildren[2].onclick();
-assert.equal(actionFetchCalls.length, 0);
-assert.ok(menuChildren[2].classList.contains('action-cmd-confirming'));
-assert.ok(menuChildren[2].children[0].innerText.includes('もう一度タップ'));
-assert.notEqual(getEl('card-action-menu').style.display, 'none');
-
-// 2回目タップでASSISTが送信されメニューとanchoredクラスが閉じること
+// 1回目タップでASSISTが即送信されメニューとanchoredクラスが閉じること
 menuChildren[2].onclick();
 assert.equal(actionFetchCalls.length, 1);
 assert.ok(String(actionFetchCalls[0].url).includes('/api/decision'));
 assert.ok(String((actionFetchCalls[0].opts && actionFetchCalls[0].opts.body) || '').includes('"ASSIST"'));
 assert.equal(getEl('card-action-menu').style.display, 'none');
 assert.equal(getEl('card-action-menu').classList.contains('anchored'), false);
+
+// 証拠からリムーブされた旨の新着ログでトースト通知が表示されること
+render({{
+  ...window.latestObs,
+  revision: 16,
+  logs: [...(window.latestObs.logs || []), '💥 事件への攻撃ヒット！ player2 の証拠から [江戸川コナン] をリムーブし、player1 が証拠を1つ獲得！']
+}});
+assert.equal(getEl('evidence-remove-toast-name').innerText, '江戸川コナン');
+assert.ok(getEl('evidence-remove-toast').classList.contains('active'));
 
 // DEDUCE（推理）は1回目タップで即実行されること
 getEl('action-menu-buttons').children = [];
@@ -4234,6 +4236,84 @@ fn test_b10038_quoted_ability_not_mis_parsed_as_on_play_revive() {
         obs["pendingDecision"]["kind"].as_str(),
         Some("targetSelect"),
         "B10038登場時に「...」内の『レベル3以下のキャラを登場させる』が誤爆しないこと"
+    );
+}
+
+#[test]
+fn test_d04007_case_action_gain_evidence_trigger() {
+    let catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();
+    let mut engine = MatchEngine::new(catalog);
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn = 4;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    let mut mary = test_inst("c_mary", "D04007", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+    mary.entered_turn = 0;
+    let mut atk = test_inst("c_atk", "B01001", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+    atk.entered_turn = 0;
+    ps1.field = vec![mary, atk];
+    ps1.hand.push(test_inst("c_h1", "B01001", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+    for i in 0..5 {
+        ps1.deck.push(test_inst(&format!("c_d{}", i), "B01001", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    }
+
+    let mut ps2 = engine::PlayerState::new("p2".to_string());
+    ps2.evidence.push(test_inst("p2_ev1", "B01001", "p2", models::Zone::EVIDENCE, models::CardOrientation::ACTIVE));
+    for i in 0..5 {
+        ps2.deck.push(test_inst(&format!("p2_d{}", i), "B01001", "p2", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    }
+    ps2.case = Some(test_inst("p2_case", "B01002C", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), ps2);
+    engine.prompt_main_action("p1");
+
+    // 1) 事件へアクションする
+    let obs1 = build_player_observation(&engine, "p1");
+    let dec1 = obs1["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec1,
+        "revision": engine.revision,
+        "value": { "type": "ACTION", "actorId": "c_atk", "targetId": "p2_case" }
+    })).unwrap();
+
+    // 2) p2はガードせずパスする
+    let obs2 = build_player_observation(&engine, "p2");
+    if obs2["pendingDecision"]["playerId"].as_str() == Some("p2") {
+        let dec2 = obs2["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+        engine.submit_decision("p2", &serde_json::json!({
+            "decisionId": dec2,
+            "revision": engine.revision,
+            "value": { "pass": true }
+        })).unwrap();
+    }
+
+    // 3) ログに相手の証拠からリムーブされたカード名が記載されていること & D04007の任意手札リムーブが開くこと
+    assert!(
+        engine.logs.iter().any(|l| l.contains("証拠から [")),
+        "事件アクションヒット時のログにリムーブされた証拠カード名が含まれること: {:?}",
+        engine.logs
+    );
+
+    let obs3 = build_player_observation(&engine, "p1");
+    assert_eq!(obs3["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+    assert_eq!(obs3["pendingDecision"]["options"]["effectType"].as_str(), Some("DISCARD_HAND"));
+
+    // 4) 手札を1枚リムーブすると、D04007の効果で追加の証拠が+1（合計2）されること
+    let dec3 = obs3["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec3,
+        "revision": engine.revision,
+        "value": { "targetId": "c_h1", "actorId": "c_mary", "effectType": "DISCARD_HAND" }
+    })).unwrap();
+
+    assert_eq!(
+        engine.players["p1"].evidence.len(),
+        2,
+        "事件攻撃+1とD04007効果+1で証拠が2になること。logs: {:?}",
+        engine.logs
     );
 }
 
