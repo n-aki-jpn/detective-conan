@@ -1466,11 +1466,84 @@
     #card-action-menu.anchored .card-modal-content {
       position: fixed;
       z-index: 205;
-      width: min(295px, calc(100vw - 24px));
-      max-width: 295px;
-      padding: 12px;
+      width: min(315px, calc(100vw - 24px));
+      max-width: 315px;
+      max-height: calc(100vh - 16px);
+      max-height: calc(100dvh - 16px);
+      overflow-y: auto;
+      padding: 14px;
       margin: 0;
       box-shadow: 0 12px 32px rgba(0, 0, 0, 0.78);
+    }
+    #action-menu-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .action-menu-cmd-btn {
+      width: 100%;
+      min-height: 48px;
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: center;
+      gap: 3px;
+      text-align: left;
+      border-radius: 10px;
+      line-height: 1.3;
+      border: 1.5px solid rgba(255, 255, 255, 0.16);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+    }
+    .action-cmd-title {
+      font-size: 0.92rem;
+      font-weight: 700;
+      display: block;
+      width: 100%;
+    }
+    .action-cmd-sub {
+      font-size: 0.73rem;
+      font-weight: 500;
+      opacity: 0.9;
+      display: block;
+      width: 100%;
+      line-height: 1.25;
+    }
+    .action-menu-divider {
+      height: 1px;
+      border-top: 1px dashed rgba(245, 158, 11, 0.45);
+      margin: 4px 0 0;
+    }
+    .action-menu-cmd-btn.action-menu-caution {
+      background: #1e293b;
+      border: 1.5px solid #f59e0b;
+      color: #fde68a;
+    }
+    .action-menu-cmd-btn.action-menu-caution:hover {
+      background: #293548;
+    }
+    .action-menu-cmd-btn.action-cmd-confirming {
+      background: #92400e !important;
+      border: 2px solid #fbbf24 !important;
+      color: #fef3c7 !important;
+      box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.3);
+    }
+    .action-menu-footer-btn {
+      padding: 6px 12px;
+      font-size: 0.78rem;
+      min-height: 40px;
+    }
+    @media (pointer: coarse) {
+      #action-menu-buttons {
+        gap: 14px;
+      }
+      .action-menu-cmd-btn {
+        min-height: 52px;
+        padding: 11px 14px;
+      }
+      .action-menu-footer-btn {
+        min-height: 44px;
+      }
     }
 
     @media (min-width: 768px) {
@@ -2149,13 +2222,13 @@
         <span id="action-menu-title" class="modal-title">カード行動選択</span>
         <span id="action-menu-badge" class="card-badge" style="font-size:0.72rem;">コマンド</span>
       </div>
-      <div id="action-menu-desc" style="font-size:0.75rem; color:var(--text-muted); margin-bottom:10px;">
+      <div id="action-menu-desc" style="font-size:0.75rem; color:var(--text-muted); margin-bottom:12px;">
         実行する行動を選択してください（PC: 右クリック / スマホ: 長押しで詳細）
       </div>
-      <div id="action-menu-buttons" style="display:flex; flex-direction:column; gap:8px;"></div>
-      <div class="modal-footer" style="margin-top:12px; justify-content:space-between;">
-        <button id="action-menu-detail-btn" class="btn btn-secondary" style="padding:5px 10px; font-size:0.76rem; min-height:30px;">🔍 詳細を見る</button>
-        <button class="btn btn-secondary" onclick="closeCardActionMenu()" style="padding:5px 12px; font-size:0.76rem; min-height:30px;">閉じる</button>
+      <div id="action-menu-buttons"></div>
+      <div class="modal-footer" style="margin-top:16px; justify-content:space-between; gap:10px;">
+        <button id="action-menu-detail-btn" class="btn btn-secondary action-menu-footer-btn">🔍 詳細を見る</button>
+        <button class="btn btn-secondary action-menu-footer-btn" onclick="closeCardActionMenu()">閉じる</button>
       </div>
     </div>
   </div>
@@ -2811,8 +2884,10 @@
         if (zoneInfo.isMine && zoneInfo.zone === 'HAND') {
           const playAct = actions.find(a => a.type === 'HAND_PLAY' && (a.cardIds || []).includes(cid));
           if (playAct) {
+            const isEvent = card.cardType === 'EVENT';
             cmds.push({
-              label: card.cardType === 'EVENT' ? '📜 イベントを使用する' : '🃏 現場に登場させる',
+              label: isEvent ? '📜 イベントを使用する' : '🃏 現場に登場させる',
+              subLabel: isEvent ? 'FILEコストを支払ってイベントを発動' : 'FILE条件を満たして現場に登場',
               cssText: 'background:#0284c7; border-color:#38bdf8;',
               onClick: () => submitDecision({ type: 'HAND_PLAY', cardId: cid })
             });
@@ -2821,7 +2896,8 @@
           if (disgAct) {
             cmds.push({
               label: '🎭 変装して登場（場のキャラを選ぶ）',
-              cssText: 'background:#ec4899; border-color:#f472b6;',
+              subLabel: '場の対象キャラと入れ替えて登場',
+              cssText: 'background:#db2777; border-color:#f472b6;',
               onClick: () => {
                 window.pendingBoardMode = {
                   type: 'DISGUISE_TARGET',
@@ -2838,7 +2914,8 @@
           if (decAct) {
             cmds.push({
               label: '⚡ 【宣言】能力を使う',
-              cssText: 'background:#8b5cf6; border-color:#a78bfa;',
+              subLabel: '手札から【宣言】能力を発動',
+              cssText: 'background:#7c3aed; border-color:#a78bfa;',
               onClick: () => submitDecision({ type: 'DECLARE', actorId: cid })
             });
           }
@@ -2849,6 +2926,7 @@
             if (validTargets.length > 0) {
               cmds.push({
                 label: '⚔️ アタックする（対象を選ぶ）',
+                subLabel: '相手のキャラまたは事件へアタック',
                 className: 'btn btn-danger',
                 onClick: () => {
                   window.pendingBoardMode = {
@@ -2868,6 +2946,8 @@
             const lpVal = Number(card.lp ?? 0);
             cmds.push({
               label: `🔎 推理する（証拠+${lpVal}）`,
+              subLabel: `スリープして証拠を +${lpVal} 獲得`,
+              cssText: 'background:#059669; border-color:#34d399;',
               onClick: () => submitDecision({ type: 'DEDUCE', actorId: cid })
             });
           }
@@ -2875,7 +2955,8 @@
           if (decAct) {
             cmds.push({
               label: '⚡ 【宣言】能力を使う',
-              cssText: 'background:#8b5cf6; border-color:#a78bfa;',
+              subLabel: 'このキャラの【宣言】能力を発動',
+              cssText: 'background:#7c3aed; border-color:#a78bfa;',
               onClick: () => submitDecision({ type: 'DECLARE', actorId: cid })
             });
           }
@@ -2884,21 +2965,19 @@
           if (decAct) {
             cmds.push({
               label: '⚡ パートナーエリア【宣言】能力を使う',
-              cssText: 'background:#8b5cf6; border-color:#a78bfa;',
+              subLabel: 'パートナーエリアの能力を発動',
+              cssText: 'background:#7c3aed; border-color:#a78bfa;',
               onClick: () => submitDecision({ type: 'DECLARE', actorId: cid })
             });
           }
         } else if (zoneInfo.isMine && zoneInfo.zone === 'PARTNER') {
-          if (actions.some(a => a.type === 'ASSIST')) {
-            cmds.push({
-              label: '🤝 アシスト（FILEへ移動）',
-              onClick: () => submitDecision({ type: 'ASSIST' })
-            });
-          }
+          // 誤タップ防止: 日常的な「推理」を先頭に置き、不可逆な「アシスト」は視覚分離＋確認つきで末尾に配置する
           const dedAct = actions.find(a => a.type === 'DEDUCE' && (a.actorIds || []).includes(cid));
           if (dedAct) {
             cmds.push({
               label: '🔎 パートナーで推理する',
+              subLabel: '証拠 +1 を獲得（パートナーをスリープ）',
+              cssText: 'background:#059669; border-color:#34d399;',
               onClick: () => submitDecision({ type: 'DEDUCE', actorId: cid })
             });
           }
@@ -2906,15 +2985,28 @@
           if (decAct) {
             cmds.push({
               label: '⚡ 【宣言】能力を使う',
-              cssText: 'background:#8b5cf6; border-color:#a78bfa;',
+              subLabel: 'パートナーの【宣言】能力を発動',
+              cssText: 'background:#7c3aed; border-color:#a78bfa;',
               onClick: () => submitDecision({ type: 'DECLARE', actorId: cid })
             });
           }
           if (actions.some(a => a.type === 'RESOLVE_CASE')) {
             cmds.push({
               label: '✨ 事件解決宣言（勝利！）',
+              subLabel: '事件を解決してゲームに勝利する',
               className: 'btn btn-danger',
               onClick: () => submitDecision({ type: 'RESOLVE_CASE' })
+            });
+          }
+          if (actions.some(a => a.type === 'ASSIST')) {
+            cmds.push({
+              label: '🤝 アシスト（FILEへ移動）',
+              subLabel: 'FILE+1・解決編移行可（※今ターン推理不可）',
+              className: 'btn action-menu-caution',
+              isCaution: true,
+              confirmText: '⚠️ 誤タップ防止：もう一度タップでアシスト実行',
+              confirmSubLabel: '確認：FILE+1されますが、このターン推理できなくなります',
+              onClick: () => submitDecision({ type: 'ASSIST' })
             });
           }
         } else if (zoneInfo.isMine && zoneInfo.zone === 'CASE') {
@@ -2922,13 +3014,15 @@
           if (decAct) {
             cmds.push({
               label: '⚡ 事件の【宣言】能力を使う',
-              cssText: 'background:#8b5cf6; border-color:#a78bfa;',
+              subLabel: '事件カードの【宣言】能力を発動',
+              cssText: 'background:#7c3aed; border-color:#a78bfa;',
               onClick: () => submitDecision({ type: 'DECLARE', actorId: cid })
             });
           }
           if (actions.some(a => a.type === 'RESOLVE_CASE')) {
             cmds.push({
               label: '✨ 事件解決宣言（勝利！）',
+              subLabel: '事件を解決してゲームに勝利する',
               className: 'btn btn-danger',
               onClick: () => submitDecision({ type: 'RESOLVE_CASE' })
             });
@@ -2938,6 +3032,7 @@
         if (zoneInfo.isMine && zoneInfo.zone === 'FIELD' && (pd.options.guardCardIds || []).includes(cid)) {
           cmds.push({
             label: '🛡️ このキャラでガードする',
+            subLabel: 'アタックの対象をこのキャラに変更',
             className: 'btn btn-danger',
             onClick: () => submitDecision({ guardCardId: cid })
           });
@@ -2946,6 +3041,7 @@
           if ((pd.options.cutinCardIds || []).some(ci => ci.instanceId === cid)) {
             cmds.push({
               label: '⚡ カットインを使用する',
+              subLabel: '手札からカットインを発動',
               cssText: 'background:#7c3aed; border-color:#8b5cf6;',
               onClick: () => submitDecision({ cutinCardId: cid })
             });
@@ -2953,6 +3049,7 @@
           if (pd.options.disguiseTargetId && (pd.options.disguiseOptions || []).some(di => di.instanceId === cid)) {
             cmds.push({
               label: '🎭 変装を使用する',
+              subLabel: '対象キャラと入れ替えて対応',
               cssText: 'background:#b45309; border-color:#f59e0b;',
               onClick: () => submitDecision({ disguiseCardId: cid, targetId: pd.options.disguiseTargetId })
             });
@@ -2962,6 +3059,7 @@
         if (zoneInfo.isMine && zoneInfo.zone === 'HAND' && (pd.options.playableCardIds || []).includes(cid)) {
           cmds.push({
             label: '🃏 ネクストヒントで登場させる',
+            subLabel: 'ネクストヒントの効果で手札から登場',
             cssText: 'background:#0284c7; border-color:#38bdf8;',
             onClick: () => submitDecision({ cardId: cid })
           });
@@ -2980,12 +3078,54 @@
 
       const btnWrap = document.getElementById('action-menu-buttons');
       btnWrap.innerHTML = '';
+      const hasPrimaryCmd = commands.some(c => !c.isCaution);
+      let insertedCautionDivider = false;
+
       commands.forEach(cmd => {
+        if (cmd.isCaution && hasPrimaryCmd && !insertedCautionDivider) {
+          insertedCautionDivider = true;
+          const div = document.createElement('div');
+          div.className = 'action-menu-divider';
+          btnWrap.appendChild(div);
+        }
+
         const b = document.createElement('button');
-        b.className = cmd.className || 'btn';
+        b.type = 'button';
+        b.className = `${cmd.className || 'btn'} action-menu-cmd-btn`.trim();
         if (cmd.cssText) b.style.cssText = cmd.cssText;
-        b.innerText = cmd.label;
+        b.dataset.actionLabel = cmd.label;
+        b.setAttribute('aria-label', cmd.label);
+
+        const titleEl = document.createElement('span');
+        titleEl.className = 'action-cmd-title';
+        titleEl.innerText = cmd.label;
+        b.appendChild(titleEl);
+
+        let subEl = null;
+        if (cmd.subLabel) {
+          subEl = document.createElement('span');
+          subEl.className = 'action-cmd-sub';
+          subEl.innerText = cmd.subLabel;
+          b.appendChild(subEl);
+        }
+
+        let armed = false;
         b.onclick = () => {
+          if (cmd.confirmText && !armed) {
+            armed = true;
+            b.classList.add('action-cmd-confirming');
+            titleEl.innerText = cmd.confirmText;
+            b.setAttribute('aria-label', cmd.confirmText);
+            if (cmd.confirmSubLabel) {
+              if (!subEl) {
+                subEl = document.createElement('span');
+                subEl.className = 'action-cmd-sub';
+                b.appendChild(subEl);
+              }
+              subEl.innerText = cmd.confirmSubLabel;
+            }
+            return;
+          }
           closeCardActionMenu();
           cmd.onClick();
         };

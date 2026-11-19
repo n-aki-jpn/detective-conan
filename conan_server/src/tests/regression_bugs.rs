@@ -2032,6 +2032,96 @@ assert.equal(btnConfirmB3006.innerText, '決定（1/5枚）');
 // 灰原哀は追加できること
 candWrapB3006.children[2].onclick();
 assert.equal(btnConfirmB3006.innerText, '決定（2/5枚）');
+
+// カード行動メニュー：誤タップ防止（推理先頭・アシスト末尾+区切り線+2段階確認・アンカー開閉）
+const actionFetchCalls = [];
+global.fetch = async (url, opts) => {{
+  if (String(url).includes('/api/decision')) {{
+    actionFetchCalls.push({{ url, opts }});
+    return {{ ok: true, json: async () => ({{}}) }};
+  }}
+  return {{ ok: true, json: async () => window.latestObs || ({{}}) }};
+}};
+render((lastObs = {{
+  revision: 15,
+  turn: 4,
+  turnPlayerId: 'player1',
+  decisionPlayerId: 'player1',
+  viewingPlayerId: 'player1',
+  logs: ['テスト開始'],
+  ...samplePlayers(),
+  pendingDecision: {{
+    decisionId: 'dec_partner_menu',
+    revision: 15,
+    playerId: 'player1',
+    kind: 'mainAction',
+    options: {{
+      actions: [
+        {{ type: 'ASSIST' }},
+        {{ type: 'DEDUCE', actorIds: ['p1_partner', 'p1_field1'] }},
+        {{ type: 'ACTION', actorIds: ['p1_field1'], targetIds: ['p2_case'] }},
+        {{ type: 'END_TURN' }}
+      ]
+    }}
+  }}
+}}));
+
+// PARTNERタップ時: DEDUCE -> 区切り線 -> ASSIST(注意枠) の順になること
+getEl('action-menu-buttons').children = [];
+onBoardCardClick(
+  {{ instanceId: 'p1_partner', definitionId: 'B01002P', name: '灰原哀', cardType: 'PARTNER', lp: 1, orientation: 'ACTIVE' }},
+  {{ isMine: true, zone: 'PARTNER' }},
+  {{ left: 20, top: 200, bottom: 290, width: 70, height: 90 }}
+);
+assert.equal(getEl('card-action-menu').classList.contains('anchored'), true);
+assert.equal(getEl('card-action-menu').style.display, 'block');
+const menuChildren = getEl('action-menu-buttons').children;
+assert.equal(menuChildren.length, 3);
+assert.equal(menuChildren[0].dataset.actionLabel, '🔎 パートナーで推理する');
+assert.ok(menuChildren[0].style.cssText.includes('#059669'));
+assert.equal(menuChildren[0].children.length, 2);
+assert.equal(menuChildren[1].className, 'action-menu-divider');
+assert.equal(menuChildren[2].dataset.actionLabel, '🤝 アシスト（FILEへ移動）');
+assert.ok(menuChildren[2].className.includes('action-menu-caution'));
+
+// 1回目タップでは即送信されず確認状態に切り替わり、メニューも開いたままになること
+menuChildren[2].onclick();
+assert.equal(actionFetchCalls.length, 0);
+assert.ok(menuChildren[2].classList.contains('action-cmd-confirming'));
+assert.ok(menuChildren[2].children[0].innerText.includes('もう一度タップ'));
+assert.notEqual(getEl('card-action-menu').style.display, 'none');
+
+// 2回目タップでASSISTが送信されメニューとanchoredクラスが閉じること
+menuChildren[2].onclick();
+assert.equal(actionFetchCalls.length, 1);
+assert.ok(String(actionFetchCalls[0].url).includes('/api/decision'));
+assert.ok(String((actionFetchCalls[0].opts && actionFetchCalls[0].opts.body) || '').includes('"ASSIST"'));
+assert.equal(getEl('card-action-menu').style.display, 'none');
+assert.equal(getEl('card-action-menu').classList.contains('anchored'), false);
+
+// DEDUCE（推理）は1回目タップで即実行されること
+getEl('action-menu-buttons').children = [];
+onBoardCardClick(
+  {{ instanceId: 'p1_partner', definitionId: 'B01002P', name: '灰原哀', cardType: 'PARTNER', lp: 1, orientation: 'ACTIVE' }},
+  {{ isMine: true, zone: 'PARTNER' }}
+);
+const menuChildrenDeduce = getEl('action-menu-buttons').children;
+assert.equal(menuChildrenDeduce[0].dataset.actionLabel, '🔎 パートナーで推理する');
+menuChildrenDeduce[0].onclick();
+assert.equal(actionFetchCalls.length, 2);
+assert.ok(String((actionFetchCalls[1].opts && actionFetchCalls[1].opts.body) || '').includes('"DEDUCE"'));
+assert.equal(getEl('card-action-menu').style.display, 'none');
+
+// FIELDキャラではアタック(danger)と推理(エメラルド)のサブ説明付きコマンドが生成されること
+const fieldCmds = getBoardCardCommands(
+  {{ instanceId: 'p1_field1', definitionId: 'B01001', name: '江戸川コナン', cardType: 'CHARACTER', lp: 1, orientation: 'ACTIVE' }},
+  {{ isMine: true, zone: 'FIELD' }},
+  window.latestObs
+);
+assert.equal(fieldCmds.length, 2);
+assert.ok(fieldCmds[0].className.includes('btn-danger'));
+assert.ok(fieldCmds[1].cssText.includes('#059669'));
+assert.ok(Boolean(fieldCmds[0].subLabel) && Boolean(fieldCmds[1].subLabel));
 "#,
             js = js_code
         );
