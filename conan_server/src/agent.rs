@@ -1,6 +1,6 @@
 use crate::catalog::CardCatalog;
 use crate::engine::MatchEngine;
-use crate::models::{CardOrientation, CardType, CasePhase, DeckDefinition};
+use crate::models::{CardDefinition, CardOrientation, CardType, CasePhase, DeckDefinition};
 use rand::seq::SliceRandom;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -254,6 +254,114 @@ impl RandomAgent {
         false
     }
 
+    /// 手札プレイ前に「パートナーのアシスト」を行うべき本質的理由があるか判定する
+    fn should_assist_before_hand_play(&self, engine: &MatchEngine, opp_id: &str) -> bool {
+        let Some(my_ps) = engine.players.get(&self.player_id) else {
+            return false;
+        };
+        let eff_file = my_ps.effective_file_count();
+        let next_file = eff_file + 1;
+
+        // 1. FILEが6枚でまだ解決編でないなら、ASSISTすることで即座に解決編(FILE 7)へ移行できる
+        if my_ps.case_phase != CasePhase::RESOLUTION && eff_file == 6 {
+            return true;
+        }
+
+        // 既にこのターンの手札プレイ（通常またはヒント登場）を行っていれば、ASSISTしても追加で手札を出せない
+        if my_ps.normal_hand_played_this_turn || my_ps.hint_played_this_turn {
+            return false;
+        }
+
+        let opp_field_len = engine.players.get(opp_id).map(|o| o.field.len()).unwrap_or(0);
+        let my_field_len = my_ps.field.len();
+
+        let is_meaningful_card = |def: &CardDefinition| -> bool {
+            let name = def.names.first().map(|s| s.as_str()).unwrap_or("");
+            let desc = &def.description;
+            if def.card_type == CardType::EVENT {
+                if name.contains("五人囃子") || desc.contains("リムーブエリアから") {
+                    let has_revivable = my_ps.remove.iter().any(|rc| {
+                        engine
+                            .catalog
+                            .get(&rc.definition_id)
+                            .map(|d| d.card_type == CardType::CHARACTER && d.level <= 4)
+                            .unwrap_or(false)
+                    });
+                    return has_revivable && my_field_len < 4;
+                }
+                if name == "カッ" || desc.contains("すべてをリムーブ") {
+                    return opp_field_len >= 2 && opp_field_len > my_field_len;
+                }
+                if name == "少年探偵団" {
+                    return my_ps.hand.len() >= 2 && my_field_len < 4;
+                }
+                if desc.contains("リムーブ") || desc.contains("スリープ") || desc.contains("スタン") {
+                    return opp_field_len > 0;
+                }
+            }
+            true
+        };
+
+        // 2. ASSISTすることで【FILE5】〜【FILE7】効果の条件を達成し、そのターン中に出せるカードがあるとき
+        if (5..=7).contains(&next_file) {
+            let tag1 = format!("【FILE{}】", next_file);
+            let tag2 = format!("【FILE {}】", next_file);
+            let unlocks_file_req = my_ps.hand.iter().any(|c| {
+                engine
+                    .catalog
+                    .get(&c.definition_id)
+                    .map(|d| {
+                        d.level <= next_file as i32
+                            && (d.description.contains(&tag1) || d.description.contains(&tag2))
+                            && is_meaningful_card(d)
+                    })
+                    .unwrap_or(false)
+            });
+            if unlocks_file_req {
+                return true;
+            }
+        }
+
+        // 3. ASSISTによって初めてプレイ可能になるレベル (level == next_file) の有効なカードが手札にあるか
+        let has_unlockable_card = my_ps.hand.iter().any(|c| {
+            engine
+                .catalog
+                .get(&c.definition_id)
+                .map(|d| d.level == next_file as i32 && is_meaningful_card(d))
+                .unwrap_or(false)
+        });
+        if !has_unlockable_card {
+            return false;
+        }
+
+        // 先攻1ターン目 (FILE 1 -> 2): Lv.2が出せるなら即ASSISTして展開する
+        if engine.turn == 1 {
+            return true;
+        }
+
+        // Hard難易度の中終盤 (next_file >= 6): Lv.6〜9の主力着地を1ターン早めるなら価値が高い
+        if self.difficulty == CpuDifficulty::Hard && next_file >= 6 {
+            return true;
+        }
+
+        // 序中盤 (eff_file 2〜4) は、ASSISTなしで出せる有効なキャラや初動サーチイベントが手札に1枚も無い場合のみASSISTする
+        // （既に現在FILEで出せるカードがあるなら、ASSISTせず手札プレイ＋パートナー推理で証拠+1を優先）
+        let has_current_playable = my_ps.hand.iter().any(|c| {
+            engine
+                .catalog
+                .get(&c.definition_id)
+                .map(|d| {
+                    let name = d.names.first().map(|s| s.as_str()).unwrap_or("");
+                    let is_proactive = d.card_type == CardType::CHARACTER
+                        || name.contains("烏丸蓮耶の影")
+                        || name.contains("小さくなった名探偵");
+                    d.level <= eff_file as i32 && is_proactive && is_meaningful_card(d)
+                })
+                .unwrap_or(false)
+        });
+        !has_current_playable
+    }
+
     /// 盤面の公開情報と自分の手札を参照して戦略的に意思決定を行う
     pub fn choose_action_with_engine(&self, engine: &MatchEngine, decision: &Value) -> Value {
         if self.difficulty == CpuDifficulty::Easy {
@@ -333,34 +441,9 @@ impl RandomAgent {
                 let eff_file = my_ps.effective_file_count();
 
                 // 2. ターン開始時の ASSIST 先行化:
-                // 手札に【FILE5】〜【FILE7】効果持ちがいる、または解決編未突入なら最優先でASSISTしてFILEを増やす
-                if find_act("ASSIST").is_some() {
-                    let has_file_req_card = my_ps.hand.iter().any(|c| {
-                        engine
-                            .catalog
-                            .get(&c.definition_id)
-                            .map(|d| {
-                                d.description.contains("【FILE5】")
-                                    || d.description.contains("【FILE 5】")
-                                    || d.description.contains("【FILE6】")
-                                    || d.description.contains("【FILE7】")
-                            })
-                            .unwrap_or(false)
-                    });
-                    let has_lv9_in_hand = my_ps.hand.iter().any(|c| {
-                        engine.catalog.get(&c.definition_id).map(|d| d.level >= 9).unwrap_or(false)
-                    });
-                    let should_assist_first = if self.difficulty == CpuDifficulty::Hard {
-                        eff_file < 7
-                            || (eff_file < 8 && (has_file_req_card || has_lv9_in_hand))
-                            || (eff_file == 8 && has_lv9_in_hand)
-                            || find_act("DEDUCE").is_none()
-                    } else {
-                        my_ps.case_phase != CasePhase::RESOLUTION && eff_file >= 6
-                    };
-                    if should_assist_first {
-                        return json!({"value": {"type": "ASSIST"}});
-                    }
+                // 解決編(FILE 7)到達や【FILE5】〜【FILE7】解禁、他に打てる札がない高Lv展開など明確な目的がある時のみ実行
+                if find_act("ASSIST").is_some() && self.should_assist_before_hand_play(engine, &opp_id) {
+                    return json!({"value": {"type": "ASSIST"}});
                 }
 
                 // 3. 手札登場・イベント使用: 学習済み重みとカード相性で評価
@@ -694,8 +777,11 @@ impl RandomAgent {
                     }
                 }
 
-                // 9. まだアシストしていないなら実行
-                if find_act("ASSIST").is_some() {
+                // 9. 解決編(FILE 7)到達のためのアシスト（不要な序中盤での無意味なASSISTは行わない）
+                if find_act("ASSIST").is_some()
+                    && my_ps.case_phase != CasePhase::RESOLUTION
+                    && eff_file == 6
+                {
                     return json!({"value": {"type": "ASSIST"}});
                 }
 

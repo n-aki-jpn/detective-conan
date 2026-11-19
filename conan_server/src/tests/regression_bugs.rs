@@ -3747,3 +3747,174 @@ fn test_target_action_prompt_title_and_constraints_real_cards() {
     }
 }
 
+#[test]
+fn test_cpu_does_not_waste_assist_when_unnecessary() {
+    let catalog = load_test_catalog();
+
+    // 1) 後攻1ターン目 (Turn 2, FILE 2): 手札に Lv.2 と Lv.4 があるとき、無駄な ASSIST をせず Lv.2 登場 + パートナー推理(証拠+1)を行うこと
+    {
+        let mut engine = MatchEngine::new(catalog.clone());
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn = 2;
+        engine.turn_player_id = "p2".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.r#case = Some(test_inst("p1_c", "B01024", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        ps1.partner = Some(test_inst("p1_p", "B01001", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+        engine.players.insert("p1".to_string(), ps1);
+
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        ps2.r#case = Some(test_inst("p2_c", "B01024", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        ps2.partner = Some(test_inst("p2_p", "B01001", "p2", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+        for i in 0..2 {
+            ps2.file.push(test_inst(&format!("f_{}", i), "B01021", "p2", models::Zone::FILE, models::CardOrientation::ACTIVE));
+        }
+        for i in 0..10 {
+            ps2.deck.push(test_inst(&format!("d_{}", i), "B01021", "p2", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        }
+        ps2.hand.push(test_inst("h_lv2", "D08008", "p2", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        ps2.hand.push(test_inst("h_lv4", "B11008", "p2", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        engine.players.insert("p2".to_string(), ps2);
+
+        let cpu = agent::RandomAgent::new("p2");
+        engine.prompt_main_action("p2");
+
+        let mut taken_types = Vec::new();
+        for _ in 0..6 {
+            let dec = engine.pending_decision.clone().expect("pending_decision");
+            let ans = cpu.choose_action_with_engine(&engine, &dec);
+            let ty = ans["value"]["type"].as_str().unwrap_or("").to_string();
+            taken_types.push(ty.clone());
+            if ty == "END_TURN" {
+                break;
+            }
+            engine.submit_decision("p2", &serde_json::json!({
+                "decisionId": dec["decisionId"],
+                "revision": engine.revision,
+                "value": ans["value"]
+            })).unwrap();
+        }
+
+        assert!(
+            !taken_types.iter().any(|t| t == "ASSIST"),
+            "FILE 2 で Lv.2 を出せるのに無駄な ASSIST を行ってはならない (actions: {:?})",
+            taken_types
+        );
+        assert!(taken_types.iter().any(|t| t == "HAND_PLAY"), "Lv.2 キャラを展開すること (actions: {:?})", taken_types);
+        assert!(taken_types.iter().any(|t| t == "DEDUCE"), "パートナーで推理(証拠+1)すること (actions: {:?})", taken_types);
+        let p2 = &engine.players["p2"];
+        assert_eq!(p2.evidence.len(), 1);
+        assert_eq!(p2.partner.as_ref().unwrap().zone, models::Zone::PARTNER);
+        assert!(p2.field.iter().any(|c| c.instance_id == "h_lv2"));
+    }
+
+    // 2) 先攻1ターン目 (Turn 1, FILE 1): 手札に Lv.2 カードが無い (Lv.4 のみ) とき、無駄な ASSIST をせず END_TURN すること
+    {
+        let mut engine = MatchEngine::new(catalog.clone());
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn = 1;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.is_first_player = true;
+        ps1.r#case = Some(test_inst("p1_c", "B01024", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        ps1.partner = Some(test_inst("p1_p", "B01001", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+        ps1.file.push(test_inst("f_0", "B01021", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+        for i in 0..10 {
+            ps1.deck.push(test_inst(&format!("d_{}", i), "B01021", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        }
+        ps1.hand.push(test_inst("h_lv4", "B11008", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        engine.players.insert("p1".to_string(), ps1);
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        ps2.r#case = Some(test_inst("p2_c", "B01024", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        engine.players.insert("p2".to_string(), ps2);
+
+        let cpu = agent::RandomAgent::new("p1");
+        engine.prompt_main_action("p1");
+
+        let mut taken_types = Vec::new();
+        for _ in 0..4 {
+            let dec = engine.pending_decision.clone().expect("pending_decision");
+            let ans = cpu.choose_action_with_engine(&engine, &dec);
+            let ty = ans["value"]["type"].as_str().unwrap_or("").to_string();
+            taken_types.push(ty.clone());
+            if ty == "END_TURN" {
+                break;
+            }
+            engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": dec["decisionId"],
+                "revision": engine.revision,
+                "value": ans["value"]
+            })).unwrap();
+        }
+        assert!(
+            !taken_types.iter().any(|t| t == "ASSIST"),
+            "FILE 1 で Lv.2 が無いのに無駄な ASSIST を行ってはならない (actions: {:?})",
+            taken_types
+        );
+        assert_eq!(taken_types.last().map(String::as_str), Some("END_TURN"));
+        assert_eq!(engine.players["p1"].partner.as_ref().unwrap().zone, models::Zone::PARTNER);
+
+        // ASSIST / END_TURN のみの選択肢（Step 9 フォールバック到達時）でも ASSIST せず END_TURN を選ぶこと
+        let direct_dec = serde_json::json!({
+            "decisionId": "d_no_assist",
+            "revision": engine.revision,
+            "playerId": "p1",
+            "kind": "mainAction",
+            "options": {
+                "actions": [
+                    { "type": "ASSIST" },
+                    { "type": "END_TURN" }
+                ]
+            }
+        });
+        let direct_ans = cpu.choose_action_with_engine(&engine, &direct_dec);
+        assert_eq!(direct_ans["value"]["type"].as_str(), Some("END_TURN"));
+    }
+
+    // 3) FILE 4 で手札に 【FILE5】持ちの Lv.4 キャラ (B11008 小嶋元太) があるときは、先に ASSIST して FILE 5 にしてから登場させること
+    {
+        let mut engine = MatchEngine::new(catalog);
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn = 5;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.is_first_player = true;
+        ps1.r#case = Some(test_inst("p1_c", "B01024", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        ps1.partner = Some(test_inst("p1_p", "B01001", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+        for i in 0..4 {
+            ps1.file.push(test_inst(&format!("f_{}", i), "B01021", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+        }
+        for i in 0..10 {
+            ps1.deck.push(test_inst(&format!("d_{}", i), "B01021", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        }
+        ps1.hand.push(test_inst("h_genta", "B11008", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        ps1.hand.push(test_inst("h_lv2", "D08008", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        engine.players.insert("p1".to_string(), ps1);
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        ps2.r#case = Some(test_inst("p2_c", "B01024", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        engine.players.insert("p2".to_string(), ps2);
+
+        let cpu = agent::RandomAgent::new("p1");
+        engine.prompt_main_action("p1");
+
+        let dec1 = engine.pending_decision.clone().unwrap();
+        let ans1 = cpu.choose_action_with_engine(&engine, &dec1);
+        assert_eq!(ans1["value"]["type"].as_str(), Some("ASSIST"), "【FILE5】解禁のため先に ASSIST すること");
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": dec1["decisionId"],
+            "revision": engine.revision,
+            "value": ans1["value"]
+        })).unwrap();
+
+        let dec2 = engine.pending_decision.clone().unwrap();
+        let ans2 = cpu.choose_action_with_engine(&engine, &dec2);
+        assert_eq!(ans2["value"]["type"].as_str(), Some("HAND_PLAY"));
+        assert_eq!(ans2["value"]["cardId"].as_str(), Some("h_genta"));
+    }
+}
+
