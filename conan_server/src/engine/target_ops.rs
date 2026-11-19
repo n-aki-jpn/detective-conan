@@ -309,6 +309,144 @@ impl MatchEngine {
                     }
                 }
             }
+            "LP_BUFF" => {
+                let d_lp = opts.get("lpDelta").and_then(|v| v.as_i64()).unwrap_or(1) as i32;
+                for pid in [player_id, opp_id.as_str()] {
+                    if let Some(ps) = self.players.get_mut(pid) {
+                        if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == tid) {
+                            c.temp_lp_bonus += d_lp;
+                            self.log(format!("✨ [{}] の効果で [{}] のLP +{}！", actor_name, target_name, d_lp));
+                            break;
+                        }
+                    }
+                }
+            }
+            "SET_BASE_LP_ZERO" => {
+                for pid in [opp_id.as_str(), player_id] {
+                    let base_lp = self.players.get(pid)
+                        .and_then(|ps| ps.field.iter().find(|c| c.instance_id == tid))
+                        .and_then(|c| self.catalog.get(&c.definition_id))
+                        .map(|d| d.lp)
+                        .unwrap_or(0);
+                    if let Some(ps) = self.players.get_mut(pid) {
+                        if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == tid) {
+                            c.temp_lp_bonus -= base_lp;
+                            self.log(format!("📉 [{}] の効果で [{}] の元のLPを0にしました！", actor_name, target_name));
+                            break;
+                        }
+                    }
+                }
+            }
+            "MOVE_TO_PARTNER_AREA" => {
+                if let Some(ps) = self.players.get_mut(player_id) {
+                    if let Some(pos) = ps.remove.iter().position(|c| c.instance_id == tid) {
+                        let mut card = ps.remove.remove(pos);
+                        card.zone = Zone::PARTNER;
+                        card.orientation = CardOrientation::ACTIVE;
+                        ps.extra_partners.push(card);
+                        self.log(format!("✨ [{}] の効果で [{}] をパートナーエリアに移しました！", actor_name, target_name));
+                    }
+                }
+            }
+            "MOVE_FACE_DOWN_SET_TO_TARGET" => {
+                if let Some(ps) = self.players.get_mut(player_id) {
+                    let mut moved_card = None;
+                    if let Some(actor_c) = ps.field.iter_mut().find(|c| c.instance_id == actor_id) {
+                        if let Some(pos) = actor_c.set_cards.iter().position(|sc| !sc.face_up) {
+                            moved_card = Some(actor_c.set_cards.remove(pos));
+                        }
+                    }
+                    if let Some(sc) = moved_card {
+                        if let Some(target_c) = ps.field.iter_mut().find(|c| c.instance_id == tid) {
+                            target_c.set_cards.push(sc);
+                            self.log(format!("🔧 [{}] の効果で裏向きセットカードを [{}] に移しました！", actor_name, target_name));
+                        }
+                    }
+                }
+            }
+            "SET_CARD_ON_SELF" | "SET_CARD_ON_TARGET_CHAR" => {
+                if let Some(ps) = self.players.get_mut(player_id) {
+                    let found = if let Some(pos) = ps.hand.iter().position(|c| c.instance_id == tid) {
+                        Some(ps.hand.remove(pos))
+                    } else if let Some(pos) = ps.remove.iter().position(|c| c.instance_id == tid) {
+                        Some(ps.remove.remove(pos))
+                    } else {
+                        None
+                    };
+                    if let Some(mut card) = found {
+                        card.face_up = true;
+                        let recv_idx = if effect_type == "SET_CARD_ON_SELF" {
+                            ps.field.iter().position(|c| c.instance_id == actor_id)
+                        } else {
+                            ps.field.iter().position(|c| c.instance_id != actor_id).or_else(|| if ps.field.is_empty() { None } else { Some(0) })
+                        };
+                        if let Some(idx) = recv_idx {
+                            ps.field[idx].set_cards.push(card);
+                            self.log(format!("🔧 [{}] の効果で [{}] をセットしました！", actor_name, target_name));
+                        }
+                    }
+                }
+            }
+            "STACK_REMOVE_UNDER_ALLY_BLUE" => {
+                let blue_idx = self.players.get(player_id).and_then(|ps| {
+                    ps.field.iter().position(|c| {
+                        self.catalog.get(&c.definition_id).map(|d| d.colors.iter().any(|col| col == "青")).unwrap_or(false)
+                    })
+                });
+                if let (Some(ps), Some(b_idx)) = (self.players.get_mut(player_id), blue_idx) {
+                    if let Some(pos) = ps.remove.iter().position(|c| c.instance_id == tid) {
+                        let mut card = ps.remove.remove(pos);
+                        card.face_up = true;
+                        ps.field[b_idx].set_cards.push(card);
+                        self.log(format!("📚 [{}] の効果で [{}] を【青】キャラの下に重ねました！", actor_name, target_name));
+                    }
+                }
+            }
+            "TRANSFER_STACKED_UNDER_TARGET" => {
+                if let Some(ps) = self.players.get_mut(player_id) {
+                    let mut moved = Vec::new();
+                    if let Some(actor_c) = ps.field.iter_mut().find(|c| c.instance_id == actor_id) {
+                        for _ in 0..2 {
+                            if let Some(sc) = actor_c.set_cards.pop() {
+                                moved.push(sc);
+                            }
+                        }
+                    }
+                    if !moved.is_empty() {
+                        if let Some(target_c) = ps.field.iter_mut().find(|c| c.instance_id == tid) {
+                            let cnt = moved.len();
+                            target_c.set_cards.extend(moved);
+                            self.log(format!("📚 [{}] の効果で重なっていたカード {}枚を [{}] の下に重ねました！", actor_name, cnt, target_name));
+                        }
+                    }
+                }
+            }
+            "STACK_SELF_UNDER_TARGET" => {
+                if let Some(ps) = self.players.get_mut(player_id) {
+                    if tid != actor_id {
+                        if let Some(pos) = ps.field.iter().position(|c| c.instance_id == actor_id) {
+                            let mut self_card = ps.field.remove(pos);
+                            self_card.face_up = true;
+                            if let Some(target_c) = ps.field.iter_mut().find(|c| c.instance_id == tid) {
+                                target_c.set_cards.push(self_card);
+                                self.log(format!("📚 [{}] を [{}] の下に重ねました！", actor_name, target_name));
+                            }
+                        }
+                    }
+                }
+            }
+            "NEGATE_BASE_ABILITIES" => {
+                self.log(format!("🚫 [{}] の効果で [{}] の元の能力をターン終了時まで無効にしました", actor_name, target_name));
+            }
+            "COPY_NAME_FROM_REVEALED" => {
+                self.log(format!("🎭 [{}] の効果で [{}] のカード名を書き換えました", actor_name, target_name));
+            }
+            "TRIGGER_TARGET_HIRAMEKI" => {
+                self.log(format!("💡 [{}] の効果で [{}] の【ヒラメキ】効果を発動しました", actor_name, target_name));
+            }
+            "GRANT_BOND_AS_ANY" => {
+                self.log(format!("🤝 [{}] の効果で [{}] に【絆】条件緩和を付与しました", actor_name, target_name));
+            }
             "LEVEL_DELTA" => {
                 let d_lv = opts.get("levelDelta").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                 for pid in [opp_id.as_str(), player_id] {
@@ -1458,6 +1596,19 @@ pub(super) fn target_action_prompt_title(action: &TargetAction, filter: &TargetF
         TargetAction::GiveMustGuard => format!("必ずガードさせる{}キャラを選択してください", prefix),
         TargetAction::GiveCanAttackActive => format!("アクティブ状態攻撃権を与える{}キャラを選択してください", prefix),
         TargetAction::SetBaseApZero => format!("元のAPを0にする{}キャラを選択してください", prefix),
+        TargetAction::LpBuff(v) => format!("LP＋{}する{}キャラを選択してください", v, prefix),
+        TargetAction::SetBaseLpZero => format!("元のLPを0にする{}キャラを選択してください", prefix),
+        TargetAction::MoveToPartnerArea => "パートナーエリアに移すカードを選択してください".to_string(),
+        TargetAction::MoveFaceDownSetToTarget => "裏向きセットカードを移すキャラを選択してください".to_string(),
+        TargetAction::SetCardOnTargetChar => "現場のキャラにセットするカードを選択してください".to_string(),
+        TargetAction::SetCardOnSelf => "このキャラにセットするカードを選択してください".to_string(),
+        TargetAction::StackRemoveUnderAllyBlue => "【青】のキャラの下に重ねるカードを選択してください".to_string(),
+        TargetAction::TransferStackedUnderTarget(_) => "下に重なっているカードを移すキャラを選択してください".to_string(),
+        TargetAction::StackSelfUnderTarget => "このキャラを下に重ねる対象キャラを選択してください".to_string(),
+        TargetAction::NegateBaseAbilities => format!("元の能力を無効にする{}キャラを選択してください", prefix),
+        TargetAction::CopyNameFromRevealed => "カード名を書き換えるキャラを選択してください".to_string(),
+        TargetAction::TriggerTargetHirameki => "【ヒラメキ】を発動させるカードを選択してください".to_string(),
+        TargetAction::GrantBondAsAny => "【絆】条件を緩和するキャラを選択してください".to_string(),
         TargetAction::LevelDelta(d) => {
             if *d >= 0 {
                 format!("レベル＋{}する{}キャラを選択してください", d, prefix)

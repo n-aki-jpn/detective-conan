@@ -78,6 +78,19 @@ pub enum TargetAction {
     RemoveSetCards(usize),
     StunAndGrantOnRemoveDraw,
     StackUnderSelf,
+    LpBuff(i32),
+    SetBaseLpZero,
+    MoveToPartnerArea,
+    MoveFaceDownSetToTarget,
+    SetCardOnTargetChar,
+    SetCardOnSelf,
+    StackRemoveUnderAllyBlue,
+    TransferStackedUnderTarget(usize),
+    StackSelfUnderTarget,
+    NegateBaseAbilities,
+    CopyNameFromRevealed,
+    TriggerTargetHirameki,
+    GrantBondAsAny,
 }
 
 impl TargetAction {
@@ -120,6 +133,19 @@ impl TargetAction {
             TargetAction::RemoveSetCards(_) => "REMOVE_SET_CARDS",
             TargetAction::StunAndGrantOnRemoveDraw => "STUN_AND_GRANT_ON_REMOVE_DRAW",
             TargetAction::StackUnderSelf => "STACK_UNDER_SELF",
+            TargetAction::LpBuff(_) => "LP_BUFF",
+            TargetAction::SetBaseLpZero => "SET_BASE_LP_ZERO",
+            TargetAction::MoveToPartnerArea => "MOVE_TO_PARTNER_AREA",
+            TargetAction::MoveFaceDownSetToTarget => "MOVE_FACE_DOWN_SET_TO_TARGET",
+            TargetAction::SetCardOnTargetChar => "SET_CARD_ON_TARGET_CHAR",
+            TargetAction::SetCardOnSelf => "SET_CARD_ON_SELF",
+            TargetAction::StackRemoveUnderAllyBlue => "STACK_REMOVE_UNDER_ALLY_BLUE",
+            TargetAction::TransferStackedUnderTarget(_) => "TRANSFER_STACKED_UNDER_TARGET",
+            TargetAction::StackSelfUnderTarget => "STACK_SELF_UNDER_TARGET",
+            TargetAction::NegateBaseAbilities => "NEGATE_BASE_ABILITIES",
+            TargetAction::CopyNameFromRevealed => "COPY_NAME_FROM_REVEALED",
+            TargetAction::TriggerTargetHirameki => "TRIGGER_TARGET_HIRAMEKI",
+            TargetAction::GrantBondAsAny => "GRANT_BOND_AS_ANY",
         }
     }
 

@@ -317,6 +317,46 @@ pub fn parse_target_action(text: &str) -> Option<TargetAction> {
     if text.contains("元のAPを0にする") {
         return Some(TargetAction::SetBaseApZero);
     }
+    if text.contains("元のLPを0にする") {
+        return Some(TargetAction::SetBaseLpZero);
+    }
+    if let Some(lp_val) = parse_signed_lp(text, true) {
+        return Some(TargetAction::LpBuff(lp_val));
+    }
+    if text.contains("パートナーエリアに移す") {
+        return Some(TargetAction::MoveToPartnerArea);
+    }
+    if text.contains("セットされている裏向きのカードを") && text.contains("移す") {
+        return Some(TargetAction::MoveFaceDownSetToTarget);
+    }
+    if text.contains("自分の現場にいるキャラ1枚にセットする") {
+        return Some(TargetAction::SetCardOnTargetChar);
+    }
+    if text.contains("このキャラにセットする") {
+        return Some(TargetAction::SetCardOnSelf);
+    }
+    if text.contains("【青】のキャラ1枚の下に重ねる") {
+        return Some(TargetAction::StackRemoveUnderAllyBlue);
+    }
+    if text.contains("このキャラの下に重なっているカードを") && text.contains("そのキャラの下に重ねる") {
+        let n = extract_count_around(text, "カードを", "枚まで").max(1);
+        return Some(TargetAction::TransferStackedUnderTarget(n));
+    }
+    if text.contains("このキャラをそのキャラの下に重ねる") {
+        return Some(TargetAction::StackSelfUnderTarget);
+    }
+    if text.contains("元の能力を無効にする") {
+        return Some(TargetAction::NegateBaseAbilities);
+    }
+    if text.contains("カード名を公開したキャラのカード名に書き換える") {
+        return Some(TargetAction::CopyNameFromRevealed);
+    }
+    if text.contains("【ヒラメキ】の効果を発動させ") {
+        return Some(TargetAction::TriggerTargetHirameki);
+    }
+    if text.contains("【絆】は指定のカード名のキャラが自分の現場にいるものとして扱う") {
+        return Some(TargetAction::GrantBondAsAny);
+    }
     if let Some(lv_d) = extract_number_before(text, "レベル－", "する") {
         return Some(TargetAction::LevelDelta(-lv_d));
     }
