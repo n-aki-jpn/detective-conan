@@ -338,6 +338,12 @@ pub enum ImmediateOp {
     SelfRemoveEvidence { count: usize, trigger_hirameki: bool },
     SelfApBuff(i32),
     SelfLpBuff(i32),
+    SetSelfFieldBaseLp {
+        from_lp: i32,
+        level: i32,
+        trait_name: String,
+        to_lp: i32,
+    },
     SelfLevelDelta(i32),
     SelfActivate,
     SelfGiveRush(Option<String>),

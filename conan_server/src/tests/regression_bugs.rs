@@ -4152,3 +4152,62 @@ fn test_b03006_and_distinct_names_reject_same_character_different_card_ids() {
     }
 }
 
+#[test]
+fn test_b09011_declare_sets_base_lp_to_1_for_lv4_lp0_shounen_tanteidan() {
+    let catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();
+    let match_id = catalog
+        .definitions
+        .iter()
+        .find(|(_, d)| {
+            d.card_type == models::CardType::CHARACTER
+                && d.level == 4
+                && d.lp == 0
+                && d.traits.iter().any(|t| t == "少年探偵団")
+        })
+        .map(|(id, _)| id.clone())
+        .expect("Lv4・LP0・少年探偵団のキャラがcards.jsonに存在すること");
+    let non_lv4_id = catalog
+        .definitions
+        .iter()
+        .find(|(_, d)| {
+            d.card_type == models::CardType::CHARACTER
+                && d.level != 4
+                && d.lp == 0
+                && d.traits.iter().any(|t| t == "少年探偵団")
+        })
+        .map(|(id, _)| id.clone())
+        .expect("Lv4以外・LP0・少年探偵団のキャラがcards.jsonに存在すること");
+
+    let mut engine = MatchEngine::new(catalog);
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn = 4;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    let mut c_b09011 = test_inst("c_b09011", "B09011", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+    c_b09011.entered_turn = 0;
+    let mut c_match = test_inst("c_match", &match_id, "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+    c_match.entered_turn = 0;
+    let mut c_non_lv4 = test_inst("c_non_lv4", &non_lv4_id, "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+    c_non_lv4.entered_turn = 0;
+    ps1.field = vec![c_b09011, c_match, c_non_lv4];
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+    engine.prompt_main_action("p1");
+
+    assert_eq!(engine.get_effective_lp("p1", &engine.players["p1"].field[1]), 0);
+
+    let obs = build_player_observation(&engine, "p1");
+    let dec_id = obs["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec_id,
+        "revision": engine.revision,
+        "value": { "type": "DECLARE", "actorId": "c_b09011" }
+    })).unwrap();
+
+    let p1 = &engine.players["p1"];
+    assert_eq!(engine.get_effective_lp("p1", &p1.field[1]), 1, "Lv4・LP0・少年探偵団はLP1になること");
+    assert_eq!(engine.get_effective_lp("p1", &p1.field[2]), 0, "Lv4以外は対象外でLP0のまま");
+}
+

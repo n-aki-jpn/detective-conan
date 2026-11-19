@@ -512,6 +512,35 @@ impl MatchEngine {
                         }
                     }
                 }
+                ImmediateOp::SetSelfFieldBaseLp {
+                    from_lp,
+                    level,
+                    trait_name,
+                    to_lp,
+                } => {
+                    let mut updated_names: Vec<String> = Vec::new();
+                    if let Some(ps) = self.players.get_mut(player_id) {
+                        for c in ps.field.iter_mut() {
+                            if let Some(def) = self.catalog.get(&c.definition_id) {
+                                if def.lp == *from_lp
+                                    && def.level == *level
+                                    && def.traits.iter().any(|t| t == trait_name)
+                                {
+                                    c.temp_lp_bonus += *to_lp - def.lp;
+                                    updated_names.push(
+                                        def.names.first().cloned().unwrap_or_else(|| def.definition_id.clone()),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    for target_name in updated_names {
+                        self.log(format!(
+                            "✨ [{}] の効果で自分の現場の [{}] のLPを {} にしました",
+                            actor_name, target_name, to_lp
+                        ));
+                    }
+                }
                 ImmediateOp::SelfLevelDelta(amt) => {
                     if let Some(ps) = self.players.get_mut(player_id) {
                         if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == actor_id) {

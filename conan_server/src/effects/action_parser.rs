@@ -557,6 +557,32 @@ pub fn parse_immediate_ops(sentence: &str) -> Vec<ImmediateOp> {
             }
         }
 
+        if sentence.contains("自分の現場にいる")
+            && sentence.contains("元のLPが")
+            && sentence.contains("元のLPを")
+            && sentence.contains("にする")
+            && !ops.iter().any(|op| matches!(op, ImmediateOp::SetSelfFieldBaseLp { .. }))
+        {
+            let from_lp = extract_count_around(sentence, "元のLPが", "で") as i32;
+            let level = extract_count_around(sentence, "レベル", "の") as i32;
+            let to_lp = extract_count_around(sentence, "元のLPを", "にする") as i32;
+            let trait_name = sentence
+                .find("〚特徴［")
+                .and_then(|s| {
+                    let rest = &sentence[s + "〚特徴［".len()..];
+                    rest.find("］〛").map(|e| rest[..e].to_string())
+                })
+                .unwrap_or_default();
+            if level > 0 && !trait_name.is_empty() {
+                ops.push(ImmediateOp::SetSelfFieldBaseLp {
+                    from_lp,
+                    level,
+                    trait_name,
+                    to_lp,
+                });
+            }
+        }
+
         if p.contains("このキャラをアクティブに") {
             ops.push(ImmediateOp::SelfActivate);
         }
