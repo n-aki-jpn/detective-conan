@@ -374,6 +374,7 @@ pub enum ImmediateOp {
     SelfLevelDelta(i32),
     SelfActivate,
     SelfGiveRush(Option<String>),
+    SetDeckTopFaceDownOnSelf(usize),
     MillDeck(usize),
     MillDeckByLastChosenLevel,
     OppMillDeck(usize),

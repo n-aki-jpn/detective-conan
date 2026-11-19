@@ -623,6 +623,11 @@ pub fn parse_immediate_ops(sentence: &str) -> Vec<ImmediateOp> {
             }
         }
 
+        if p.contains("自分のデッキのカードを上から") && p.contains("裏向きでこのキャラにセットする") {
+            let n = extract_count_around(p, "上から", "枚裏向き").max(1);
+            ops.push(ImmediateOp::SetDeckTopFaceDownOnSelf(n));
+        }
+
         if p.contains("このキャラをアクティブに") {
             ops.push(ImmediateOp::SelfActivate);
         }

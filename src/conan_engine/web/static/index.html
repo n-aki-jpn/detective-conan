@@ -3865,18 +3865,32 @@
     }
 
     window.prevFieldIds = null;
+    window.prevRemoveIds = null;
     window.prevLogCountForNotice = null;
+    window.removeToastQueue = [];
+    window.removeToastPlaying = false;
     let cardPlayCutinTimer = null;
     let evidenceToastTimer = null;
 
-    function showEvidenceRemoveToast(cardName, mainPath) {
+    function playNextRemoveToast() {
+      if (window.removeToastQueue.length === 0) {
+        window.removeToastPlaying = false;
+        return;
+      }
+      window.removeToastPlaying = true;
+      const item = window.removeToastQueue.shift();
       const toast = document.getElementById('evidence-remove-toast');
       const img = document.getElementById('evidence-remove-toast-img');
+      const labelEl = document.getElementById('evidence-remove-toast-label');
       const nameEl = document.getElementById('evidence-remove-toast-name');
-      if (!toast || !img || !nameEl) return;
-      nameEl.innerText = cardName || '証拠カード';
-      if (mainPath) {
-        img.src = `/card-images/${mainPath}`;
+      if (!toast || !img || !nameEl) {
+        window.removeToastPlaying = false;
+        return;
+      }
+      if (labelEl) labelEl.innerText = item.label || '🗑️ リムーブ（捨て札）';
+      nameEl.innerText = item.name || 'カード';
+      if (item.mainPath) {
+        img.src = `/card-images/${item.mainPath}`;
         img.style.display = 'block';
       } else {
         img.style.display = 'none';
@@ -3884,10 +3898,23 @@
       toast.classList.remove('active');
       void toast.offsetWidth;
       toast.classList.add('active');
+      const duration = window.removeToastQueue.length > 0 ? 1500 : 2400;
       if (evidenceToastTimer && typeof clearTimeout === 'function') clearTimeout(evidenceToastTimer);
       evidenceToastTimer = setTimeout(() => {
         toast.classList.remove('active');
-      }, 2600);
+        if (window.removeToastQueue.length > 0) {
+          playNextRemoveToast();
+        } else {
+          window.removeToastPlaying = false;
+        }
+      }, duration);
+    }
+
+    function showEvidenceRemoveToast(cardName, mainPath, label = '🗑️ リムーブ（捨て札）') {
+      window.removeToastQueue.push({ name: cardName, mainPath, label });
+      if (!window.removeToastPlaying) {
+        playNextRemoveToast();
+      }
     }
 
     function showCardPlayCutin(card) {
@@ -3918,11 +3945,28 @@
 
     function render(obs) {
       window.latestObs = obs;
+      const meRemList = (obs.me?.remove || []).map(c => ({ c, owner: '自分' }));
+      const oppRemList = (obs.opponent?.remove || []).map(c => ({ c, owner: '相手' }));
+      const allRemWithOwner = [...meRemList, ...oppRemList];
+      const curRemoveIdSet = new Set(allRemWithOwner.map(x => x.c?.instanceId).filter(Boolean));
+      if (window.prevRemoveIds !== null) {
+        allRemWithOwner.forEach(({ c, owner }) => {
+          if (c && c.instanceId && !window.prevRemoveIds.has(c.instanceId)) {
+            showEvidenceRemoveToast(
+              c.name || c.definitionId || 'カード',
+              c.mainPath || '',
+              `🗑️ ${owner}のリムーブ`
+            );
+          }
+        });
+      }
+      window.prevRemoveIds = curRemoveIdSet;
+
       const curLogs = obs.logs || [];
       if (window.prevLogCountForNotice !== null && curLogs.length > window.prevLogCountForNotice) {
         const newLogs = curLogs.slice(window.prevLogCountForNotice);
         const evHitLog = [...newLogs].reverse().find(l => String(l).includes('証拠から ['));
-        if (evHitLog) {
+        if (evHitLog && window.removeToastQueue.length === 0 && !window.removeToastPlaying) {
           const m = String(evHitLog).match(/証拠から \[([^\]]+)\]/);
           const cardName = m ? m[1] : '証拠カード';
           const idMatch = cardName.match(/\(([^)]+)\)$/);
@@ -3934,7 +3978,7 @@
             (c.name && (c.name === cardName || c.name === baseNameFromLog)) ||
             c.definitionId === cardName
           );
-          showEvidenceRemoveToast(cardName, matchedCard?.mainPath || '');
+          showEvidenceRemoveToast(cardName, matchedCard?.mainPath || '', '💥 証拠からリムーブ');
         }
       }
       window.prevLogCountForNotice = curLogs.length;
@@ -6192,7 +6236,7 @@
   <div id="evidence-remove-toast" aria-live="polite">
     <img id="evidence-remove-toast-img" src="" alt="" style="display:none;" />
     <div style="display:flex; flex-direction:column; gap:2px; min-width:0;">
-      <span style="font-size:0.7rem; font-weight:800; color:#fbbf24;">💥 証拠からリムーブ</span>
+      <span id="evidence-remove-toast-label" style="font-size:0.7rem; font-weight:800; color:#fbbf24;">🗑️ リムーブ（捨て札）</span>
       <span id="evidence-remove-toast-name" style="font-size:0.86rem; font-weight:700; color:#f8fafc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></span>
     </div>
   </div>

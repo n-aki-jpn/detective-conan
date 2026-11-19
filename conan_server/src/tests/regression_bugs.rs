@@ -4400,3 +4400,38 @@ fn test_b10037_contact_win_requires_other_10000_ap_char() {
     );
 }
 
+#[test]
+fn test_b02018_declare_mills_3_and_sets_deck_top_face_down_on_self() {
+    let catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();
+    let mut engine = MatchEngine::new(catalog);
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn = 4;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    let mut heiji = test_inst("c_heiji", "B02018", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+    heiji.entered_turn = 0;
+    ps1.field.push(heiji);
+    for i in 0..6 {
+        ps1.deck.push(test_inst(&format!("c_d{}", i), "B01001", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    }
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+    engine.prompt_main_action("p1");
+
+    let obs = build_player_observation(&engine, "p1");
+    let dec_id = obs["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec_id,
+        "revision": engine.revision,
+        "value": { "type": "DECLARE", "actorId": "c_heiji" }
+    })).unwrap();
+
+    let p1 = &engine.players["p1"];
+    assert_eq!(p1.remove.len(), 3, "コストで山札から3枚リムーブされること");
+    assert_eq!(p1.field[0].set_cards.len(), 1, "山札から1枚が裏向きで自身にセットされること");
+    assert!(!p1.field[0].set_cards[0].face_up, "セットされたカードは裏向きであること");
+    assert!(p1.field[0].has_rush, "セット時効果で〚突撃〛を得ること");
+}
+
