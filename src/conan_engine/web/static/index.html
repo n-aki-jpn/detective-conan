@@ -1652,6 +1652,62 @@
         overflow-y: auto;
       }
     }
+    /* カード登場時の画面全体カットイン演出 */
+    #card-play-cutin {
+      position: fixed;
+      inset: 0;
+      z-index: 950;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      background: radial-gradient(circle, rgba(15, 23, 42, 0.85) 0%, rgba(2, 6, 23, 0.65) 100%);
+      pointer-events: none;
+    }
+    #card-play-cutin.active {
+      display: flex;
+      animation: cardPlayCutinAnim 0.85s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+    #card-play-cutin img {
+      max-width: min(82vw, 380px);
+      max-height: 76dvh;
+      width: auto;
+      height: auto;
+      border-radius: 14px;
+      box-shadow: 0 0 42px rgba(56, 189, 248, 0.65), 0 18px 48px rgba(0, 0, 0, 0.85);
+      border: 2px solid rgba(186, 230, 253, 0.75);
+      object-fit: contain;
+    }
+    #card-play-cutin-label {
+      margin-top: 12px;
+      padding: 6px 16px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(56, 189, 248, 0.6);
+      color: #f8fafc;
+      font-weight: 800;
+      font-size: 1rem;
+      letter-spacing: 0.04em;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+    }
+    @keyframes cardPlayCutinAnim {
+      0% {
+        opacity: 0;
+        transform: scale(0.65);
+      }
+      18% {
+        opacity: 1;
+        transform: scale(1.04);
+      }
+      72% {
+        opacity: 1;
+        transform: scale(1);
+      }
+      100% {
+        opacity: 0;
+        transform: scale(1.08);
+      }
+    }
   </style>
 </head>
 
@@ -3758,8 +3814,37 @@
       }
     }
 
+    window.prevFieldIds = null;
+    let cardPlayCutinTimer = null;
+
+    function showCardPlayCutin(card) {
+      if (!card || !card.mainPath) return;
+      const overlay = document.getElementById('card-play-cutin');
+      const img = document.getElementById('card-play-cutin-img');
+      const label = document.getElementById('card-play-cutin-label');
+      if (!overlay || !img || !label) return;
+      img.src = `/card-images/${card.mainPath}`;
+      label.innerText = card.name || card.definitionId || '';
+      overlay.classList.remove('active');
+      void overlay.offsetWidth;
+      overlay.classList.add('active');
+      if (cardPlayCutinTimer) clearTimeout(cardPlayCutinTimer);
+      cardPlayCutinTimer = setTimeout(() => {
+        overlay.classList.remove('active');
+      }, 860);
+    }
+
     function render(obs) {
       window.latestObs = obs;
+      const curFieldCards = [...(obs.me?.field || []), ...(obs.opponent?.field || [])];
+      const curFieldIdSet = new Set(curFieldCards.map(c => c.instanceId));
+      if (window.prevFieldIds !== null) {
+        const newlyEntered = curFieldCards.find(c => c && c.instanceId && !window.prevFieldIds.has(c.instanceId));
+        if (newlyEntered) {
+          showCardPlayCutin(newlyEntered);
+        }
+      }
+      window.prevFieldIds = curFieldIdSet;
       renderDecisionActorCard(null);
       if (window.pendingBoardMode && (window.pendingBoardMode.revision !== obs.revision || !obs.pendingDecision || obs.pendingDecision.kind !== 'mainAction')) {
         window.pendingBoardMode = null;
@@ -5962,6 +6047,10 @@
           }
         }
   </script>
+  <div id="card-play-cutin" aria-hidden="true">
+    <img id="card-play-cutin-img" src="" alt="" />
+    <div id="card-play-cutin-label"></div>
+  </div>
 </body>
 
 </html>
