@@ -473,7 +473,7 @@ pub fn card_matches_filter_with_ctx(
         def
     };
     filter.branches.iter().any(|b| {
-        if card.temp_name_override.is_some() {
+        if card.temp_name_override.is_some() || matches!(card.zone, crate::models::Zone::DECK | crate::models::Zone::REMOVE) {
             if let Some(ref nm) = b.name_req {
                 if !has_instance_name_match(card, eff_def, nm) {
                     return false;

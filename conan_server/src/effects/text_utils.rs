@@ -346,13 +346,33 @@ pub fn has_trait_match(def: &CardDefinition, query: &str) -> bool {
     def.traits.iter().any(|t| t == query)
 }
 
-/// インスタンス（一時的なカード名書き換えを含む）のカード名一致判定
+/// インスタンス（一時的なカード名書き換え・ゾーン限定別名を含む）のカード名一致判定
 pub fn has_instance_name_match(inst: &CardInstance, def: &CardDefinition, query: &str) -> bool {
+    let query_tokens = extract_distinct_card_names(query);
     if let Some(ref ov) = inst.temp_name_override {
-        let query_tokens = extract_distinct_card_names(query);
         return raw_name_matches_query(ov, query, &query_tokens);
     }
-    has_name_match(def, query)
+    if has_name_match(def, query) {
+        return true;
+    }
+    if matches!(inst.zone, crate::models::Zone::DECK | crate::models::Zone::REMOVE) {
+        for line in def.description.lines() {
+            if (line.contains("デッキかリムーブエリアにある") || line.contains("リムーブエリアにある"))
+                && line.contains("としても扱う")
+            {
+                if let Some(start) = line.find("〚カード名［") {
+                    let rest = &line[start + "〚カード名［".len()..];
+                    if let Some(end) = rest.find("］〛") {
+                        let alias = &rest[..end];
+                        if raw_name_matches_query(alias, query, &query_tokens) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    false
 }
 
 pub fn extract_leading_bracket_tags(text: &str) -> Vec<&str> {

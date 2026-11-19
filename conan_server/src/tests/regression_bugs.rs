@@ -4435,3 +4435,38 @@ fn test_b02018_declare_mills_3_and_sets_deck_top_face_down_on_self() {
     assert!(p1.field[0].has_rush, "セット時効果で〚突撃〛を得ること");
 }
 
+#[test]
+fn test_b10038_treated_as_kaito_kid_in_deck_and_remove_only() {
+    let catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();
+    let f_deck = effects::parse_target_filter(
+        "〚カード名［怪盗キッド］〛のキャラ",
+        effects::TargetZone::Deck,
+        true,
+        None,
+    );
+    let f_rem = effects::parse_target_filter(
+        "〚カード名［怪盗キッド］〛のキャラ",
+        effects::TargetZone::Remove,
+        true,
+        None,
+    );
+
+    let in_deck = test_inst("c_deck", "B10038", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE);
+    assert!(
+        effects::card_matches_filter(&catalog, None, "p1", "p1", &in_deck, 7000, &f_deck, None, None),
+        "デッキにあるB10038は〚カード名［怪盗キッド］〛として扱われること"
+    );
+
+    let in_remove = test_inst("c_rem", "B10038", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE);
+    assert!(
+        effects::card_matches_filter(&catalog, None, "p1", "p1", &in_remove, 7000, &f_rem, None, None),
+        "リムーブエリアにあるB10038は〚カード名［怪盗キッド］〛として扱われること"
+    );
+
+    let on_field = test_inst("c_field", "B10038", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+    assert!(
+        !effects::card_matches_filter(&catalog, None, "p1", "p1", &on_field, 7000, &f_rem, None, None),
+        "現場にあるB10038は怪盗キッドとして扱われないこと"
+    );
+}
+
