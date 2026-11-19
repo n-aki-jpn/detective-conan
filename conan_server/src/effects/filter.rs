@@ -193,6 +193,8 @@ pub fn parse_branches_from_phrase(phrase: &str, default_card_type: CardType) -> 
         Some("【変装】".to_string())
     } else if phrase.contains("【疾風】を持つ") {
         Some("【疾風】".to_string())
+    } else if phrase.contains("〚突撃〛を持つ") || phrase.contains("突撃を持つ") {
+        Some("〚突撃".to_string())
     } else {
         None
     };
@@ -509,7 +511,24 @@ pub fn branch_matches_with_ctx(
         return false;
     }
     if let Some(ref req_kw) = b.require_keyword {
-        if !def.description.contains(req_kw.as_str()) {
+        if req_kw == "〚突撃" {
+            let has_innate_rush = crate::effects::text_utils::extract_clauses(
+                &def.description,
+                crate::effects::types::TriggerKind::Passive,
+                def.card_type,
+            )
+            .into_iter()
+            .any(|cl| {
+                cl.contains("〚突撃")
+                    && !cl.contains("場合、")
+                    && !cl.contains("とき、")
+                    && !cl.contains("ターン終了時まで")
+                    && !cl.contains("を得る")
+            });
+            if !has_innate_rush {
+                return false;
+            }
+        } else if !def.description.contains(req_kw.as_str()) {
             return false;
         }
     }

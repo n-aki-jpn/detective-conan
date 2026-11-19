@@ -4317,3 +4317,44 @@ fn test_d04007_case_action_gain_evidence_trigger() {
     );
 }
 
+#[test]
+fn test_b10101_rush_filter_excludes_conditional_rush() {
+    let mut catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();
+    let f = effects::parse_target_filter(
+        "〚突撃〛を持つキャラ",
+        effects::TargetZone::Deck,
+        true,
+        None,
+    );
+
+    // 常時突撃（B10037: 〚突撃〛）はマッチすること
+    let b10037_inst = test_inst("c_b10037", "B10037", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE);
+    assert!(
+        effects::card_matches_filter(&catalog, None, "p1", "p1", &b10037_inst, 6000, &f, None, None),
+        "常時〚突撃〛を持つB10037は対象に含まれること"
+    );
+
+    // 条件付き突撃付与（例: 「〜場合、このキャラは〚突撃〛を持つ」や登場時突撃付与）はマッチしないこと
+    let conditional_rush = models::CardDefinition {
+        definition_id: "TEST_COND_RUSH".to_string(),
+        canonical_id: "TEST_COND_RUSH".to_string(),
+        names: vec!["テストキャラ".to_string()],
+        card_type: models::CardType::CHARACTER,
+        colors: vec!["白".to_string()],
+        level: 4,
+        ap: 4000,
+        lp: 1,
+        description: "自分の現場に〇〇がいる場合、このキャラは〚突撃〛を持つ。".to_string(),
+        case_levels: None,
+        main_thumb: None,
+        main_path: None,
+        traits: vec![],
+    };
+    catalog.definitions.insert("TEST_COND_RUSH".to_string(), conditional_rush);
+    let cond_inst = test_inst("c_cond", "TEST_COND_RUSH", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE);
+    assert!(
+        !effects::card_matches_filter(&catalog, None, "p1", "p1", &cond_inst, 4000, &f, None, None),
+        "条件を満たして突撃を得るキャラは『突撃を持つキャラ』に含まれないこと"
+    );
+}
+
