@@ -1838,7 +1838,7 @@
   <div id="screen-battle" class="screen-view active">
     <div class="battle-workspace">
       <div class="battle-main-col">
-        <div class="battle-header">
+        <div id="battle-header-bar" class="battle-header">
           <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
             <span class="status-badge" id="match-info">T:1</span>
             <label
@@ -1888,7 +1888,10 @@
           <!-- Opponent Area -->
           <div class="player-zone" id="opp-zone">
             <div class="zone-header">
-              <span class="player-title" id="opp-id" style="color:#f87171;">相手</span>
+              <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                <span class="player-title" id="opp-id" style="color:#f87171;">相手</span>
+                <span id="opp-turn-badge" class="status-badge" style="display:none; font-size:0.68rem; padding:1px 6px;"></span>
+              </div>
               <span id="opp-case-phase" style="font-size:0.72rem; color:var(--text-muted);">事件編</span>
             </div>
             <div class="counters-grid">
@@ -1917,7 +1920,10 @@
           <!-- Player Area (Field) -->
           <div class="player-zone" id="me-zone">
             <div class="zone-header">
-              <span class="player-title" id="me-id" style="color:var(--accent);">自分</span>
+              <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                <span class="player-title" id="me-id" style="color:var(--accent);">自分</span>
+                <span id="me-turn-badge" class="status-badge" style="display:none; font-size:0.68rem; padding:1px 6px;"></span>
+              </div>
               <span id="me-case-phase" style="font-size:0.72rem; color:var(--accent);">事件編</span>
             </div>
             <div class="counters-grid">
@@ -3959,7 +3965,38 @@
       const roomTag = obs.roomId && obs.roomId !== 'default'
         ? (obs.roomId.startsWith('solo_') ? '' : `[部屋:${obs.roomId}] `)
         : '';
+      const battleHeaderBar = document.getElementById('battle-header-bar');
+      if (battleHeaderBar) {
+        const isInMatch = Number(obs.turn || 0) >= 1;
+        battleHeaderBar.style.display = isInMatch ? 'none' : 'flex';
+      }
       document.getElementById('match-info').innerText = `${roomTag}T:${obs.turn} (${obs.turnPlayerId === currentViewingPlayer ? '自ターン' : '相手T'})`;
+
+      const updateTurnBadge = (elId, pid) => {
+        const el = document.getElementById(elId);
+        if (!el) return;
+        const isTurnOwner = obs.turnPlayerId === pid;
+        const isDecider = obs.decisionPlayerId === pid;
+        if (!isTurnOwner && !isDecider) {
+          el.style.display = 'none';
+          return;
+        }
+        el.style.display = 'inline-block';
+        const tText = isTurnOwner ? `T:${obs.turn}` : '';
+        const opText = isDecider ? '⚡操作中' : '';
+        el.innerText = [tText, opText].filter(Boolean).join(' ');
+        if (isDecider) {
+          el.style.background = pid === currentViewingPlayer ? 'rgba(16, 185, 129, 0.22)' : 'rgba(245, 158, 11, 0.22)';
+          el.style.border = pid === currentViewingPlayer ? '1px solid #10b981' : '1px solid #f59e0b';
+          el.style.color = pid === currentViewingPlayer ? '#6ee7b7' : '#fde68a';
+        } else {
+          el.style.background = 'rgba(56, 189, 248, 0.16)';
+          el.style.border = '1px solid rgba(56, 189, 248, 0.5)';
+          el.style.color = '#bae6fd';
+        }
+      };
+      updateTurnBadge('me-turn-badge', obs.viewingPlayerId || currentViewingPlayer);
+      updateTurnBadge('opp-turn-badge', obs.opponent?.playerId || (currentViewingPlayer === 'player1' ? 'player2' : 'player1'));
 
       const decBox = document.getElementById('decision-box');
       const decActs = document.getElementById('decision-actions');
@@ -4115,8 +4152,9 @@
         if (pd.kind === 'mulligan') {
           decBox.dataset.hasOverlay = '1';
           if (isNewOverlayKey) window.decisionOverlayHidden = false;
-          document.getElementById('decision-title').innerText = `🃏 初期手札マリガン (引き直し)`;
-          document.getElementById('decision-desc').innerText = `戻したいカードをタップして選択してください`;
+          const turnOrderLabel = me.isFirst ? '先攻' : '後攻';
+          document.getElementById('decision-title').innerText = `🃏 初期手札マリガン【${turnOrderLabel}】`;
+          document.getElementById('decision-desc').innerText = `あなたは【${turnOrderLabel}】です。戻したいカードをタップして選択してください`;
 
           const mScroll = document.createElement('div');
           mScroll.className = 'mulligan-scroll';
