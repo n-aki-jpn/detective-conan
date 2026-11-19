@@ -4358,3 +4358,45 @@ fn test_b10101_rush_filter_excludes_conditional_rush() {
     );
 }
 
+#[test]
+fn test_b10037_contact_win_requires_other_10000_ap_char() {
+    let catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();
+    let mut engine = MatchEngine::new(catalog);
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn = 4;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    let mut kyogoku = test_inst("c_kyogoku", "B10037", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+    kyogoku.entered_turn = 0;
+    let mut ally = test_inst("c_ally", "B01001", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+    ally.entered_turn = 0;
+    ps1.field = vec![kyogoku, ally];
+    ps1.hand.push(test_inst("c_h1", "B01001", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+
+    // 1) 京極真自身とのコンタクト勝利では発動しないこと
+    engine.trigger_on_contact_win("p1", "c_kyogoku", "B10037");
+    assert!(
+        engine.pending_decision.is_none(),
+        "京極真自身とのコンタクト勝利ではB10037の上の効果は発動しないこと"
+    );
+
+    // 2) 他キャラでもAP10000未満（B01001はAP1000）とのコンタクト勝利では発動しないこと
+    engine.trigger_on_contact_win("p1", "c_ally", "B01001");
+    assert!(
+        engine.pending_decision.is_none(),
+        "AP10000未満の他キャラとのコンタクト勝利ではB10037の上の効果は発動しないこと"
+    );
+
+    // 3) 京極真以外のAP10000以上のキャラとのコンタクト勝利では発動すること
+    engine.players.get_mut("p1").unwrap().field[1].temp_ap_bonus = 10000;
+    engine.trigger_on_contact_win("p1", "c_ally", "B01001");
+    assert!(
+        engine.pending_decision.is_some(),
+        "京極真以外のAP10000以上のキャラとのコンタクト勝利ではB10037の上の効果が発動すること"
+    );
+}
+

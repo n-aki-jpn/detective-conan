@@ -970,34 +970,66 @@ impl MatchEngine {
 
     /// コンタクトによる相手キャラリムーブ時のトリガーを解決する
     pub fn trigger_on_contact_win(&mut self, attacker_pid: &str, actor_id: &str, actor_def_id: &str) {
-        let Some(def) = self.catalog.get(actor_def_id).cloned() else {
-            return;
-        };
-        let clauses = extract_clauses(&def.description, TriggerKind::OnContactWin, def.card_type);
-        if clauses.is_empty() {
-            return;
-        }
-        let card_name = self.card_name_by_def(actor_def_id);
-        let ori = self.find_actor_orientation(attacker_pid, actor_id);
+        let actor_ap = self.players.get(attacker_pid)
+            .and_then(|ps| ps.field.iter().find(|c| c.instance_id == actor_id))
+            .map(|c| self.get_effective_ap_with_contact(attacker_pid, c, true))
+            .unwrap_or(0);
+        let actor_is_kyogoku = self.catalog.get(actor_def_id)
+            .map(|d| d.names.iter().any(|n| n == "京極真"))
+            .unwrap_or(false);
 
-        for clause in clauses {
-            let ctx = self.build_cond_info(attacker_pid, Some(actor_id), ori, None);
-            if check_clause_conditions(&clause, &ctx).is_err() {
+        let field_cards: Vec<(String, String, CardOrientation)> = self
+            .players
+            .get(attacker_pid)
+            .map(|ps| {
+                ps.field
+                    .iter()
+                    .map(|c| (c.instance_id.clone(), c.definition_id.clone(), c.orientation))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        for (watcher_id, wdef_id, ori) in field_cards {
+            let Some(def) = self.catalog.get(&wdef_id).cloned() else {
+                continue;
+            };
+            let clauses = extract_clauses(&def.description, TriggerKind::OnContactWin, def.card_type);
+            if clauses.is_empty() {
                 continue;
             }
-            let cost = parse_clause_cost(&clause);
-            if !self.pay_clause_cost(attacker_pid, actor_id, &cost) {
-                continue;
+            let card_name = self.card_name_by_def(&wdef_id);
+
+            for clause in clauses {
+                let is_self_only = clause.contains("このキャラとのコンタクト") || !clause.contains("自分の現場にいる");
+                if is_self_only && watcher_id != actor_id {
+                    continue;
+                }
+                if clause.contains("〚カード名［京極真］〛以外の") && actor_is_kyogoku {
+                    continue;
+                }
+                if let Some(min_ap) = crate::effects::extract_number_before(&clause, "AP", "以上のキャラとのコンタクト") {
+                    if actor_ap < min_ap {
+                        continue;
+                    }
+                }
+                let ctx = self.build_cond_info(attacker_pid, Some(&watcher_id), ori, None);
+                if check_clause_conditions(&clause, &ctx).is_err() {
+                    continue;
+                }
+                let cost = parse_clause_cost(&clause);
+                if !self.pay_clause_cost(attacker_pid, &watcher_id, &cost) {
+                    continue;
+                }
+                let plan = parse_effect_steps(&clause, None, def.card_type);
+                self.execute_or_enqueue_plan(
+                    attacker_pid,
+                    &watcher_id,
+                    &card_name,
+                    Some(def.level),
+                    def.card_type,
+                    plan,
+                );
             }
-            let plan = parse_effect_steps(&clause, None, def.card_type);
-            self.execute_or_enqueue_plan(
-                attacker_pid,
-                actor_id,
-                &card_name,
-                Some(def.level),
-                def.card_type,
-                plan,
-            );
         }
     }
 
