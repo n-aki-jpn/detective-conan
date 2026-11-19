@@ -4211,3 +4211,29 @@ fn test_b09011_declare_sets_base_lp_to_1_for_lv4_lp0_shounen_tanteidan() {
     assert_eq!(engine.get_effective_lp("p1", &p1.field[2]), 0, "Lv4以外は対象外でLP0のまま");
 }
 
+#[test]
+fn test_b10038_quoted_ability_not_mis_parsed_as_on_play_revive() {
+    let catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();
+    let mut engine = MatchEngine::new(catalog);
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn = 4;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    ps1.field.push(test_inst("c_b10038", "B10038", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+    ps1.remove.push(test_inst("c_lv3", "B01001", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE));
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+
+    let deployed = vec![("c_b10038".to_string(), "B10038".to_string(), models::CardOrientation::ACTIVE)];
+    engine.resolve_deployed_characters("p1", None, &deployed, "MAIN");
+
+    let obs = build_player_observation(&engine, "p1");
+    assert_ne!(
+        obs["pendingDecision"]["kind"].as_str(),
+        Some("targetSelect"),
+        "B10038登場時に「...」内の『レベル3以下のキャラを登場させる』が誤爆しないこと"
+    );
+}
+

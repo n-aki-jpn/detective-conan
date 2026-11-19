@@ -1256,6 +1256,8 @@ pub fn extract_deck_search_scope(effect_body: &str) -> &str {
 }
 
 pub fn is_target_selection_sentence(s: &str) -> bool {
+    let outer = crate::effects::text_utils::strip_quotes(s);
+    let s = outer.as_str();
     if s.contains("証拠を")
         && (s.contains("表向き") || s.contains("裏向き"))
         && !s.contains("リムーブ")

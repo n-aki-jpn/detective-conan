@@ -644,6 +644,8 @@ pub fn check_clause_conditions(clause: &str, ctx: &PlayerCondInfo) -> Result<(),
             Some(lv) if lv >= min_src_lv => {}
             _ => return Err("能力や効果によって登場していないため発動しません".to_string()),
         }
+    } else if clean.contains("自分のキャラの能力によって登場した場合") && ctx.played_by_effect_level.is_none() {
+        return Err("自分のキャラの能力によって登場していないため発動しません".to_string());
     } else if clean.contains("能力や効果によって登場した場合") && ctx.played_by_effect_level.is_none()
     {
         return Err("能力や効果によって登場していないため発動しません".to_string());
