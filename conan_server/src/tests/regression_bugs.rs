@@ -4470,3 +4470,36 @@ fn test_b10038_treated_as_kaito_kid_in_deck_and_remove_only() {
     );
 }
 
+#[test]
+fn test_b10098_declare_cost_sleeps_and_moves_self_to_partner_area() {
+    let catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();
+    let mut engine = MatchEngine::new(catalog);
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn = 4;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    let mut c_b10098 = test_inst("c_b10098", "B10098", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+    c_b10098.entered_turn = 0;
+    ps1.field.push(c_b10098);
+    // リムーブエリアに〚突撃〛を持つLv8以下の怪盗キッド/服部平次を用意（B10038はLv8なので対象外、B01001等は非対象。コスト確認用なので1枚なくても宣言自体は可能）
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+    engine.prompt_main_action("p1");
+
+    let obs = build_player_observation(&engine, "p1");
+    let dec_id = obs["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec_id,
+        "revision": engine.revision,
+        "value": { "type": "DECLARE", "actorId": "c_b10098" }
+    })).unwrap();
+
+    let p1 = &engine.players["p1"];
+    assert!(p1.field.is_empty(), "B10098はコストで場から移動すること");
+    assert_eq!(p1.extra_partners.len(), 1, "B10098はパートナーエリアに移ること");
+    assert_eq!(p1.extra_partners[0].instance_id, "c_b10098");
+    assert_eq!(p1.extra_partners[0].orientation, models::CardOrientation::SLEEP, "【スリープ】コストによりスリープ状態で移ること");
+}
+

@@ -139,6 +139,9 @@ pub fn parse_clause_cost(clause: &str) -> ClauseCost {
             || prefix.contains("〚デッキの下に移し")
             || prefix.contains("このキャラをデッキの下に移す")
             || prefix.contains("このキャラをデッキの下に移し");
+        cost.self_to_partner_area = prefix.contains("〚パートナーエリアに移す〛")
+            || prefix.contains("〚パートナーエリアに移し")
+            || prefix.contains("このキャラをパートナーエリアに移");
     } else if let Some(opt_idx) = clean.find("てもよい。そうした場合、") {
         let opt_prefix = &clean[..opt_idx];
         let seg = opt_prefix.rsplit('。').next().unwrap_or(opt_prefix);

@@ -349,6 +349,7 @@ pub struct ClauseCost {
     pub deck_mill: usize,
     pub sacrifice_self: bool,
     pub self_to_deck_bottom: bool,
+    pub self_to_partner_area: bool,
 }
 
 /// 即時処理オペレーション

@@ -273,6 +273,13 @@ impl MatchEngine {
                     ps.deck.insert(0, c);
                 }
             }
+            if cost.self_to_partner_area && !actor_id.is_empty() {
+                if let Some(idx) = ps.field.iter().position(|c| c.instance_id == actor_id) {
+                    let mut c = ps.field.remove(idx);
+                    c.zone = Zone::PARTNER;
+                    ps.extra_partners.push(c);
+                }
+            }
         }
 
         // コストで山札からリムーブして0枚になった瞬間に即座へリフレッシュ（docs/rules.md §リフレッシュ）
