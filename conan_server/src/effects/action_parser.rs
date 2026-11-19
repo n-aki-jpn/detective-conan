@@ -286,7 +286,7 @@ pub fn parse_target_action(text: &str) -> Option<TargetAction> {
     if text.contains("証拠として得る") && !text.contains("相手はそのカード") && !text.contains("持ち主はそのカード") {
         return Some(TargetAction::PlaceHandCardAsEvidenceFaceDown);
     }
-    if text.contains("このキャラとのコンタクトを発生させる") {
+    if text.contains("とのコンタクトを発生させる") {
         return Some(TargetAction::GrantContactForceAttack);
     }
     if text.contains("デッキの上か下に移す") {

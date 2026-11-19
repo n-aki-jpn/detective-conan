@@ -668,6 +668,7 @@ impl MatchEngine {
                             self.trigger_set_card_on_remove(&defender_pid, &sid, &sdid);
                         }
                         // コンタクト勝利時トリガーの解決
+                        self.contact_removed_actors_this_turn.insert(actor_id.clone());
                         self.trigger_on_contact_win(&attacker_pid, &actor_id, &a_def_id);
                     } else {
                         self.log(format!("🛡️ [{}] は身代わり/効果によりコンタクトでのリムーブを免れました！", def_name));

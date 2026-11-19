@@ -509,6 +509,8 @@ pub struct PlayerCondInfo<'a> {
     pub case_def: Option<&'a CardDefinition>,
     pub field_cards: Vec<(&'a CardInstance, &'a CardDefinition)>,
     pub played_by_effect_level: Option<i32>,
+    pub self_ap: i32,
+    pub self_contact_removed_opp_this_turn: bool,
     pub self_remove_cards: Vec<(&'a CardInstance, &'a CardDefinition)>,
     pub self_partner_cards: Vec<(&'a CardInstance, &'a CardDefinition)>,
     pub self_entered_field_this_turn: bool,

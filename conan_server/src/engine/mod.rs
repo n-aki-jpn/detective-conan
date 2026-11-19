@@ -114,6 +114,7 @@ pub struct MatchEngine {
     pub action_context: Option<Value>,
     /// コンタクト中のみ有効なAPバフ（カットイン等）。コンタクト終了時にクリアされる
     pub contact_ap_buffs: HashMap<String, i32>,
+    pub contact_removed_actors_this_turn: HashSet<String>,
     pub turn_clause_usage: HashMap<String, usize>,
     pub turn_field_plays_by_player: HashMap<String, usize>,
     pub turn_disguise_blocked_players: HashSet<String>,
@@ -191,6 +192,7 @@ impl MatchEngine {
             finish_reason: None,
             action_context: None,
             contact_ap_buffs: HashMap::new(),
+            contact_removed_actors_this_turn: HashSet::new(),
             turn_clause_usage: HashMap::new(),
             turn_field_plays_by_player: HashMap::new(),
             turn_disguise_blocked_players: HashSet::new(),

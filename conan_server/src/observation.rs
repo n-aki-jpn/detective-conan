@@ -47,7 +47,7 @@ pub fn build_player_observation(engine: &MatchEngine, viewing_player_id: &str) -
             0
         };
         let set_cards_json: Vec<Value> = c.set_cards.iter().map(|sc| {
-            if !sc.face_up && c.owner_id != viewing_player_id {
+            if !sc.face_up {
                 return json!({
                     "instanceId": sc.instance_id,
                     "faceUp": false

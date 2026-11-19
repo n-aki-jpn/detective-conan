@@ -651,6 +651,15 @@ pub fn check_clause_conditions(clause: &str, ctx: &PlayerCondInfo) -> Result<(),
         return Err("能力や効果によって登場していないため発動しません".to_string());
     }
 
+    if clean.contains("このキャラがAP10000以上で") && ctx.self_ap < 10000 {
+        return Err("このキャラのAPが10000未満のため宣言できません".to_string());
+    }
+    if clean.contains("このターン中に相手の現場にいるキャラがこのキャラとのコンタクトによってリムーブされていた場合")
+        && !ctx.self_contact_removed_opp_this_turn
+    {
+        return Err("このターン中にこのキャラとのコンタクトで相手キャラをリムーブしていないため宣言できません".to_string());
+    }
+
     Ok(())
 }
 

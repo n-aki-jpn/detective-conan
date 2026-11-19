@@ -315,6 +315,18 @@ impl MatchEngine {
             case_def,
             field_cards,
             played_by_effect_level,
+            self_ap: actor_id
+                .and_then(|aid| ps.and_then(|p| p.field.iter().find(|c| c.instance_id == aid)))
+                .map(|c| {
+                    let base = c.base_ap_override.unwrap_or_else(|| {
+                        self.catalog.get(&c.definition_id).map(|d| d.ap).unwrap_or(0)
+                    });
+                    base + c.temp_ap_bonus + self.contact_ap_buffs.get(&c.instance_id).copied().unwrap_or(0)
+                })
+                .unwrap_or(0),
+            self_contact_removed_opp_this_turn: actor_id
+                .map(|aid| self.contact_removed_actors_this_turn.contains(aid))
+                .unwrap_or(false),
             self_remove_cards,
             self_partner_cards,
             self_entered_field_this_turn: self.self_entered_field_players_this_turn.contains(player_id),
