@@ -1009,16 +1009,28 @@ impl MatchEngine {
                     let level = def_opt.map(|d| d.level + c.temp_level_delta).unwrap_or(0);
                     let traits = def_opt.map(|d| d.traits.clone()).unwrap_or_default();
                     let colors = def_opt.map(|d| d.colors.clone()).unwrap_or_default();
+                    let raw_title = c.temp_name_override.clone().unwrap_or_else(|| {
+                        def_opt
+                            .and_then(|d| d.names.first().cloned())
+                            .unwrap_or_else(|| c.definition_id.clone())
+                    });
                     let cname = c
                         .temp_name_override
                         .clone()
                         .unwrap_or_else(|| self.card_name_by_def(&c.definition_id));
                     // 裏向きの証拠は中身（名前・ステータス・定義ID）を秘匿する（observation との整合）
                     let mask_evidence = filter.zone == TargetZone::Evidence && !c.face_up;
+                    let card_names = if mask_evidence {
+                        Vec::new()
+                    } else {
+                        extract_distinct_card_names(&raw_title)
+                    };
                     candidates.push(json!({
                         "instanceId": c.instance_id,
                         "definitionId": if mask_evidence { String::new() } else { c.definition_id.clone() },
                         "name": if mask_evidence { "裏向きの証拠".to_string() } else { cname },
+                        "baseName": if mask_evidence { "裏向きの証拠".to_string() } else { raw_title },
+                        "cardNames": card_names,
                         "level": if mask_evidence { 0 } else { level },
                         "ap": if mask_evidence { 0 } else { eff_ap },
                         "colors": if mask_evidence { Vec::<String>::new() } else { colors },

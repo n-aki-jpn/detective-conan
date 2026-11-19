@@ -133,6 +133,17 @@ impl RandomAgent {
         }
     }
 
+    fn candidate_distinct_names(cand: &Value) -> Vec<String> {
+        if let Some(arr) = cand.get("cardNames").and_then(|v| v.as_array()) {
+            return arr
+                .iter()
+                .filter_map(|x| x.as_str().map(|s| s.to_string()))
+                .collect();
+        }
+        let cname = cand.get("name").and_then(|v| v.as_str()).unwrap_or("");
+        crate::effects::extract_distinct_card_names(cname)
+    }
+
     fn reset_turn_state_if_needed(&self, turn_number: i32) {
         let prev = self.last_turn.load(Ordering::Relaxed);
         if prev != turn_number {
@@ -1048,7 +1059,6 @@ impl RandomAgent {
                         if chosen_ids.len() >= max_select {
                             break;
                         }
-                        let cname = c.get("name").and_then(|v| v.as_str()).unwrap_or("");
                         let clv = c.get("level").and_then(|v| v.as_i64()).unwrap_or(0);
                         let ccols: Vec<&str> = c
                             .get("colors")
@@ -1056,12 +1066,8 @@ impl RandomAgent {
                             .map(|arr| arr.iter().filter_map(|x| x.as_str()).collect())
                             .unwrap_or_default();
 
-                        let cnames: Vec<&str> = cname
-                            .split(&['&', '＆'][..])
-                            .map(str::trim)
-                            .filter(|s| !s.is_empty())
-                            .collect();
-                        if distinct_names && cnames.iter().any(|n| used_names.contains(*n)) {
+                        let cnames = Self::candidate_distinct_names(c);
+                        if distinct_names && !cnames.is_empty() && cnames.iter().any(|n| used_names.contains(n)) {
                             continue;
                         }
                         if distinct_levels && used_levels.contains(&clv) {
@@ -1078,7 +1084,7 @@ impl RandomAgent {
 
                         if distinct_names {
                             for n in cnames {
-                                used_names.insert(n.to_string());
+                                used_names.insert(n);
                             }
                         }
                         if distinct_levels {
@@ -1323,7 +1329,6 @@ impl RandomAgent {
                         let Some(iid) = c.get("instanceId").and_then(|v| v.as_str()) else {
                             continue;
                         };
-                        let cname = c.get("name").and_then(|v| v.as_str()).unwrap_or("");
                         let clv = c.get("level").and_then(|v| v.as_i64()).unwrap_or(0);
                         let ccols: Vec<&str> = c
                             .get("colors")
@@ -1331,12 +1336,8 @@ impl RandomAgent {
                             .map(|arr| arr.iter().filter_map(|x| x.as_str()).collect())
                             .unwrap_or_default();
 
-                        let cnames: Vec<&str> = cname
-                            .split(&['&', '＆'][..])
-                            .map(str::trim)
-                            .filter(|s| !s.is_empty())
-                            .collect();
-                        if distinct_names && cnames.iter().any(|n| used_names.contains(*n)) {
+                        let cnames = Self::candidate_distinct_names(c);
+                        if distinct_names && !cnames.is_empty() && cnames.iter().any(|n| used_names.contains(n)) {
                             continue;
                         }
                         if distinct_levels && used_levels.contains(&clv) {
@@ -1353,7 +1354,7 @@ impl RandomAgent {
 
                         if distinct_names {
                             for n in cnames {
-                                used_names.insert(n.to_string());
+                                used_names.insert(n);
                             }
                         }
                         if distinct_levels {

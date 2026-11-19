@@ -478,16 +478,21 @@ pub fn eval_cond_phrase(cond: &str, ctx: &PlayerCondInfo) -> bool {
                 }
                 if matches_field_branches(inst, def, &branches) {
                     if distinct_names {
-                        let cname = inst
+                        let raw_name = inst
                             .temp_name_override
                             .as_deref()
                             .or_else(|| def.names.first().map(|s| s.as_str()))
-                            .unwrap_or(&def.definition_id)
-                            .to_string();
-                        if seen_names.iter().any(|s| s == &cname) {
+                            .unwrap_or(&def.definition_id);
+                        let tokens = extract_distinct_card_names(raw_name);
+                        let name_list: Vec<String> = if tokens.is_empty() {
+                            vec![raw_name.to_string()]
+                        } else {
+                            tokens
+                        };
+                        if name_list.iter().any(|nm| seen_names.iter().any(|s| s == nm)) {
                             continue;
                         }
-                        seen_names.push(cname);
+                        seen_names.extend(name_list);
                     }
                     cnt += 1;
                 }

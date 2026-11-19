@@ -1985,6 +1985,53 @@ render({{
 assert.equal(getEl('dock-command-bar').classList.contains('is-prompt-active'), false);
 assert.equal(bottomDockEl.classList.contains('is-prompt-active'), false);
 assert.equal(getEl('dock-effect-toggle').style.display, 'none');
+
+// distinctNames: true 時に「江戸川コナン(B04005)」選択後は「江戸川コナン(B05010)」が重複選択不可かつ半透明になること
+getEl('decision-actions').children = [];
+render({{
+  revision: 14,
+  turn: 8,
+  turnPlayerId: 'player1',
+  decisionPlayerId: 'player1',
+  viewingPlayerId: 'player1',
+  logs: ['テスト開始'],
+  ...samplePlayers(),
+  pendingDecision: {{
+    decisionId: 'dec_b03006_distinct',
+    revision: 14,
+    playerId: 'player1',
+    kind: 'targetSelect',
+    options: {{
+      actorId: 'inst_ayumi',
+      actorName: '結成 少年探偵団(B03006)',
+      effectType: 'STACK_UNDER_SELF',
+      targetZone: 'REMOVE',
+      maxSelect: 5,
+      distinctNames: true,
+      optional: true,
+      title: '下に重ねるカードをリムーブエリアから選択してください（同名不可）',
+      candidates: [
+        {{ instanceId: 'c_conan_1', definitionId: 'B04005', name: '江戸川コナン(B04005)', baseName: '江戸川コナン', cardNames: ['江戸川コナン'], level: 4, ap: 3000, zoneLabel: 'リムーブ', zone: 'REMOVE', isOpponent: false }},
+        {{ instanceId: 'c_conan_2', definitionId: 'B05010', name: '江戸川コナン(B05010)', level: 2, ap: 2000, zoneLabel: 'リムーブ', zone: 'REMOVE', isOpponent: false }},
+        {{ instanceId: 'c_haibara', definitionId: 'B09011', name: '灰原哀(B09011)', level: 4, ap: 4000, zoneLabel: 'リムーブ', zone: 'REMOVE', isOpponent: false }}
+      ]
+    }}
+  }}
+}});
+const decChildren = getEl('decision-actions').children;
+const btnConfirmB3006 = decChildren[1];
+const candWrapB3006 = decChildren[2];
+assert.equal(candWrapB3006.children.length, 3);
+candWrapB3006.children[0].onclick();
+assert.equal(btnConfirmB3006.innerText, '決定（1/5枚）');
+assert.ok(candWrapB3006.children[1].style.cssText.includes('opacity:0.42'));
+assert.ok(!candWrapB3006.children[2].style.cssText.includes('opacity:0.42'));
+// 2枚目の江戸川コナン(B05010)をクリックしても追加されないこと
+candWrapB3006.children[1].onclick();
+assert.equal(btnConfirmB3006.innerText, '決定（1/5枚）');
+// 灰原哀は追加できること
+candWrapB3006.children[2].onclick();
+assert.equal(btnConfirmB3006.innerText, '決定（2/5枚）');
 "#,
             js = js_code
         );
@@ -3915,6 +3962,103 @@ fn test_cpu_does_not_waste_assist_when_unnecessary() {
         let ans2 = cpu.choose_action_with_engine(&engine, &dec2);
         assert_eq!(ans2["value"]["type"].as_str(), Some("HAND_PLAY"));
         assert_eq!(ans2["value"]["cardId"].as_str(), Some("h_genta"));
+    }
+}
+
+#[test]
+fn test_b03006_and_distinct_names_reject_same_character_different_card_ids() {
+    let catalog = load_test_catalog();
+
+    // extract_distinct_card_names / has_name_match の単体検証（デュオ・別名・ID括弧除去）
+    assert_eq!(
+        effects::extract_distinct_card_names("江戸川コナン(B04005)"),
+        vec!["江戸川コナン".to_string()]
+    );
+    assert_eq!(
+        effects::extract_distinct_card_names("江戸川コナン＆工藤新一(B05005)"),
+        vec!["江戸川コナン".to_string(), "工藤新一".to_string()]
+    );
+    assert_eq!(
+        effects::extract_distinct_card_names("黒衣の騎士・スペイド（工藤新一）(B07001)"),
+        vec!["黒衣の騎士・スペイド".to_string(), "工藤新一".to_string()]
+    );
+
+    // 1) リムーブエリアに異なるカードIDの同名カード（B04005 / B05010 江戸川コナン）+ 灰原哀 + 吉田歩美がある状態で B03006 を登場させ、
+    //    クライアントが4枚すべてを送信してもサーバー側バリデーションで2枚目のコナンが弾かれて3枚のみ重なること
+    {
+        let mut engine = MatchEngine::new(catalog.clone());
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn = 8;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.field.push(test_inst("c_kessei", "B03006", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        ps1.remove.push(test_inst("conan_04005", "B04005", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE));
+        ps1.remove.push(test_inst("haibara", "B09011", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE));
+        ps1.remove.push(test_inst("ayumi", "B11007", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE));
+        ps1.remove.push(test_inst("conan_05010", "B05010", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE));
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+
+        let deployed = vec![("c_kessei".to_string(), "B03006".to_string(), models::CardOrientation::ACTIVE)];
+        engine.resolve_deployed_characters("p1", None, &deployed, "MAIN");
+
+        let obs = build_player_observation(&engine, "p1");
+        assert_eq!(obs["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+        assert_eq!(obs["pendingDecision"]["options"]["distinctNames"].as_bool(), Some(true));
+
+        let candidates = obs["pendingDecision"]["options"]["candidates"].as_array().unwrap();
+        for cid in ["conan_04005", "conan_05010"] {
+            let cand = candidates
+                .iter()
+                .find(|c| c["instanceId"].as_str() == Some(cid))
+                .expect("candidate must exist");
+            let cnames: Vec<&str> = cand["cardNames"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|v| v.as_str())
+                .collect();
+            assert_eq!(cnames, vec!["江戸川コナン"]);
+        }
+
+        // 2) CPU (RandomAgent) に選ばせてもコナン2枚を同時選択せず、3枚のみ選ぶこと
+        let cpu = agent::RandomAgent::new("p1");
+        let cpu_ans = cpu.choose_action_with_engine(&engine, &obs["pendingDecision"]);
+        let cpu_ids: Vec<&str> = cpu_ans["value"]["targetIds"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|v| v.as_str())
+            .collect();
+        assert_eq!(cpu_ids.len(), 3, "CPUもコナン重複を除いた3枚のみ選択すること: {:?}", cpu_ids);
+        assert!(
+            !(cpu_ids.contains(&"conan_04005") && cpu_ids.contains(&"conan_05010")),
+            "CPUが同名異IDのコナンを両方選んではならない: {:?}",
+            cpu_ids
+        );
+
+        // 3) 4枚（コナン2種含む）を無理やり送信しても、サーバー側で2枚目の conan_05010 が除外され3枚のみ下に重なること
+        let dec_id = obs["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": dec_id,
+            "revision": engine.revision,
+            "value": {
+                "targetIds": ["conan_04005", "haibara", "ayumi", "conan_05010"],
+                "actorId": "c_kessei",
+                "effectType": "STACK_UNDER_SELF"
+            }
+        })).unwrap();
+
+        let p1 = &engine.players["p1"];
+        let kessei = p1.field.iter().find(|c| c.instance_id == "c_kessei").unwrap();
+        let stacked_ids: Vec<&str> = kessei.set_cards.iter().map(|s| s.instance_id.as_str()).collect();
+        assert_eq!(stacked_ids, vec!["conan_04005", "haibara", "ayumi"]);
+        assert!(
+            p1.remove.iter().any(|c| c.instance_id == "conan_05010"),
+            "2枚目の江戸川コナン(B05010)はリムーブエリアに残ること"
+        );
     }
 }
 

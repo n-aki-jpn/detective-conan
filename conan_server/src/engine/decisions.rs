@@ -670,15 +670,19 @@ impl MatchEngine {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
             .unwrap_or_else(|| self.card_name_by_inst(&actor_id));
-        let valid_candidate_ids: HashSet<String> = opts
+        let cand_map: HashMap<&str, &Value> = opts
             .get("candidates")
             .and_then(|v| v.as_array())
             .map(|arr| {
                 arr.iter()
-                    .filter_map(|c| c.get("instanceId").and_then(|s| s.as_str()).map(|s| s.to_string()))
+                    .filter_map(|c| c.get("instanceId").and_then(|s| s.as_str()).map(|id| (id, c)))
                     .collect()
             })
             .unwrap_or_default();
+        let distinct_names = opts.get("distinctNames").and_then(|v| v.as_bool()).unwrap_or(false);
+        let distinct_levels = opts.get("distinctLevels").and_then(|v| v.as_bool()).unwrap_or(false);
+        let distinct_colors = opts.get("distinctColors").and_then(|v| v.as_bool()).unwrap_or(false);
+        let max_total_level = opts.get("maxTotalLevel").and_then(|v| v.as_i64());
 
         let max_select = opts.get("maxSelect").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
         let abort_on_skip = opts.get("abortOnSkip").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -696,10 +700,70 @@ impl MatchEngine {
         }
         selected_ids.truncate(max_select.max(1));
 
-        let valid_chosen: Vec<String> = selected_ids
-            .into_iter()
-            .filter(|id| valid_candidate_ids.is_empty() || valid_candidate_ids.contains(id))
-            .collect();
+        let mut used_names: HashSet<String> = HashSet::new();
+        let mut used_levels: HashSet<i64> = HashSet::new();
+        let mut used_colors: HashSet<String> = HashSet::new();
+        let mut sum_level: i64 = 0;
+
+        let mut valid_chosen: Vec<String> = Vec::new();
+        for id in selected_ids {
+            if !cand_map.is_empty() && !cand_map.contains_key(id.as_str()) {
+                continue;
+            }
+            if let Some(&cand) = cand_map.get(id.as_str()) {
+                let cnames: Vec<String> = match cand.get("cardNames").and_then(|v| v.as_array()) {
+                    Some(arr) => arr
+                        .iter()
+                        .filter_map(|x| x.as_str().map(|s| s.to_string()))
+                        .collect(),
+                    None => {
+                        let raw = cand.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                        extract_distinct_card_names(raw)
+                    }
+                };
+                let clv = cand.get("level").and_then(|v| v.as_i64()).unwrap_or(0);
+                let ccols: Vec<String> = cand
+                    .get("colors")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|x| x.as_str().map(|s| s.to_string()))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
+                if distinct_names && !cnames.is_empty() && cnames.iter().any(|n| used_names.contains(n)) {
+                    continue;
+                }
+                if distinct_levels && used_levels.contains(&clv) {
+                    continue;
+                }
+                if distinct_colors && ccols.iter().any(|col| used_colors.contains(col)) {
+                    continue;
+                }
+                if let Some(cap) = max_total_level {
+                    if sum_level + clv > cap {
+                        continue;
+                    }
+                }
+
+                if distinct_names {
+                    for n in cnames {
+                        used_names.insert(n);
+                    }
+                }
+                if distinct_levels {
+                    used_levels.insert(clv);
+                }
+                if distinct_colors {
+                    for col in ccols {
+                        used_colors.insert(col);
+                    }
+                }
+                sum_level += clv;
+            }
+            valid_chosen.push(id);
+        }
 
         let mut deployed_list: Vec<(String, String, CardOrientation)> = Vec::new();
         let mut chosen_def_for_cond: Option<String> = None;
@@ -1340,24 +1404,45 @@ impl MatchEngine {
         }
         chosen_ids.truncate(max_select.max(1));
 
+        let distinct_colors = opts.get("distinctColors").and_then(|v| v.as_bool()).unwrap_or(false);
         let mut revealed_instances = vec![];
-        let mut selectable_ids = HashSet::new();
+        let mut selectable_map: HashMap<String, Vec<String>> = HashMap::new();
         if let Some(cards) = opts.get("revealedCards").and_then(|v| v.as_array()) {
             for c in cards {
                 if let Some(iid) = c.get("instanceId").and_then(|v| v.as_str()) {
                     revealed_instances.push(iid.to_string());
                     if c.get("selectable").and_then(|v| v.as_bool()).unwrap_or(true) {
-                        selectable_ids.insert(iid.to_string());
+                        let cols = c
+                            .get("colors")
+                            .and_then(|v| v.as_array())
+                            .map(|arr| {
+                                arr.iter()
+                                    .filter_map(|x| x.as_str().map(|s| s.to_string()))
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        selectable_map.insert(iid.to_string(), cols);
                     }
                 }
             }
         }
 
-        // 条件外カードを選択した場合は無視
-        let chosen_set: HashSet<String> = chosen_ids
-            .into_iter()
-            .filter(|id| selectable_ids.contains(id))
-            .collect();
+        // 条件外カード・同色重複カードを選択した場合は無視
+        let mut used_colors: HashSet<String> = HashSet::new();
+        let mut chosen_set: HashSet<String> = HashSet::new();
+        for id in chosen_ids {
+            if let Some(cols) = selectable_map.get(&id) {
+                if distinct_colors && cols.iter().any(|col| used_colors.contains(col)) {
+                    continue;
+                }
+                if distinct_colors {
+                    for col in cols {
+                        used_colors.insert(col.clone());
+                    }
+                }
+                chosen_set.insert(id);
+            }
+        }
 
         // B09033 繰り返しターンは FILE を上から1枚支払う
         if b09033_rem_repeats > 0 && opts.get("b09033RequireFileCost").and_then(|v| v.as_bool()).unwrap_or(false) && !chosen_set.is_empty() {

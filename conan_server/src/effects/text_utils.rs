@@ -262,15 +262,75 @@ pub fn normalize_card_name(s: &str) -> String {
     strip_parens(s).replace('&', "＆")
 }
 
-pub fn has_name_match(def: &CardDefinition, query: &str) -> bool {
+/// カード表示名（`江戸川コナン(B04005)` やデュオ名 `江戸川コナン＆工藤新一(B05005)`、
+/// 別名付き `黒衣の騎士・スペイド（工藤新一）` 等）から比較用の個別カード名トークン一覧を抽出する
+pub fn extract_distinct_card_names(raw: &str) -> Vec<String> {
+    let mut no_ascii_parens = String::with_capacity(raw.len());
+    let mut depth = 0usize;
+    for ch in raw.chars() {
+        if ch == '(' {
+            depth += 1;
+        } else if ch == ')' {
+            depth = depth.saturating_sub(1);
+        } else if depth == 0 {
+            no_ascii_parens.push(ch);
+        }
+    }
+
+    let mut out: Vec<String> = Vec::new();
+    let mut push_unique = |s: &str| {
+        let trimmed = s.trim();
+        if !trimmed.is_empty() && !out.iter().any(|x| x == trimmed) {
+            out.push(trimmed.to_string());
+        }
+    };
+
+    for part in no_ascii_parens.split(&['&', '＆'][..]) {
+        let p = part.trim();
+        if p.is_empty() {
+            continue;
+        }
+        if let (Some(open_idx), Some(close_idx)) = (p.find('（'), p.rfind('）')) {
+            if open_idx < close_idx {
+                let base = p[..open_idx].trim();
+                let alias = p[open_idx + '（'.len_utf8()..close_idx].trim();
+                let after = p[close_idx + '）'.len_utf8()..].trim();
+                if !base.is_empty() && after.is_empty() && !alias.is_empty() && alias != "笑" {
+                    push_unique(base);
+                    push_unique(alias);
+                    continue;
+                }
+            }
+        }
+        push_unique(p);
+    }
+    out
+}
+
+fn raw_name_matches_query(candidate_name: &str, query: &str, query_tokens: &[String]) -> bool {
     let q = normalize_card_name(query);
     let q_amp = query.replace('&', "＆");
-    def.names.iter().any(|n| {
-        let n_amp = n.replace('&', "＆");
-        n_amp == q_amp
-            || normalize_card_name(n) == q
-            || n_amp.contains(&format!("（{}）", q_amp))
-    })
+    let n_amp = candidate_name.replace('&', "＆");
+    if n_amp == q_amp
+        || normalize_card_name(candidate_name) == q
+        || n_amp.contains(&format!("（{}）", q_amp))
+    {
+        return true;
+    }
+    if query_tokens.is_empty() {
+        return false;
+    }
+    let name_tokens = extract_distinct_card_names(candidate_name);
+    query_tokens
+        .iter()
+        .all(|qt| name_tokens.iter().any(|t| t == qt))
+}
+
+pub fn has_name_match(def: &CardDefinition, query: &str) -> bool {
+    let query_tokens = extract_distinct_card_names(query);
+    def.names
+        .iter()
+        .any(|n| raw_name_matches_query(n, query, &query_tokens))
 }
 
 pub fn has_trait_match(def: &CardDefinition, query: &str) -> bool {
@@ -280,10 +340,8 @@ pub fn has_trait_match(def: &CardDefinition, query: &str) -> bool {
 /// インスタンス（一時的なカード名書き換えを含む）のカード名一致判定
 pub fn has_instance_name_match(inst: &CardInstance, def: &CardDefinition, query: &str) -> bool {
     if let Some(ref ov) = inst.temp_name_override {
-        let q = normalize_card_name(query);
-        let q_amp = query.replace('&', "＆");
-        let ov_amp = ov.replace('&', "＆");
-        return ov_amp == q_amp || normalize_card_name(ov) == q;
+        let query_tokens = extract_distinct_card_names(query);
+        return raw_name_matches_query(ov, query, &query_tokens);
     }
     has_name_match(def, query)
 }
