@@ -966,6 +966,49 @@ impl MatchEngine {
                 }
             }
         }
+
+        // 味方の現場・パートナーエリアからの「自分の現場にいるレベルN以上のキャラがコンタクトしたとき、そのコンタクト中、そのキャラをAP＋Xする」
+        for (owner_pid, contact_cid) in [(attacker_pid, actor_id), (defender_pid, def_cid)] {
+            let contact_lv = self.players.get(owner_pid)
+                .and_then(|p| p.field.iter().find(|c| c.instance_id == contact_cid))
+                .map(|c| self.catalog.get(&c.definition_id).map(|d| d.level).unwrap_or(0) + c.temp_level_delta)
+                .unwrap_or(0);
+            let watchers: Vec<(String, String, CardOrientation, bool)> = self.players.get(owner_pid).map(|ps| {
+                let mut v: Vec<_> = ps.field.iter().map(|c| (c.instance_id.clone(), c.definition_id.clone(), c.orientation, false)).collect();
+                for ep in &ps.extra_partners {
+                    v.push((ep.instance_id.clone(), ep.definition_id.clone(), ep.orientation, true));
+                }
+                v
+            }).unwrap_or_default();
+
+            for (wid, wdef_id, ori, in_partner) in watchers {
+                let Some(wdef) = self.catalog.get(&wdef_id).cloned() else {
+                    continue;
+                };
+                let wname = self.card_name_by_def(&wdef_id);
+                for clause in extract_clauses(&wdef.description, TriggerKind::OnContact, wdef.card_type) {
+                    if in_partner && !allows_partner_area(&clause) {
+                        continue;
+                    }
+                    if !clause.contains("自分の現場にいる") || !clause.contains("コンタクトしたとき") {
+                        continue;
+                    }
+                    if let Some(min_lv) = crate::effects::extract_number_before(&clause, "レベル", "以上のキャラがコンタクトしたとき") {
+                        if contact_lv < min_lv {
+                            continue;
+                        }
+                    }
+                    let ctx = self.build_cond_info(owner_pid, Some(&wid), ori, None);
+                    if check_clause_conditions(&clause, &ctx).is_err() {
+                        continue;
+                    }
+                    if let Some(ap_buff) = crate::effects::parse_signed_ap(&clause, true) {
+                        *self.contact_ap_buffs.entry(contact_cid.to_string()).or_insert(0) += ap_buff;
+                        self.log(format!("✨ [{}] の効果（コンタクト時）でコンタクト中のキャラをAP＋{}！", wname, ap_buff));
+                    }
+                }
+            }
+        }
     }
 
     /// コンタクトによる相手キャラリムーブ時のトリガーを解決する

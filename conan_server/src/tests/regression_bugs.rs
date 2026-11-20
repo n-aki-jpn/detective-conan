@@ -4543,3 +4543,41 @@ fn test_b10098_revived_char_can_attack_active() {
     assert!(revived.can_attack_active, "B10098で登場させたキャラはアクティブ状態のキャラへアクションできること");
 }
 
+#[test]
+fn test_b10098_partner_area_grants_contact_ap2000_on_both_turns() {
+    let catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();
+    let mut engine = MatchEngine::new(catalog);
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn = 4;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    ps1.extra_partners.push(test_inst("c_b10098", "B10098", "p1", models::Zone::PARTNER, models::CardOrientation::SLEEP));
+    ps1.field.push(test_inst("c_lv8", "B10038", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+
+    let mut ps2 = engine::PlayerState::new("p2".to_string());
+    ps2.field.push(test_inst("p2_c1", "B01001", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP));
+
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), ps2);
+
+    // 1) 自分ターン（攻撃側）でコンタクトしたとき +2000 されること
+    engine.trigger_on_contact("p1", "c_lv8", "p2", "p2_c1");
+    assert_eq!(
+        engine.contact_ap_buffs.get("c_lv8").copied().unwrap_or(0),
+        2000,
+        "自分ターン中にパートナーエリアのB10098がLv8以上のキャラにAP+2000すること"
+    );
+
+    // 2) 相手ターン（防御側）でコンタクトされたときも +2000 されること
+    engine.contact_ap_buffs.clear();
+    engine.turn_player_id = "p2".to_string();
+    engine.trigger_on_contact("p2", "p2_c1", "p1", "c_lv8");
+    assert_eq!(
+        engine.contact_ap_buffs.get("c_lv8").copied().unwrap_or(0),
+        2000,
+        "相手ターン中にパートナーエリアのB10098がLv8以上のキャラにAP+2000すること"
+    );
+}
+
