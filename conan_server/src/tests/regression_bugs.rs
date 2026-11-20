@@ -1228,7 +1228,15 @@ use super::*;
         })).unwrap();
 
         let obs2 = build_player_observation(&engine, "p1");
-        assert_eq!(obs2["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+        let b10036_line2 = engine.catalog.get("B10036").unwrap().description.lines().nth(1).unwrap().to_string();
+    let b10036_plan = effects::parse_effect_steps(&b10036_line2, None, models::CardType::CHARACTER);
+    assert_eq!(
+        obs2["pendingDecision"]["kind"].as_str(),
+        Some("targetSelect"),
+        "logs: {:?}, plan: {:?}",
+        engine.logs,
+        b10036_plan.target_step
+    );
         let ts_id = obs2["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
         engine.submit_decision("p1", &serde_json::json!({
             "decisionId": ts_id,
@@ -1326,7 +1334,15 @@ use super::*;
         })).unwrap();
 
         let obs2 = build_player_observation(&engine, "p1");
-        assert_eq!(obs2["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+        let b10036_line2 = engine.catalog.get("B10036").unwrap().description.lines().nth(1).unwrap().to_string();
+    let b10036_plan = effects::parse_effect_steps(&b10036_line2, None, models::CardType::CHARACTER);
+    assert_eq!(
+        obs2["pendingDecision"]["kind"].as_str(),
+        Some("targetSelect"),
+        "logs: {:?}, plan: {:?}",
+        engine.logs,
+        b10036_plan.target_step
+    );
         let ts_id = obs2["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
         engine.submit_decision("p1", &serde_json::json!({
             "decisionId": ts_id,
@@ -2438,7 +2454,15 @@ assert.ok(Boolean(fieldCmds[0].subLabel) && Boolean(fieldCmds[1].subLabel));
             })).unwrap();
 
             let obs2 = build_player_observation(&engine, "p1");
-            assert_eq!(obs2["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+            let b10036_line2 = engine.catalog.get("B10036").unwrap().description.lines().nth(1).unwrap().to_string();
+    let b10036_plan = effects::parse_effect_steps(&b10036_line2, None, models::CardType::CHARACTER);
+    assert_eq!(
+        obs2["pendingDecision"]["kind"].as_str(),
+        Some("targetSelect"),
+        "logs: {:?}, plan: {:?}",
+        engine.logs,
+        b10036_plan.target_step
+    );
             engine.submit_decision("p1", &serde_json::json!({
                 "decisionId": obs2["pendingDecision"]["decisionId"],
                 "revision": engine.revision,
@@ -2761,7 +2785,15 @@ fn test_b06104_ka_mass_remove_with_b03116_vodka_revive_and_draw() {
 
     // 2) カッの「手札からレベル7以下の【黒】のキャラを1枚まで登場させる」選択で f_vodka7 (B05107) を選択
     let obs2 = build_player_observation(&engine, "p1");
-    assert_eq!(obs2["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+    let b10036_line2 = engine.catalog.get("B10036").unwrap().description.lines().nth(1).unwrap().to_string();
+    let b10036_plan = effects::parse_effect_steps(&b10036_line2, None, models::CardType::CHARACTER);
+    assert_eq!(
+        obs2["pendingDecision"]["kind"].as_str(),
+        Some("targetSelect"),
+        "logs: {:?}, plan: {:?}",
+        engine.logs,
+        b10036_plan.target_step
+    );
     let dec2 = obs2["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
     engine.submit_decision("p1", &serde_json::json!({
         "decisionId": dec2,
@@ -3078,7 +3110,15 @@ fn test_b11056_actor_ap_or_less_remove_targets_opponent_not_self() {
     })).unwrap();
 
     let obs2 = build_player_observation(&engine, "p1");
-    assert_eq!(obs2["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+    let b10036_line2 = engine.catalog.get("B10036").unwrap().description.lines().nth(1).unwrap().to_string();
+    let b10036_plan = effects::parse_effect_steps(&b10036_line2, None, models::CardType::CHARACTER);
+    assert_eq!(
+        obs2["pendingDecision"]["kind"].as_str(),
+        Some("targetSelect"),
+        "logs: {:?}, plan: {:?}",
+        engine.logs,
+        b10036_plan.target_step
+    );
     let cands: Vec<&str> = obs2["pendingDecision"]["options"]["candidates"]
         .as_array()
         .unwrap()
@@ -3356,7 +3396,15 @@ fn test_b09058_declare_requires_sleeping_other_akai_family_char() {
         })).unwrap();
 
         let obs2 = build_player_observation(&engine, "p1");
-        assert_eq!(obs2["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+        let b10036_line2 = engine.catalog.get("B10036").unwrap().description.lines().nth(1).unwrap().to_string();
+    let b10036_plan = effects::parse_effect_steps(&b10036_line2, None, models::CardType::CHARACTER);
+    assert_eq!(
+        obs2["pendingDecision"]["kind"].as_str(),
+        Some("targetSelect"),
+        "logs: {:?}, plan: {:?}",
+        engine.logs,
+        b10036_plan.target_step
+    );
         assert_eq!(obs2["pendingDecision"]["options"]["effectType"].as_str(), Some("SLEEP"));
         let cands: Vec<&str> = obs2["pendingDecision"]["options"]["candidates"]
             .as_array()
@@ -3453,7 +3501,15 @@ fn test_b11022_kazuha_action_trigger_fires_after_b11096_action_trigger() {
 
     // 2) 先に B11096 のアクション時誘発（手札を1枚リムーブしてもよい）が開く
     let obs2 = build_player_observation(&engine, "p1");
-    assert_eq!(obs2["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+    let b10036_line2 = engine.catalog.get("B10036").unwrap().description.lines().nth(1).unwrap().to_string();
+    let b10036_plan = effects::parse_effect_steps(&b10036_line2, None, models::CardType::CHARACTER);
+    assert_eq!(
+        obs2["pendingDecision"]["kind"].as_str(),
+        Some("targetSelect"),
+        "logs: {:?}, plan: {:?}",
+        engine.logs,
+        b10036_plan.target_step
+    );
     assert_eq!(obs2["pendingDecision"]["options"]["effectType"].as_str(), Some("DISCARD_HAND"));
     engine.submit_decision("p1", &serde_json::json!({
         "decisionId": obs2["pendingDecision"]["decisionId"],
@@ -4531,7 +4587,15 @@ fn test_b10098_revived_char_can_attack_active() {
     })).unwrap();
 
     let obs2 = build_player_observation(&engine, "p1");
-    assert_eq!(obs2["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+    let b10036_line2 = engine.catalog.get("B10036").unwrap().description.lines().nth(1).unwrap().to_string();
+    let b10036_plan = effects::parse_effect_steps(&b10036_line2, None, models::CardType::CHARACTER);
+    assert_eq!(
+        obs2["pendingDecision"]["kind"].as_str(),
+        Some("targetSelect"),
+        "logs: {:?}, plan: {:?}",
+        engine.logs,
+        b10036_plan.target_step
+    );
     let dec2 = obs2["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
     engine.submit_decision("p1", &serde_json::json!({
         "decisionId": dec2,
@@ -4557,27 +4621,81 @@ fn test_b10098_partner_area_grants_contact_ap2000_on_both_turns() {
     ps1.field.push(test_inst("c_lv8", "B10038", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
 
     let mut ps2 = engine::PlayerState::new("p2".to_string());
-    ps2.field.push(test_inst("p2_c1", "B01001", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP));
+    ps2.field.push(test_inst("p2_c1", "B10038", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP));
 
     engine.players.insert("p1".to_string(), ps1);
     engine.players.insert("p2".to_string(), ps2);
 
     // 1) 自分ターン（攻撃側）でコンタクトしたとき +2000 されること
-    engine.trigger_on_contact("p1", "c_lv8", "p2", "p2_c1");
+    let c_lv8_ref = &engine.players["p1"].field[0];
     assert_eq!(
-        engine.contact_ap_buffs.get("c_lv8").copied().unwrap_or(0),
-        2000,
-        "自分ターン中にパートナーエリアのB10098がLv8以上のキャラにAP+2000すること"
+        engine.get_effective_ap_with_contact("p1", c_lv8_ref, true),
+        9000,
+        "自分ターン中にパートナーエリアのB10098がLv8以上のキャラ(7000)にAP+2000すること"
     );
 
     // 2) 相手ターン（防御側）でコンタクトされたときも +2000 されること
-    engine.contact_ap_buffs.clear();
     engine.turn_player_id = "p2".to_string();
-    engine.trigger_on_contact("p2", "p2_c1", "p1", "c_lv8");
+    let c_lv8_ref2 = &engine.players["p1"].field[0];
     assert_eq!(
-        engine.contact_ap_buffs.get("c_lv8").copied().unwrap_or(0),
-        2000,
-        "相手ターン中にパートナーエリアのB10098がLv8以上のキャラにAP+2000すること"
+        engine.get_effective_ap_with_contact("p1", c_lv8_ref2, true),
+        9000,
+        "相手ターン中にパートナーエリアのB10098がLv8以上のキャラ(7000)にAP+2000すること"
     );
+}
+
+#[test]
+fn test_b10036_forced_contact_uses_other_sleeping_ally() {
+    let catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();
+    let mut engine = MatchEngine::new(catalog);
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn = 4;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    ps1.case = Some(test_inst("p1_case", "B10101", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    ps1.case_phase = models::CasePhase::RESOLUTION;
+    ps1.partner = Some(test_inst("p1_p", "B10036P", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    let mut sonoko = test_inst("c_sonoko", "B10036", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+    sonoko.entered_turn = 0;
+    let mut sleeping_ally = test_inst("c_ally_sleep", "B10038", "p1", models::Zone::FIELD, models::CardOrientation::SLEEP);
+    sleeping_ally.entered_turn = 0;
+    ps1.field = vec![sonoko, sleeping_ally];
+
+    let mut ps2 = engine::PlayerState::new("p2".to_string());
+    ps2.field.push(test_inst("p2_c1", "B10038", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP));
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), ps2);
+    engine.prompt_main_action("p1");
+
+    let obs1 = build_player_observation(&engine, "p1");
+    let dec1 = obs1["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec1,
+        "revision": engine.revision,
+        "value": { "type": "DECLARE", "actorId": "c_sonoko" }
+    })).unwrap();
+
+    let obs2 = build_player_observation(&engine, "p1");
+    let b10036_line2 = engine.catalog.get("B10036").unwrap().description.lines().nth(1).unwrap().to_string();
+    let b10036_plan = effects::parse_effect_steps(&b10036_line2, None, models::CardType::CHARACTER);
+    assert_eq!(
+        obs2["pendingDecision"]["kind"].as_str(),
+        Some("targetSelect"),
+        "logs: {:?}, plan: {:?}",
+        engine.logs,
+        b10036_plan.target_step
+    );
+    let dec2 = obs2["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec2,
+        "revision": engine.revision,
+        "value": { "targetId": "p2_c1", "actorId": "c_sonoko", "effectType": "GRANT_CONTACT_FORCE_ATTACK" }
+    })).unwrap();
+
+    if let Some(ref ctx) = engine.action_context {
+        assert_eq!(ctx["actorId"].as_str(), Some("c_ally_sleep"), "園子自身ではなく他のスリープ味方キャラがコンタクト元になること");
+    }
 }
 

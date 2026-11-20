@@ -45,6 +45,30 @@ impl MatchEngine {
             return total;
         }
 
+        if in_contact {
+            if let Some(ps) = self.players.get(owner_id) {
+                let card_lv = target_def.level + card.temp_level_delta;
+                for (src, in_partner) in ps.field.iter().map(|c| (c, false)).chain(ps.extra_partners.iter().map(|c| (c, true))) {
+                    if let Some(sdef) = self.catalog.get(&src.definition_id) {
+                        for line in sdef.description.lines() {
+                            if in_partner && !line.contains("パートナーエリアでも発動する") {
+                                continue;
+                            }
+                            if line.contains("自分の現場にいる") && line.contains("コンタクトしたとき") {
+                                if let Some(min_lv) = crate::effects::extract_number_before(line, "レベル", "以上のキャラがコンタクトしたとき") {
+                                    if card_lv >= min_lv {
+                                        if let Some(ap_buff) = crate::effects::parse_signed_ap(line, true) {
+                                            total += ap_buff;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // セットカードからのAPバフ（自分のターン中+2000、コンタクト中+2000等）
         for sc in &card.set_cards {
             if !sc.face_up {

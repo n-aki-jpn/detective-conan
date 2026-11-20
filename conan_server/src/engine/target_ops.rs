@@ -858,23 +858,42 @@ impl MatchEngine {
                 }
             }
             "GRANT_CONTACT_FORCE_ATTACK" => {
-                let can_contact = self.players.get(player_id).map(|ps| ps.field.iter().any(|c| c.instance_id == actor_id)).unwrap_or(false)
-                    && self.players.get(&opp_id).map(|ps| ps.field.iter().any(|c| c.instance_id == tid)).unwrap_or(false);
-                if can_contact {
-                    self.log(format!("⚔️ [{}] の効果で [{}] とのコンタクト（バトル）が発生！", actor_name, target_name));
+                let needs_other_sleeping = self.players.get(player_id)
+                    .and_then(|ps| ps.field.iter().find(|c| c.instance_id == actor_id))
+                    .and_then(|c| self.catalog.get(&c.definition_id))
+                    .map(|d| d.description.contains("このキャラ以外のスリープ状態のキャラ"))
+                    .unwrap_or(false);
+                let contact_actor_id = if needs_other_sleeping {
+                    self.players.get(player_id)
+                        .and_then(|ps| ps.field.iter().find(|c| c.instance_id != actor_id && c.orientation == CardOrientation::SLEEP))
+                        .map(|c| c.instance_id.clone())
+                } else if self.players.get(player_id).map(|ps| ps.field.iter().any(|c| c.instance_id == actor_id)).unwrap_or(false) {
+                    Some(actor_id.to_string())
+                } else {
+                    None
+                };
+                let opp_ok = self.players.get(&opp_id).map(|ps| ps.field.iter().any(|c| c.instance_id == tid)).unwrap_or(false);
+                if let (Some(c_actor_id), true) = (contact_actor_id, opp_ok) {
+                    let c_actor_name = self.players.get(player_id)
+                        .and_then(|ps| ps.field.iter().find(|c| c.instance_id == c_actor_id))
+                        .map(|c| self.card_name_by_def(&c.definition_id))
+                        .unwrap_or_else(|| actor_name.to_string());
+                    self.log(format!("⚔️ [{}] の効果で [{}] と [{}] のコンタクト（バトル）が発生！", actor_name, c_actor_name, target_name));
                     self.contact_ap_buffs.clear();
-                self.action_context = Some(json!({
+                    self.action_context = Some(json!({
                         "attackerPlayerId": player_id,
                         "defenderPlayerId": opp_id,
-                        "actorId": actor_id,
+                        "actorId": c_actor_id,
                         "targetId": tid,
                         "attackerPass": false,
                         "defenderPass": false,
                         "cutinUsed": false,
                         "isForcedContact": true
                     }));
-                    self.trigger_on_contact(player_id, actor_id, &opp_id, tid);
+                    self.trigger_on_contact(player_id, &c_actor_id, &opp_id, tid);
                     self.proceed_to_action_resolution(None);
+                } else if needs_other_sleeping {
+                    self.log(format!("⚠️ [{}] の効果を発動しましたが、このキャラ以外のスリープ状態のキャラがいませんでした", actor_name));
                 }
             }
             _ => {

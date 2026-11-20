@@ -1003,7 +1003,6 @@ impl MatchEngine {
                         continue;
                     }
                     if let Some(ap_buff) = crate::effects::parse_signed_ap(&clause, true) {
-                        *self.contact_ap_buffs.entry(contact_cid.to_string()).or_insert(0) += ap_buff;
                         self.log(format!("✨ [{}] の効果（コンタクト時）でコンタクト中のキャラをAP＋{}！", wname, ap_buff));
                     }
                 }
