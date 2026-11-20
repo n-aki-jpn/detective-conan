@@ -756,6 +756,14 @@ pub fn assign_or_queue_target_step(
     raw_sentence: String,
     seen_target_or_search: &mut bool,
 ) {
+    if tstep.action == TargetAction::GiveCanAttackActive && tstep.filter.target_prev_chosen {
+        if let Some(ref mut prev) = plan.target_step {
+            if !prev.bonuses.contains(&TargetBonus::GiveCanAttackActive) {
+                prev.bonuses.push(TargetBonus::GiveCanAttackActive);
+            }
+            return;
+        }
+    }
     if plan.extra_clauses.is_empty() && plan.target_step.is_none() && plan.deck_search.is_none() {
         plan.target_step = Some(tstep);
     } else if plan.extra_clauses.is_empty() && plan.follow_up_target.is_none() && plan.deck_search.is_none() {
@@ -1260,6 +1268,9 @@ pub fn extract_deck_search_scope(effect_body: &str) -> &str {
 
 pub fn is_target_selection_sentence(s: &str) -> bool {
     let outer = crate::effects::text_utils::strip_quotes(s);
+    if s.contains("アクティブ状態のキャラを指定してアクションできる") && outer.contains("そのキャラ") {
+        return true;
+    }
     let s = outer.as_str();
     if s.contains("証拠を")
         && (s.contains("表向き") || s.contains("裏向き"))

@@ -4503,3 +4503,43 @@ fn test_b10098_declare_cost_sleeps_and_moves_self_to_partner_area() {
     assert_eq!(p1.extra_partners[0].orientation, models::CardOrientation::SLEEP, "【スリープ】コストによりスリープ状態で移ること");
 }
 
+#[test]
+fn test_b10098_revived_char_can_attack_active() {
+    let catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();
+    let mut engine = MatchEngine::new(catalog);
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn = 4;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    let mut c_b10098 = test_inst("c_b10098", "B10098", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+    c_b10098.entered_turn = 0;
+    ps1.field.push(c_b10098);
+    // リムーブエリアに Lv8・突撃・怪盗キッド扱い の B10038 を用意
+    ps1.remove.push(test_inst("c_kid", "B10038", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE));
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+    engine.prompt_main_action("p1");
+
+    let obs1 = build_player_observation(&engine, "p1");
+    let dec1 = obs1["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec1,
+        "revision": engine.revision,
+        "value": { "type": "DECLARE", "actorId": "c_b10098" }
+    })).unwrap();
+
+    let obs2 = build_player_observation(&engine, "p1");
+    assert_eq!(obs2["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+    let dec2 = obs2["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec2,
+        "revision": engine.revision,
+        "value": { "targetId": "c_kid", "actorId": "c_b10098", "effectType": "REVIVE_ACTIVE" }
+    })).unwrap();
+
+    let revived = engine.players["p1"].field.iter().find(|c| c.instance_id == "c_kid").expect("B10038が登場していること");
+    assert!(revived.can_attack_active, "B10098で登場させたキャラはアクティブ状態のキャラへアクションできること");
+}
+
