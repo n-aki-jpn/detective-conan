@@ -263,7 +263,7 @@ pub fn parse_effect_steps(
         strip_leading_tags(&clean)
     };
 
-    // トリガー文言（「〜したとき、」やタイミング句等）が先頭にある場合、効果対象のフィルタ解析を汚染しないよう除去する
+    // トリガー文言（「〜したとき、」「〜するたび、」やタイミング句等）が先頭にある場合、効果対象のフィルタ解析を汚染しないよう除去する
     let after_colon_stage1 = if !clean.contains('：') {
         let first_sent = after_colon_raw.split('。').next().unwrap_or(after_colon_raw);
         if let Some(tok_idx) = first_sent.find("とき、") {
@@ -271,6 +271,12 @@ pub fn parse_effect_steps(
                 && !first_sent[..tok_idx].contains("次に相手の証拠がリムーブされた")
             {
                 after_colon_raw[tok_idx + "とき、".len()..].trim_start()
+            } else {
+                after_colon_raw
+            }
+        } else if let Some(tabi_idx) = first_sent.find("たび、") {
+            if !first_sent[..tabi_idx].contains('「') {
+                after_colon_raw[tabi_idx + "たび、".len()..].trim_start()
             } else {
                 after_colon_raw
             }

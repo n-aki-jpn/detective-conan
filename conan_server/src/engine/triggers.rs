@@ -195,6 +195,7 @@ impl MatchEngine {
 
         let mut removed_sets: Vec<(String, String)> = vec![];
         let mut removed_def: Option<String> = None;
+        let mut transferred_set_info: Option<(String, String, bool)> = None;
         if let Some(ps) = self.players.get_mut(owner_pid) {
             if let Some(idx) = ps.field.iter().position(|c| c.instance_id == char_inst_id) {
                 let mut card = ps.field.remove(idx);
@@ -225,6 +226,11 @@ impl MatchEngine {
                             .map(|d| has_trait_match(d, "怪盗"))
                             .unwrap_or(false)
                     }) {
+                        transferred_set_info = Some((
+                            other_kaito.instance_id.clone(),
+                            kcard.definition_id.clone(),
+                            kcard.face_up,
+                        ));
                         other_kaito.set_cards.push(kcard);
                     } else {
                         let mut kcard = kcard;
@@ -246,6 +252,9 @@ impl MatchEngine {
                     ps.remove.push(card);
                 }
             }
+        }
+        if let Some((oid, kdef, kfu)) = transferred_set_info {
+            self.trigger_on_card_set(owner_pid, &oid, &[(kdef, kfu)]);
         }
         if let Some(ref d) = removed_def {
             if is_opp_turn && self.is_mr_card(d) {
@@ -417,6 +426,167 @@ impl MatchEngine {
             if self.pending_decision.is_none() {
                 if let Some(m) = saved_main {
                     self.pending_decision = Some(m);
+                }
+            }
+        }
+    }
+
+    /// キャラにカードがセットされたときの誘発効果（「〜がセットされるたび」「〜がセットされたとき」）を解決する
+    pub(super) fn trigger_on_card_set(
+        &mut self,
+        owner_pid: &str,
+        target_cid: &str,
+        added_cards: &[(String, bool)],
+    ) {
+        if added_cards.is_empty() {
+            return;
+        }
+        let Some(target_def_id) = self
+            .players
+            .get(owner_pid)
+            .and_then(|ps| ps.field.iter().find(|c| c.instance_id == target_cid))
+            .map(|c| c.definition_id.clone())
+        else {
+            return;
+        };
+        let Some(def) = self.catalog.get(&target_def_id).cloned() else {
+            return;
+        };
+        let clauses = extract_clauses(&def.description, TriggerKind::OnCardSet, def.card_type);
+        if clauses.is_empty() {
+            return;
+        }
+        let target_name = self.card_name_by_def(&def.definition_id);
+
+        for clause in clauses {
+            let clean_clause = strip_parens(&clause);
+            let req_trait: Option<String> = clean_clause
+                .find("がセット")
+                .and_then(|pos| {
+                    let prefix = &clean_clause[..pos];
+                    prefix.find("〚特徴［").and_then(|s| {
+                        let rest = &prefix[s + "〚特徴［".len()..];
+                        rest.find("］〛").map(|e| rest[..e].to_string())
+                    })
+                });
+            let is_per_card = clean_clause.contains("がセットされるたび");
+
+            for (set_def_id, face_up) in added_cards {
+                if let Some(ref tr) = req_trait {
+                    if !*face_up {
+                        continue;
+                    }
+                    let matched = self
+                        .catalog
+                        .get(set_def_id)
+                        .map(|d| has_trait_match(d, tr))
+                        .unwrap_or(false);
+                    if !matched {
+                        continue;
+                    }
+                }
+
+                let Some((ori, entered_turn, has_rush)) = self
+                    .players
+                    .get(owner_pid)
+                    .and_then(|ps| ps.field.iter().find(|c| c.instance_id == target_cid))
+                    .map(|c| (c.orientation, c.entered_turn, c.has_rush))
+                else {
+                    break;
+                };
+
+                let ctx = self.build_cond_info(owner_pid, Some(target_cid), ori, Some(def.level));
+                if let Err(reason) = check_clause_conditions(&clause, &ctx) {
+                    self.log(format!(
+                        "⚠️ [{}] のセット時効果不発: {}",
+                        target_name, reason
+                    ));
+                    continue;
+                }
+                if !self.can_use_clause_this_turn(target_cid, &clause) {
+                    break;
+                }
+                self.mark_clause_used_this_turn(target_cid, &clause);
+
+                if clean_clause.contains("このキャラをアクティブにするか、")
+                    && clean_clause.contains("〚突撃〛")
+                {
+                    if ori == CardOrientation::ACTIVE {
+                        if let Some(ps) = self.players.get_mut(owner_pid) {
+                            if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == target_cid) {
+                                c.has_rush = true;
+                            }
+                        }
+                        self.log(format!(
+                            "✨ [{}] のセット時効果でターン終了時まで〚突撃〛を得ました！",
+                            target_name
+                        ));
+                    } else if has_rush || entered_turn < self.turn {
+                        let mut was_stun = false;
+                        if let Some(ps) = self.players.get_mut(owner_pid) {
+                            if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == target_cid) {
+                                if c.orientation == CardOrientation::STUN {
+                                    c.orientation = CardOrientation::SLEEP;
+                                    was_stun = true;
+                                } else {
+                                    c.orientation = CardOrientation::ACTIVE;
+                                }
+                            }
+                        }
+                        if was_stun {
+                            self.log(format!(
+                                "✨ [{}] のセット時効果でスタン状態の自身をスリープにしました！",
+                                target_name
+                            ));
+                        } else {
+                            self.log(format!(
+                                "✨ [{}] のセット時効果で自身をアクティブにしました！",
+                                target_name
+                            ));
+                        }
+                    } else {
+                        let mc = EventModeChoice {
+                            min_pick: 1,
+                            max_pick: 1,
+                            distinct_colors_limit: false,
+                            pre_clauses: vec![],
+                            mode_gate_condition: None,
+                            options: vec![
+                                "このキャラをアクティブにする。".to_string(),
+                                "ターン終了時までこのキャラは〚突撃〛を持つ。".to_string(),
+                            ],
+                            all_condition: None,
+                            optional_all_cost: None,
+                            post_clauses: vec![],
+                        };
+                        let plan = ParsedClausePlan {
+                            immediate_before: vec![ImmediateOp::EventModeChoice(mc)],
+                            ..Default::default()
+                        };
+                        self.execute_or_enqueue_plan(
+                            owner_pid,
+                            target_cid,
+                            &target_name,
+                            Some(def.level),
+                            def.card_type,
+                            plan,
+                        );
+                    }
+                } else {
+                    let resolved = resolve_state_branch(&clause, ori);
+                    let plan = parse_effect_steps(&resolved, Some(def.level), def.card_type);
+                    self.execute_or_enqueue_plan(
+                        owner_pid,
+                        target_cid,
+                        &target_name,
+                        Some(def.level),
+                        def.card_type,
+                        plan,
+                    );
+                }
+
+                if !is_per_card {
+                    break;
                 }
             }
         }

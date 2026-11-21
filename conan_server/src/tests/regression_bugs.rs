@@ -4699,3 +4699,415 @@ fn test_b10036_forced_contact_uses_other_sleeping_ally() {
     }
 }
 
+#[test]
+fn test_b02018_triggers_on_card_set_by_other_cards_and_respects_limits() {
+    let catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();
+    let mut engine = MatchEngine::new(catalog);
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn = 4;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    ps1.case = Some(test_inst("p1_case", "B02001", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    ps1.case_phase = models::CasePhase::INTRO;
+    for i in 0..7 {
+        ps1.file.push(test_inst(&format!("f1_{}", i), "B01021", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+    }
+    let mut heiji = test_inst("c_heiji", "B02018", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+    heiji.entered_turn = 4;
+    let mut heizo = test_inst("c_heizo", "B02030", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+    heizo.entered_turn = 0;
+    ps1.field = vec![heiji, heizo];
+    ps1.hand.push(test_inst("ev_b01039", "B01039", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+    ps1.hand.push(test_inst("ch_kazuha", "B02023", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+    for i in 0..10 {
+        ps1.deck.push(test_inst(&format!("d1_{}", i), "B01001", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    }
+
+    let mut ps2 = engine::PlayerState::new("p2".to_string());
+    ps2.case = Some(test_inst("p2_case", "B02001", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    ps2.case_phase = models::CasePhase::INTRO;
+    for i in 0..7 {
+        ps2.file.push(test_inst(&format!("f2_{}", i), "B01021", "p2", models::Zone::FILE, models::CardOrientation::ACTIVE));
+    }
+    ps2.hand.push(test_inst("ch_momiji", "B02020", "p2", models::Zone::HAND, models::CardOrientation::ACTIVE));
+    for i in 0..5 {
+        ps2.deck.push(test_inst(&format!("d2_{}", i), "B01001", "p2", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    }
+
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), ps2);
+    engine.prompt_main_action("p1");
+
+    // 1回目: 別キャラ B02030（服部平蔵）の【宣言】で裏向きセット（ACTIVE なので自動で〚突撃〛獲得）
+    let obs = build_player_observation(&engine, "p1");
+    let dec1 = obs["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec1,
+        "revision": engine.revision,
+        "value": { "type": "DECLARE", "actorId": "c_heizo" }
+    })).unwrap();
+
+    let obs_t1 = build_player_observation(&engine, "p1");
+    assert_eq!(obs_t1["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+    let dec_t1 = obs_t1["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec_t1,
+        "revision": engine.revision,
+        "value": { "targetId": "c_heiji" }
+    })).unwrap();
+
+    assert_eq!(engine.players["p1"].field[0].set_cards.len(), 1, "B02030で1枚セットされること");
+    assert!(engine.players["p1"].field[0].has_rush, "1回目（ACTIVE）: 他カードによるセットで〚突撃〛を得ること");
+
+    // 2回目: B02018 を SLEEP にしてイベント B01039 をセット → has_rush 済みのため自動で ACTIVE になる
+    engine.players.get_mut("p1").unwrap().field[0].orientation = models::CardOrientation::SLEEP;
+    let obs_ev = build_player_observation(&engine, "p1");
+    let dec_ev = obs_ev["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec_ev,
+        "revision": engine.revision,
+        "value": { "type": "HAND_PLAY", "cardId": "ev_b01039" }
+    })).unwrap();
+
+    let obs_ev_t = build_player_observation(&engine, "p1");
+    assert_eq!(obs_ev_t["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+    let dec_ev_t = obs_ev_t["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec_ev_t,
+        "revision": engine.revision,
+        "value": { "targetId": "c_heiji" }
+    })).unwrap();
+
+    assert_eq!(engine.players["p1"].field[0].set_cards.len(), 2, "イベントB01039がセットされること");
+    assert_eq!(
+        engine.players["p1"].field[0].orientation,
+        models::CardOrientation::ACTIVE,
+        "2回目（SLEEP, has_rush済）: イベントセットでアクティブになること"
+    );
+
+    // 3回目: 再び SLEEP にし、B02023（遠山和葉）の【登場時】でセット → 【ターン2】上限により発動しない
+    {
+        let ps1 = engine.players.get_mut("p1").unwrap();
+        ps1.field[0].orientation = models::CardOrientation::SLEEP;
+        ps1.normal_hand_played_this_turn = false;
+    }
+    engine.prompt_main_action("p1");
+    let obs_kaz = build_player_observation(&engine, "p1");
+    let dec_kaz = obs_kaz["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec_kaz,
+        "revision": engine.revision,
+        "value": { "type": "HAND_PLAY", "cardId": "ch_kazuha" }
+    })).unwrap();
+
+    let obs_kaz_t = build_player_observation(&engine, "p1");
+    assert_eq!(obs_kaz_t["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+    let dec_kaz_t = obs_kaz_t["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec_kaz_t,
+        "revision": engine.revision,
+        "value": { "targetId": "c_heiji" }
+    })).unwrap();
+
+    assert_eq!(engine.players["p1"].field[0].set_cards.len(), 3, "B02023で3枚目がセットされること");
+    assert_eq!(
+        engine.players["p1"].field[0].orientation,
+        models::CardOrientation::SLEEP,
+        "3回目: 【ターン2】上限に達しているためアクティブ化しないこと"
+    );
+
+    // 4) 相手ターン中（p2のターン）に相手カード B02020（大岡紅葉）の効果で B02018 に裏向きセット → 【自分ターン中】未達のため発動しない
+    engine.turn = 5;
+    engine.turn_player_id = "p2".to_string();
+    engine.turn_clause_usage.clear();
+    {
+        let ps1 = engine.players.get_mut("p1").unwrap();
+        ps1.field[0].orientation = models::CardOrientation::SLEEP;
+        ps1.field[0].has_rush = false;
+    }
+    engine.prompt_main_action("p2");
+    let obs_p2 = build_player_observation(&engine, "p2");
+    let dec_p2 = obs_p2["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p2", &serde_json::json!({
+        "decisionId": dec_p2,
+        "revision": engine.revision,
+        "value": { "type": "HAND_PLAY", "cardId": "ch_momiji" }
+    })).unwrap();
+
+    let obs_p2_t = build_player_observation(&engine, "p2");
+    assert_eq!(obs_p2_t["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+    let dec_p2_t = obs_p2_t["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p2", &serde_json::json!({
+        "decisionId": dec_p2_t,
+        "revision": engine.revision,
+        "value": { "targetId": "c_heiji" }
+    })).unwrap();
+
+    assert_eq!(engine.players["p1"].field[0].set_cards.len(), 4, "相手ターン中にB02020で4枚目がセットされること");
+    assert_eq!(
+        engine.players["p1"].field[0].orientation,
+        models::CardOrientation::SLEEP,
+        "相手ターン中は【自分ターン中】条件を満たさないためアクティブ化しないこと"
+    );
+    assert!(
+        !engine.players["p1"].field[0].has_rush,
+        "相手ターン中は【自分ターン中】条件を満たさないため〚突撃〛を得ないこと"
+    );
+}
+
+#[test]
+fn test_b02018_mode_select_when_sleep_without_rush_on_entry_turn() {
+    let catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();
+
+    for choose_idx in [0usize, 1usize] {
+        let mut engine = MatchEngine::new(catalog.clone());
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn = 4;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        for i in 0..6 {
+            ps1.file.push(test_inst(&format!("f_{}", i), "B01021", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+        }
+        let mut heiji = test_inst("c_heiji", "B02018", "p1", models::Zone::FIELD, models::CardOrientation::SLEEP);
+        heiji.entered_turn = 4;
+        heiji.has_rush = false;
+        ps1.field.push(heiji);
+        ps1.hand.push(test_inst("ev_b01039", "B01039", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+        engine.prompt_main_action("p1");
+
+        let obs1 = build_player_observation(&engine, "p1");
+        let dec1 = obs1["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": dec1,
+            "revision": engine.revision,
+            "value": { "type": "HAND_PLAY", "cardId": "ev_b01039" }
+        })).unwrap();
+
+        let obs2 = build_player_observation(&engine, "p1");
+        assert_eq!(obs2["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+        let dec2 = obs2["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": dec2,
+            "revision": engine.revision,
+            "value": { "targetId": "c_heiji" }
+        })).unwrap();
+
+        let obs3 = build_player_observation(&engine, "p1");
+        assert_eq!(
+            obs3["pendingDecision"]["kind"].as_str(),
+            Some("modeSelect"),
+            "登場ターンにSLEEPかつ非突撃ならアクティブか突撃のmodeSelectが出ること"
+        );
+        let dec3 = obs3["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": dec3,
+            "revision": engine.revision,
+            "value": { "modeIndex": choose_idx }
+        })).unwrap();
+
+        let heiji_after = &engine.players["p1"].field[0];
+        if choose_idx == 0 {
+            assert_eq!(heiji_after.orientation, models::CardOrientation::ACTIVE, "選択肢0でアクティブになること");
+            assert!(!heiji_after.has_rush);
+        } else {
+            assert_eq!(heiji_after.orientation, models::CardOrientation::SLEEP);
+            assert!(heiji_after.has_rush, "選択肢1で〚突撃〛を得ること");
+        }
+    }
+}
+
+#[test]
+fn test_b06046_and_b06047_yaiba_card_set_triggers() {
+    let catalog = catalog::CardCatalog::load_from_json("../data/dummy/cards.json").unwrap();
+
+    // 1) B06046 鉄刃: 裏向きセットでは不発、YAIBAイベントセットでアクティブ（ターン2制限）
+    {
+        let mut engine = MatchEngine::new(catalog.clone());
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn = 6;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        for i in 0..8 {
+            ps1.file.push(test_inst(&format!("f_{}", i), "B06046", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+        }
+        let mut yaiba = test_inst("c_yaiba", "B06046", "p1", models::Zone::FIELD, models::CardOrientation::SLEEP);
+        yaiba.entered_turn = 6;
+        let mut heizo = test_inst("c_heizo", "B02030", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+        heizo.entered_turn = 0;
+        ps1.field = vec![yaiba, heizo];
+        ps1.hand.push(test_inst("ev1", "B06064", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        ps1.hand.push(test_inst("ev2", "B06064", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        ps1.hand.push(test_inst("ev3", "B06064", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        for i in 0..5 {
+            ps1.deck.push(test_inst(&format!("d_{}", i), "B06048", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        }
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+        engine.prompt_main_action("p1");
+
+        // 裏向きセットでは特徴YAIBAを満たさず不発
+        let obs_d = build_player_observation(&engine, "p1");
+        let dec_d = obs_d["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": dec_d,
+            "revision": engine.revision,
+            "value": { "type": "DECLARE", "actorId": "c_heizo" }
+        })).unwrap();
+        let obs_dt = build_player_observation(&engine, "p1");
+        let dec_dt = obs_dt["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": dec_dt,
+            "revision": engine.revision,
+            "value": { "targetId": "c_yaiba" }
+        })).unwrap();
+        assert_eq!(engine.players["p1"].field[0].set_cards.len(), 1);
+        assert_eq!(
+            engine.players["p1"].field[0].orientation,
+            models::CardOrientation::SLEEP,
+            "裏向きカードでは〚特徴［YAIBA］〛条件を満たさずB06046はアクティブにならないこと"
+        );
+
+        // 表向き YAIBA イベントセット 1回目・2回目でアクティブ、3回目はターン2上限で不発
+        for (ev_id, expect_active) in [("ev1", true), ("ev2", true), ("ev3", false)] {
+            {
+                let ps1 = engine.players.get_mut("p1").unwrap();
+                ps1.field[0].orientation = models::CardOrientation::SLEEP;
+                ps1.normal_hand_played_this_turn = false;
+            }
+            engine.prompt_main_action("p1");
+            let obs_e = build_player_observation(&engine, "p1");
+            let dec_e = obs_e["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+            engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": dec_e,
+                "revision": engine.revision,
+                "value": { "type": "HAND_PLAY", "cardId": ev_id }
+            })).unwrap();
+            let obs_et = build_player_observation(&engine, "p1");
+            assert_eq!(obs_et["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+            let dec_et = obs_et["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+            engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": dec_et,
+                "revision": engine.revision,
+                "value": { "targetId": "c_yaiba" }
+            })).unwrap();
+            let expected = if expect_active {
+                models::CardOrientation::ACTIVE
+            } else {
+                models::CardOrientation::SLEEP
+            };
+            assert_eq!(
+                engine.players["p1"].field[0].orientation,
+                expected,
+                "イベント {} セット後のB06046状態が想定通りであること",
+                ev_id
+            );
+        }
+    }
+
+    // 2) B06047 鉄刃: YAIBAカードセットでリムーブからLv5以下YAIBAをスリープ登場（ターン1制限）
+    {
+        let mut engine = MatchEngine::new(catalog);
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn = 6;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        for i in 0..7 {
+            ps1.file.push(test_inst(&format!("f_{}", i), "B06047", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+        }
+        let mut yaiba = test_inst("c_yaiba47", "B06047", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+        yaiba.entered_turn = 6;
+        ps1.field.push(yaiba);
+        ps1.remove.push(test_inst("rem_sayaka1", "B06048", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE));
+        ps1.remove.push(test_inst("rem_sayaka2", "B06048", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE));
+        ps1.hand.push(test_inst("ev1", "B06064", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        ps1.hand.push(test_inst("ev2", "B06064", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        for i in 0..5 {
+            ps1.deck.push(test_inst(&format!("d_{}", i), "B06048", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        }
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+        engine.prompt_main_action("p1");
+
+        // 1枚目: セット後 B06047 効果でリムーブからスリープ登場の targetSelect が開く
+        let obs1 = build_player_observation(&engine, "p1");
+        let dec1 = obs1["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": dec1,
+            "revision": engine.revision,
+            "value": { "type": "HAND_PLAY", "cardId": "ev1" }
+        })).unwrap();
+        let obs_t1 = build_player_observation(&engine, "p1");
+        let dec_t1 = obs_t1["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": dec_t1,
+            "revision": engine.revision,
+            "value": { "targetId": "c_yaiba47" }
+        })).unwrap();
+
+        let obs_rev = build_player_observation(&engine, "p1");
+        assert_eq!(obs_rev["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+        assert_eq!(
+            obs_rev["pendingDecision"]["options"]["effectType"].as_str(),
+            Some("REVIVE_SLEEP"),
+            "B06047のセット時効果でREVIVE_SLEEP対象選択が開くこと"
+        );
+        let dec_rev = obs_rev["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": dec_rev,
+            "revision": engine.revision,
+            "value": { "targetId": "rem_sayaka1" }
+        })).unwrap();
+
+        // 蘇生された峰さやか(B06048)が場に登場し SLEEP であること（登場時deckSearchが開いていれば解決）
+        if engine.pending_decision.as_ref().and_then(|d| d["kind"].as_str()) == Some("deckSearch") {
+            let obs_ds = build_player_observation(&engine, "p1");
+            let dec_ds = obs_ds["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+            engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": dec_ds,
+                "revision": engine.revision,
+                "value": { "chosenCardId": null }
+            })).unwrap();
+        }
+        assert!(
+            engine.players["p1"].field.iter().any(|c| c.instance_id == "rem_sayaka1" && c.orientation == models::CardOrientation::SLEEP),
+            "B06047のセット時効果でリムーブエリアのB06048がスリープ状態で場に登場すること"
+        );
+
+        // 2枚目: 【ターン1】上限に達しているため再発動しないこと
+        engine.players.get_mut("p1").unwrap().normal_hand_played_this_turn = false;
+        engine.prompt_main_action("p1");
+        let obs2 = build_player_observation(&engine, "p1");
+        let dec2 = obs2["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": dec2,
+            "revision": engine.revision,
+            "value": { "type": "HAND_PLAY", "cardId": "ev2" }
+        })).unwrap();
+        let obs_t2 = build_player_observation(&engine, "p1");
+        let dec_t2 = obs_t2["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": dec_t2,
+            "revision": engine.revision,
+            "value": { "targetId": "c_yaiba47" }
+        })).unwrap();
+
+        assert_eq!(
+            engine.pending_decision.as_ref().and_then(|d| d["kind"].as_str()),
+            Some("mainAction"),
+            "【ターン1】制限により2回目のセットではB06047効果が発動せずmainActionに戻ること"
+        );
+    }
+}
+
+

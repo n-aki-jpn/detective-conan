@@ -558,47 +558,53 @@ impl MatchEngine {
                     }
                 }
                 ImmediateOp::SetDeckTopFaceDownOnSelf(n) => {
-                    let mut set_count = 0usize;
-                    let mut trigger_on_set_msg: Option<String> = None;
+                    let mut added: Vec<(String, bool)> = Vec::new();
                     if let Some(ps) = self.players.get_mut(player_id) {
                         let mut popped = Vec::new();
                         for _ in 0..*n {
                             if let Some(mut c) = ps.deck.pop() {
                                 c.zone = Zone::FIELD;
                                 c.face_up = false;
+                                added.push((c.definition_id.clone(), false));
                                 popped.push(c);
                             }
                         }
-                        set_count = popped.len();
                         if !popped.is_empty() {
                             if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == actor_id) {
                                 c.set_cards.extend(popped);
-                                let has_set_trigger = self.catalog.get(&c.definition_id)
-                                    .map(|d| d.description.contains("このキャラにカード1枚がセットされるたび"))
-                                    .unwrap_or(false);
-                                if has_set_trigger {
-                                    if c.orientation == CardOrientation::SLEEP {
-                                        c.orientation = CardOrientation::ACTIVE;
-                                        trigger_on_set_msg = Some(format!("✨ [{}] のセット時効果で自身をアクティブにしました！", actor_name));
-                                    } else {
-                                        c.has_rush = true;
-                                        trigger_on_set_msg = Some(format!("✨ [{}] のセット時効果でターン終了時まで〚突撃〛を得ました！", actor_name));
-                                    }
+                            } else {
+                                added.clear();
+                                for mut c in popped.into_iter().rev() {
+                                    c.zone = Zone::DECK;
+                                    ps.deck.push(c);
                                 }
                             }
                         }
                     }
-                    if set_count > 0 {
-                        self.log(format!("🔧 [{}] の効果でデッキの上から {}枚を裏向きで自身にセットしました", actor_name, set_count));
-                    }
-                    if let Some(msg) = trigger_on_set_msg {
-                        self.log(msg);
+                    if !added.is_empty() {
+                        self.refresh_if_deck_emptied(player_id);
+                        self.log(format!("🔧 [{}] の効果でデッキの上から {}枚を裏向きで自身にセットしました", actor_name, added.len()));
+                        self.trigger_on_card_set(player_id, actor_id, &added);
                     }
                 }
                 ImmediateOp::SelfActivate => {
+                    let mut was_stun = false;
+                    let mut changed = false;
                     if let Some(ps) = self.players.get_mut(player_id) {
                         if let Some(c) = ps.field.iter_mut().find(|c| c.instance_id == actor_id) {
-                            c.orientation = CardOrientation::ACTIVE;
+                            changed = true;
+                            if c.orientation == CardOrientation::STUN {
+                                c.orientation = CardOrientation::SLEEP;
+                                was_stun = true;
+                            } else {
+                                c.orientation = CardOrientation::ACTIVE;
+                            }
+                        }
+                    }
+                    if changed {
+                        if was_stun {
+                            self.log(format!("✨ スタン状態の [{}] をスリープにしました", actor_name));
+                        } else {
                             self.log(format!("✨ [{}] をアクティブにしました", actor_name));
                         }
                     }

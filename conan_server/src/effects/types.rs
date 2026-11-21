@@ -18,6 +18,7 @@ pub enum TriggerKind {
     OnContactWin,
     OnHintUse,
     OnAllyPlay,
+    OnCardSet,
     Passive,
 }
 

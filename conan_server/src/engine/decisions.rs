@@ -936,7 +936,13 @@ impl MatchEngine {
             self.last_deployed_count = 0;
             let mut removed_lv_sum = 0i32;
             let mut removed_ap_sum = 0i32;
-            let has_continuation = opts.get("followUpTarget").filter(|v| !v.is_null()).is_some()
+            let bonuses: Vec<TargetBonus> = serde_json::from_value(
+                opts.get("bonuses").cloned().unwrap_or_else(|| json!([])),
+            )
+            .unwrap_or_default();
+            let has_continuation = !bonuses.is_empty()
+                || valid_chosen.len() > 1
+                || opts.get("followUpTarget").filter(|v| !v.is_null()).is_some()
                 || opts.get("followUpDeckSearch").filter(|v| !v.is_null()).is_some()
                 || opts.get("pendingClausePlan").filter(|v| !v.is_null()).is_some()
                 || opts.get("followUpOps").and_then(|v| v.as_array()).map(|a| !a.is_empty()).unwrap_or(false);
@@ -966,16 +972,13 @@ impl MatchEngine {
                     &mut deployed_list,
                 );
             }
-            self.is_executing_clause_plan = prev_exec;
             if effect_type == "REMOVE" {
                 self.last_removed_level_sum = removed_lv_sum;
                 self.last_removed_ap_sum = removed_ap_sum;
             }
-            let bonuses: Vec<TargetBonus> = serde_json::from_value(
-                opts.get("bonuses").cloned().unwrap_or_else(|| json!([])),
-            )
-            .unwrap_or_default();
-            if self.apply_target_bonuses(player_id, &actor_id, &actor_name, &bonuses, &valid_chosen, &resume_context) {
+            let bonus_paused = self.apply_target_bonuses(player_id, &actor_id, &actor_name, &bonuses, &valid_chosen, &resume_context);
+            self.is_executing_clause_plan = prev_exec;
+            if bonus_paused {
                 return;
             }
         } else {

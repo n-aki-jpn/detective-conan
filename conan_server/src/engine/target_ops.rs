@@ -365,6 +365,13 @@ impl MatchEngine {
                 }
             }
             "SET_CARD_ON_SELF" | "SET_CARD_ON_TARGET_CHAR" => {
+                let face_up = !(effect_type == "SET_CARD_ON_SELF"
+                    && self
+                        .find_card_def_id(actor_id)
+                        .and_then(|did| self.catalog.get(&did))
+                        .map(|d| strip_parens(&d.description).contains("裏向きでこのキャラにセットする"))
+                        .unwrap_or(false));
+                let mut set_info: Option<(String, String, bool)> = None;
                 if let Some(ps) = self.players.get_mut(player_id) {
                     let found = if let Some(pos) = ps.hand.iter().position(|c| c.instance_id == tid) {
                         Some(ps.hand.remove(pos))
@@ -374,17 +381,24 @@ impl MatchEngine {
                         None
                     };
                     if let Some(mut card) = found {
-                        card.face_up = true;
+                        card.zone = Zone::FIELD;
+                        card.face_up = face_up;
                         let recv_idx = if effect_type == "SET_CARD_ON_SELF" {
                             ps.field.iter().position(|c| c.instance_id == actor_id)
                         } else {
                             ps.field.iter().position(|c| c.instance_id != actor_id).or_else(|| if ps.field.is_empty() { None } else { Some(0) })
                         };
                         if let Some(idx) = recv_idx {
+                            let recv_id = ps.field[idx].instance_id.clone();
+                            let card_def_id = card.definition_id.clone();
                             ps.field[idx].set_cards.push(card);
+                            set_info = Some((recv_id, card_def_id, face_up));
                             self.log(format!("🔧 [{}] の効果で [{}] をセットしました！", actor_name, target_name));
                         }
                     }
+                }
+                if let Some((recv_id, card_def_id, fu)) = set_info {
+                    self.trigger_on_card_set(player_id, &recv_id, &[(card_def_id, fu)]);
                 }
             }
             "STACK_REMOVE_UNDER_ALLY_BLUE" => {
@@ -587,6 +601,7 @@ impl MatchEngine {
                 let mut ev_card: Option<CardInstance> = None;
                 let mut is_soccer_no_facedown = false;
                 let mut set_desc = String::new();
+                let mut added_set_cards: Vec<(String, bool)> = Vec::new();
                 if let Some(ps) = self.players.get_mut(player_id) {
                     if let Some(rpos) = ps.remove.iter().position(|c| c.instance_id == actor_id) {
                         ev_card = Some(ps.remove.remove(rpos));
@@ -596,7 +611,8 @@ impl MatchEngine {
                     if let Some(mut ev) = ev_card {
                         ev.zone = Zone::FIELD;
                         ev.face_up = true;
-                        set_desc = self.catalog.get(&ev.definition_id).map(|d| d.description.clone()).unwrap_or_default();
+                        let ev_def_id = ev.definition_id.clone();
+                        set_desc = self.catalog.get(&ev_def_id).map(|d| d.description.clone()).unwrap_or_default();
                         if let Some(tc) = ps.field.iter_mut().find(|c| c.instance_id == tid) {
                             let has_no_facedown = !tc.set_cards.iter().any(|s| !s.face_up);
                             let is_soccer = self
@@ -611,6 +627,7 @@ impl MatchEngine {
                                 is_soccer_no_facedown = true;
                             }
                             tc.set_cards.push(ev);
+                            added_set_cards.push((ev_def_id, true));
                             self.log(format!("🔧 [{}] を [{}] にセットしました！", actor_name, target_name));
                         } else {
                             // フォールバックで戻す
@@ -620,50 +637,68 @@ impl MatchEngine {
                     }
                 }
                 if is_soccer_no_facedown {
+                    let mut top_attached = false;
                     if let Some(ps) = self.players.get_mut(player_id) {
                         if let Some(mut top) = ps.deck.pop() {
                             top.zone = Zone::FIELD;
                             top.face_up = false;
+                            let top_def_id = top.definition_id.clone();
                             if let Some(tc) = ps.field.iter_mut().find(|c| c.instance_id == tid) {
                                 tc.set_cards.push(top);
+                                added_set_cards.push((top_def_id, false));
+                                top_attached = true;
                             } else {
                                 top.zone = Zone::DECK;
                                 ps.deck.push(top);
                             }
                         }
                     }
+                    if top_attached {
+                        self.refresh_if_deck_emptied(player_id);
+                    }
                     self.draw_cards(player_id, 1);
                     self.log(format!("⚽ [{}] の誘発効果で山札の上から1枚裏向きでセットし、カードを1枚引きました！", actor_name));
+                }
+                if !added_set_cards.is_empty() {
+                    self.trigger_on_card_set(player_id, tid, &added_set_cards);
                 }
             }
             "SET_DECK_TOP_FACE_DOWN" => {
                 let n = opts.get("setDeckCount").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
-                let mut attached = 0;
-                if let Some(ps) = self.players.get_mut(player_id) {
-                    let mut pulled = Vec::new();
-                    for _ in 0..n {
-                        if let Some(mut top) = ps.deck.pop() {
-                            top.zone = Zone::FIELD;
-                            top.face_up = false;
-                            pulled.push(top);
+                let target_owner = [player_id, opp_id.as_str()].into_iter().find(|pid| {
+                    self.players
+                        .get(*pid)
+                        .map(|ps| ps.field.iter().any(|c| c.instance_id == tid))
+                        .unwrap_or(false)
+                });
+                let mut added: Vec<(String, bool)> = Vec::new();
+                if let Some(owner_pid) = target_owner {
+                    if let Some(ps) = self.players.get_mut(owner_pid) {
+                        let mut pulled = Vec::new();
+                        for _ in 0..n {
+                            if let Some(mut top) = ps.deck.pop() {
+                                top.zone = Zone::FIELD;
+                                top.face_up = false;
+                                added.push((top.definition_id.clone(), false));
+                                pulled.push(top);
+                            }
+                        }
+                        if let Some(tc) = ps.field.iter_mut().find(|c| c.instance_id == tid) {
+                            tc.set_cards.extend(pulled);
+                        } else {
+                            added.clear();
+                            for mut c in pulled.into_iter().rev() {
+                                c.zone = Zone::DECK;
+                                ps.deck.push(c);
+                            }
                         }
                     }
-                    if let Some(tc) = ps.field.iter_mut().find(|c| c.instance_id == tid) {
-                        attached = pulled.len();
-                        tc.set_cards.extend(pulled);
-                    } else {
-                        for mut c in pulled.into_iter().rev() {
-                            c.zone = Zone::DECK;
-                            ps.deck.push(c);
-                        }
+                    // 山札からキャラの下へセット（裏向き）して0枚になった瞬間に即座へリフレッシュ
+                    if !added.is_empty() {
+                        self.refresh_if_deck_emptied(owner_pid);
+                        self.log(format!("🔧 [{}] の効果で [{}] に山札の上から{}枚裏向きでセットしました", actor_name, target_name, added.len()));
+                        self.trigger_on_card_set(owner_pid, tid, &added);
                     }
-                }
-                // 山札からキャラの下へセット（裏向き）して0枚になった瞬間に即座へリフレッシュ
-                if attached > 0 {
-                    self.refresh_if_deck_emptied(player_id);
-                }
-                if attached > 0 {
-                    self.log(format!("🔧 [{}] の効果で [{}] に山札の上から{}枚裏向きでセットしました", actor_name, target_name, attached));
                 }
             }
             "STACK_UNDER_SELF" => {

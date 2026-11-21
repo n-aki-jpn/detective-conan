@@ -310,7 +310,11 @@ pub fn parse_target_action(text: &str) -> Option<TargetAction> {
     if text.contains("手札に加える") || text.contains("手札に加え") {
         return Some(TargetAction::RecoverToHand);
     }
-    if text.contains("裏向きで") && text.contains("セットする") && !text.contains("AP＋") {
+    if text.contains("裏向きで")
+        && text.contains("セットする")
+        && !text.contains("AP＋")
+        && !text.contains("このキャラにセットする")
+    {
         let n = extract_count_around(text, "上から", "枚裏向き").max(1);
         return Some(TargetAction::SetDeckTopFaceDown(n));
     }

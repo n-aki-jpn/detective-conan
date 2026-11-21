@@ -154,6 +154,16 @@ pub fn line_matches_trigger(line: &str, trigger: TriggerKind, card_type: CardTyp
                 && !unquoted.starts_with("このイベントがセットされている")
                 && (unquoted.contains("【疾風】") || unquoted.contains("登場したとき"))
         }
+        TriggerKind::OnCardSet => {
+            !unquoted.contains("【登場時】")
+                && !unquoted.contains("【宣言】")
+                && !unquoted.contains("【カットイン】")
+                && !unquoted.contains("【ヒラメキ】")
+                && !unquoted.starts_with("このイベントがセットされている")
+                && !unquoted.starts_with("このイベントが、")
+                && (unquoted.contains("がセットされるたび")
+                    || unquoted.contains("がセットされたとき"))
+        }
         TriggerKind::OnEvidenceGain => {
             !unquoted.contains("【登場時】")
                 && !unquoted.contains("【宣言】")
@@ -176,6 +186,7 @@ pub fn line_matches_trigger(line: &str, trigger: TriggerKind, card_type: CardTyp
                 && !clean.contains("とき、")
                 && !clean.contains("したとき")
                 && !clean.contains("されたとき")
+                && !clean.contains("たび、")
                 && !clean.contains("ターン終了時、")
                 && !clean.contains("自分のターン終了時、")
                 && !clean.contains("相手のターン終了時、")
