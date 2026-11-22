@@ -4197,7 +4197,7 @@
         if (pd.kind === 'mulligan') {
           decBox.dataset.hasOverlay = '1';
           if (isNewOverlayKey) window.decisionOverlayHidden = false;
-          const turnOrderLabel = me.isFirst ? '先攻' : '後攻';
+          const turnOrderLabel = me.isFirstPlayer ? '先攻' : '後攻';
           document.getElementById('decision-title').innerText = `🃏 初期手札マリガン【${turnOrderLabel}】`;
           document.getElementById('decision-desc').innerText = `あなたは【${turnOrderLabel}】です。戻したいカードをタップして選択してください`;
 
