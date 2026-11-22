@@ -305,7 +305,7 @@ pub fn parse_target_action(text: &str) -> Option<TargetAction> {
         return Some(TargetAction::GrantContactForceAttack);
     }
     if text.contains("デッキの上か下に移す") {
-        return Some(TargetAction::BottomDeck);
+        return Some(TargetAction::TopOrBottomDeck);
     }
     if text.contains("使用する") && text.contains("イベント") {
         return Some(TargetAction::PlayEventFromHand);

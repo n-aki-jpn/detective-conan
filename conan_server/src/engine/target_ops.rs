@@ -1826,6 +1826,7 @@ pub(super) fn target_action_prompt_title(action: &TargetAction, filter: &TargetF
         TargetAction::Activate => format!("アクティブにする{}キャラを{}選択してください", prefix, count_phrase("体")),
         TargetAction::Remove => format!("リムーブする{}カードを{}選択してください", prefix, count_phrase("枚")),
         TargetAction::BottomDeck => format!("デッキの下に移す{}キャラを{}選択してください", prefix, count_phrase("体")),
+        TargetAction::TopOrBottomDeck => format!("デッキの上か下に移す{}キャラを{}選択してください", prefix, count_phrase("体")),
         TargetAction::BounceToHand => format!("手札に戻す{}カードを{}選択してください", prefix, count_phrase("枚")),
         TargetAction::ApBuff(v) => format!("AP＋{}する{}キャラを{}選択してください", v, prefix, count_phrase("体")),
         TargetAction::ApDebuff(v) => format!("AP－{}する{}キャラを{}選択してください", v, prefix, count_phrase("体")),

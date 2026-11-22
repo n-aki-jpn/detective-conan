@@ -318,6 +318,51 @@ impl MatchEngine {
             .unwrap_or(0) as usize;
 
         match special_kind {
+            "DECK_TOP_OR_BOTTOM" => {
+                let target_ids: Vec<String> = opts
+                    .get("targetIds")
+                    .and_then(|v| v.as_array())
+                    .map(|a| a.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect())
+                    .unwrap_or_default();
+                let to_top = single_idx == 0;
+                let pos_label = if to_top { "上" } else { "下" };
+                let p_ids: Vec<String> = self.players.keys().cloned().collect();
+                for tid in target_ids {
+                    for pid in &p_ids {
+                        let mut found_card = None;
+                        if let Some(ps) = self.players.get_mut(pid) {
+                            if let Some(pos) = ps.field.iter().position(|c| c.instance_id == tid) {
+                                found_card = Some(ps.field.remove(pos));
+                            }
+                        }
+                        if let Some(mut card) = found_card {
+                            let cname = self.card_name_by_def(&card.definition_id);
+                            card.zone = Zone::DECK;
+                            card.face_up = false;
+                            card.orientation = CardOrientation::ACTIVE;
+                            if let Some(ps) = self.players.get_mut(pid) {
+                                for mut sc in card.set_cards.drain(..) {
+                                    sc.zone = Zone::REMOVE;
+                                    sc.face_up = true;
+                                    ps.remove.push(sc);
+                                }
+                                if to_top {
+                                    ps.deck.push(card);
+                                } else {
+                                    ps.deck.insert(0, card);
+                                }
+                            }
+                            self.log(format!("📚 [{}] の効果で [{}] をデッキの{}に移しました！", actor_name, cname, pos_label));
+                            break;
+                        }
+                    }
+                }
+                if self.drain_pending_clause_queue() {
+                    return;
+                }
+                self.resume_after_decision(player_id, &resume_context);
+                return;
+            }
             "DECLARE_CLAUSE_SELECT" => {
                 if let Some(chosen_clause) = modes.get(single_idx).cloned() {
                     let def_id = opts
@@ -810,7 +855,33 @@ impl MatchEngine {
         let mut chosen_def_for_cond: Option<String> = None;
         let mut applied = false;
 
-        if effect_type == "FORCE_CONTACT_PICK_ALLY" {
+        if effect_type == "TOP_OR_BOTTOM_DECK" {
+            if !valid_chosen.is_empty() {
+                let dec_id = self.generate_decision_id();
+                self.pending_decision = Some(json!({
+                    "decisionId": dec_id,
+                    "revision": self.revision,
+                    "playerId": player_id,
+                    "kind": "modeSelect",
+                    "options": {
+                        "specialKind": "DECK_TOP_OR_BOTTOM",
+                        "actorId": actor_id,
+                        "actorName": actor_name,
+                        "sourceLevel": source_level,
+                        "targetIds": valid_chosen,
+                        "modes": ["デッキの上に移す", "デッキの下に移す"],
+                        "resumeContext": resume_context,
+                        "title": format!("[{}] 選んだカードをデッキの上か下に移してください", actor_name),
+                    }
+                }));
+                return;
+            }
+            if self.drain_pending_clause_queue() {
+                return;
+            }
+            self.resume_after_decision(player_id, &resume_context);
+            return;
+        } else if effect_type == "FORCE_CONTACT_PICK_ALLY" {
             let tid = opts
                 .get("forcedContactTargetId")
                 .and_then(|v| v.as_str())

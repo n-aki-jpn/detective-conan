@@ -1826,4 +1826,54 @@ fn test_b05102_still_draws_and_deploys_when_opponent_field_empty() {
     assert_eq!(engine.players["p1"].hand.len(), 3, "対象不在でも後続の1枚ドローが実行されること");
 }
 
+#[test]
+fn test_b01081_can_choose_deck_top_or_bottom() {
+    let catalog = load_test_catalog();
+    let mut engine = MatchEngine::new(catalog);
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    ps1.partner = Some(test_inst("p1_p", "B01079", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps1.case = Some(test_inst("p1_c", "PR115", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    ps1.field.push(test_inst("b01081", "B01081P", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+
+    let mut ps2 = engine::PlayerState::new("p2".to_string());
+    ps2.partner = Some(test_inst("p2_p", "PR250", "p2", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps2.case = Some(test_inst("p2_c", "B10101", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    ps2.field.push(test_inst("opp_lv7", "B07041", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+    ps2.deck.push(test_inst("opp_d1", "D03009", "p2", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), ps2);
+
+    let desc = engine.catalog.get("B01081P").unwrap().description.clone();
+    engine.execute_declare_clause("p1", "b01081", "B01081P", false, None, models::CardOrientation::ACTIVE, &desc);
+
+    // 1. まず対象キャラを選ぶ
+    let dec1 = engine.pending_decision.as_ref().unwrap();
+    assert_eq!(dec1["kind"], "targetSelect");
+    let id1 = dec1["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": id1,
+        "revision": engine.revision,
+        "value": {"targetIds": ["opp_lv7"]}
+    })).unwrap();
+
+    // 2. デッキの上か下かを選ぶ modeSelect が開くこと
+    let dec2 = engine.pending_decision.as_ref().unwrap();
+    assert_eq!(dec2["kind"], "modeSelect");
+    assert_eq!(dec2["options"]["specialKind"], "DECK_TOP_OR_BOTTOM");
+    let id2 = dec2["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": id2,
+        "revision": engine.revision,
+        "value": {"modeIndex": 0}
+    })).unwrap();
+
+    assert_eq!(engine.players["p2"].field.len(), 0);
+    assert_eq!(engine.players["p2"].deck.last().unwrap().instance_id, "opp_lv7", "デッキの上に移動すること");
+}
+
 
