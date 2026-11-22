@@ -1767,6 +1767,8 @@
         oninput="setBgmVolume(this.value)" style="width:54px; accent-color:#38bdf8; cursor:pointer;" title="BGM音量">
       <button class="btn btn-secondary" onclick="showRoomModal()"
         style="padding:4px 8px; font-size:0.75rem; min-height:28px;">📶 対戦ルーム</button>
+      <button id="btn-copy-board" class="btn btn-secondary" onclick="copyBoardState()"
+        style="padding:4px 8px; font-size:0.75rem; min-height:28px;" title="現在の盤面・ログをコピー">🐛 盤面コピー</button>
       <button class="btn btn-secondary" onclick="resetMatch()"
         style="padding:4px 8px; font-size:0.75rem; min-height:28px;">リセット</button>
     </div>
@@ -2623,6 +2625,93 @@
     function isOnlinePvpRoom(obs = lastObs) {
       const soloId = localStorage.getItem('conan_solo_room_id');
       return currentRoomId !== 'default' && currentRoomId !== soloId && !(obs && obs.isCpu);
+    }
+
+    async function copyBoardState() {
+      if (!lastObs) {
+        alert('盤面データがまだ読み込まれていません');
+        return;
+      }
+      const summarizeCard = (c) => {
+        if (!c) return null;
+        const out = {
+          definitionId: c.definitionId || null,
+          name: c.name || null,
+          orientation: c.orientation || null,
+          faceUp: c.faceUp,
+        };
+        if (c.enteredTurn !== undefined) out.enteredTurn = c.enteredTurn;
+        if (c.hasRush) out.hasRush = true;
+        if (c.rushTarget) out.rushTarget = c.rushTarget;
+        if (c.canAttackActive) out.canAttackActive = true;
+        if (c.tempApBonus) out.tempApBonus = c.tempApBonus;
+        if (c.tempLpBonus) out.tempLpBonus = c.tempLpBonus;
+        if (c.setCards && c.setCards.length > 0) {
+          out.setCards = c.setCards.map(sc => ({
+            definitionId: sc.definitionId || null,
+            name: sc.name || null,
+            faceUp: sc.faceUp,
+          }));
+        }
+        return out;
+      };
+      const summarizePlayer = (ps) => {
+        if (!ps) return null;
+        return {
+          playerId: ps.playerId,
+          isFirstPlayer: !!ps.isFirstPlayer,
+          casePhase: ps.casePhase,
+          fileCount: ps.fileCount !== undefined ? ps.fileCount : (ps.file ? ps.file.length : 0),
+          partner: summarizeCard(ps.partner),
+          case: summarizeCard(ps.case),
+          field: (ps.field || []).map(summarizeCard),
+          hand: (ps.hand || []).map(summarizeCard),
+          evidence: (ps.evidence || []).map(summarizeCard),
+          remove: (ps.remove || []).map(summarizeCard),
+        };
+      };
+      const logs = (lastObs.logs || []).slice(-30);
+      const boardObj = {
+        turn: lastObs.turn,
+        turnPlayerId: lastObs.turnPlayerId,
+        phase: lastObs.phase,
+        revision: lastObs.revision,
+        me: summarizePlayer(lastObs.me),
+        opponent: summarizePlayer(lastObs.opponent),
+        pendingDecision: lastObs.pendingDecision || null,
+      };
+      const text = [
+        `### 盤面状態 (T:${lastObs.turn} / 手番:${lastObs.turnPlayerId} / Phase:${lastObs.phase} / rev:${lastObs.revision})`,
+        '',
+        '#### 直近ログ (最大30件)',
+        '```text',
+        ...logs,
+        '```',
+        '',
+        '#### 盤面・決定状態 (JSON)',
+        '```json',
+        JSON.stringify(boardObj, null, 2),
+        '```',
+      ].join('\n');
+
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        }
+        alert('盤面情報をクリップボードにコピーしました！');
+      } catch (err) {
+        console.error('Copy failed:', err);
+        alert('クリップボードへのコピーに失敗しました');
+      }
     }
 
     function switchView(pid) {
