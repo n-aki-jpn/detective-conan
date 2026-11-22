@@ -18,7 +18,8 @@ fn test_bug3_b07094_gin_and_optional_compound_costs() {
         ps1.field.push(test_inst("p1_gin", "B07094", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE)); // lv8
         ps1.hand.push(test_inst("h1", "B01011", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
         ps2.field.push(test_inst("opp_c", "B01011", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE));
-        engine.players.insert("p1".to_string(), ps1);
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+    engine.players.insert("p1".to_string(), ps1);
         engine.players.insert("p2".to_string(), ps2);
 
         engine.trigger_on_turn_end("p1");
@@ -44,7 +45,8 @@ fn test_bug3_b07094_gin_and_optional_compound_costs() {
         ps1.field.push(test_inst("self_lv4", "B01011", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
         ps1.hand.push(test_inst("h1", "B01011", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
         ps2.field.push(test_inst("opp_c", "B01014", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE));
-        engine.players.insert("p1".to_string(), ps1);
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+    engine.players.insert("p1".to_string(), ps1);
         engine.players.insert("p2".to_string(), ps2);
 
         engine.trigger_on_turn_end("p1");
@@ -99,7 +101,8 @@ fn test_bug3_b07094_gin_and_optional_compound_costs() {
             ps1.deck.push(test_inst(&format!("c_d1_{}", i), "B01011", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
             ps2.deck.push(test_inst(&format!("c_d2_{}", i), "B01011", "p2", models::Zone::DECK, models::CardOrientation::ACTIVE));
         }
-        engine.players.insert("p1".to_string(), ps1);
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+    engine.players.insert("p1".to_string(), ps1);
         engine.players.insert("p2".to_string(), ps2);
 
         engine.trigger_on_turn_end("p1");
@@ -154,7 +157,8 @@ fn test_bug3_b07094_gin_and_optional_compound_costs() {
         ps1.hand.push(test_inst("h_subaru", "B04049", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
         ps1.hand.push(test_inst("h_fbi", "B01062", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
         ps2.field.push(test_inst("opp_c", "B01014", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE));
-        engine.players.insert("p1".to_string(), ps1);
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+    engine.players.insert("p1".to_string(), ps1);
         engine.players.insert("p2".to_string(), ps2);
 
         engine.prompt_main_action("p1");
@@ -216,6 +220,7 @@ fn test_b08089_hell_angel_on_remove() {
         zone: models::Zone::HAND,
         ..Default::default()
     });
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
     engine.players.insert("p1".to_string(), ps1);
     engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
 
@@ -247,7 +252,8 @@ fn test_b09058_declare_requires_sleeping_other_akai_family_char() {
         ps1.field.push(test_inst("haneda_58", "B09058", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
         ps1.field.push(test_inst("non_akai", "B01005", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
         ps1.deck.push(test_inst("d1", "B01005", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
-        engine.players.insert("p1".to_string(), ps1);
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+    engine.players.insert("p1".to_string(), ps1);
         engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
         engine.prompt_main_action("p1");
 
@@ -275,7 +281,8 @@ fn test_b09058_declare_requires_sleeping_other_akai_family_char() {
         ps1.field.push(test_inst("haneda_58", "B09058", "p1", models::Zone::FIELD, models::CardOrientation::SLEEP));
         ps1.field.push(test_inst("other_akai", "B11056", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
         ps1.deck.push(test_inst("d1", "B01005", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
-        engine.players.insert("p1".to_string(), ps1);
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+    engine.players.insert("p1".to_string(), ps1);
         engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
         engine.prompt_main_action("p1");
 
@@ -357,6 +364,7 @@ fn test_b09011_declare_sets_base_lp_to_1_for_lv4_lp0_shounen_tanteidan() {
     let mut c_non_lv4 = test_inst("c_non_lv4", &non_lv4_id, "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
     c_non_lv4.entered_turn = 0;
     ps1.field = vec![c_b09011, c_match, c_non_lv4];
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
     engine.players.insert("p1".to_string(), ps1);
     engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
     engine.prompt_main_action("p1");
@@ -388,6 +396,7 @@ fn test_b10038_quoted_ability_not_mis_parsed_as_on_play_revive() {
     let mut ps1 = engine::PlayerState::new("p1".to_string());
     ps1.field.push(test_inst("c_b10038", "B10038", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
     ps1.remove.push(test_inst("c_lv3", "B01001", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE));
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
     engine.players.insert("p1".to_string(), ps1);
     engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
 
@@ -459,6 +468,7 @@ fn test_b10037_contact_win_requires_other_10000_ap_char() {
     ally.entered_turn = 0;
     ps1.field = vec![kyogoku, ally];
     ps1.hand.push(test_inst("c_h1", "B01001", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
     engine.players.insert("p1".to_string(), ps1);
     engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
 
@@ -534,6 +544,7 @@ fn test_b10098_declare_cost_sleeps_and_moves_self_to_partner_area() {
     c_b10098.entered_turn = 0;
     ps1.field.push(c_b10098);
     // リムーブエリアに〚突撃〛を持つLv8以下の怪盗キッド/服部平次を用意（B10038はLv8なので対象外、B01001等は非対象。コスト確認用なので1枚なくても宣言自体は可能）
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
     engine.players.insert("p1".to_string(), ps1);
     engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
     engine.prompt_main_action("p1");
@@ -568,6 +579,7 @@ fn test_b10098_revived_char_can_attack_active() {
     ps1.field.push(c_b10098);
     // リムーブエリアに Lv8・突撃・怪盗キッド扱い の B10038 を用意
     ps1.remove.push(test_inst("c_kid", "B10038", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE));
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
     engine.players.insert("p1".to_string(), ps1);
     engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
     engine.prompt_main_action("p1");
@@ -617,6 +629,7 @@ fn test_b10098_partner_area_grants_contact_ap2000_on_both_turns() {
     let mut ps2 = engine::PlayerState::new("p2".to_string());
     ps2.field.push(test_inst("p2_c1", "B10038", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP));
 
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
     engine.players.insert("p1".to_string(), ps1);
     engine.players.insert("p2".to_string(), ps2);
 
@@ -659,6 +672,7 @@ fn test_b10036_forced_contact_uses_other_sleeping_ally() {
 
     let mut ps2 = engine::PlayerState::new("p2".to_string());
     ps2.field.push(test_inst("p2_c1", "B10038", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP));
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
     engine.players.insert("p1".to_string(), ps1);
     engine.players.insert("p2".to_string(), ps2);
     engine.prompt_main_action("p1");
@@ -716,6 +730,7 @@ fn test_b10101_declare_grants_contact_win_ability_without_immediate_deck_search(
     for i in 0..4 {
         ps1.deck.push(test_inst(&format!("d_{}", i), "B01001", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
     }
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
     engine.players.insert("p1".to_string(), ps1);
     engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
     engine.prompt_main_action("p1");
@@ -802,6 +817,7 @@ fn test_b10037_triggers_when_ally_reaches_10000_ap_via_cutin_in_contact() {
         ps2.evidence.push(test_inst(&format!("p2_ev{}", i), "B01005", "p2", models::Zone::EVIDENCE, models::CardOrientation::ACTIVE));
     }
 
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
     engine.players.insert("p1".to_string(), ps1);
     engine.players.insert("p2".to_string(), ps2);
     engine.contact_ap_buffs.insert("c_ally".to_string(), 3000);
@@ -823,5 +839,100 @@ fn test_b10037_triggers_when_ally_reaches_10000_ap_via_cutin_in_contact() {
         engine.contact_ap_buffs.is_empty(),
         "コンタクト終了後には contact_ap_buffs がクリアされていること"
     );
+}
+
+#[test]
+fn test_b09078_deck_search_dual_pick_and_conditional_discard() {
+    let catalog = load_test_catalog();
+
+    // ケース1: キャラとイベントの両方を1枚ずつ（計2枚）手札に加えた場合のみ手札リムーブが発生する
+    let mut engine = MatchEngine::new(catalog.clone());
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn_player_id = "p1".to_string();
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    ps1.partner = Some(test_inst("p1_p", "B01079", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps1.case = Some(test_inst("p1_c", "PR115", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    ps1.case_phase = models::CasePhase::INTRO;
+    for i in 0..4 {
+        ps1.file.push(test_inst(&format!("f{}", i), "B06089", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+    }
+    ps1.field.push(test_inst("b09078", "B09078", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+    ps1.hand.push(test_inst("h_keep", "B06089", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+    // 山札の上3枚（末尾からポップされるため逆順）: B08068P(黄キャラ), D05014(黄イベント), B06089(黄キャラ)
+    ps1.deck.push(test_inst("d3", "B06089", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    ps1.deck.push(test_inst("d2", "D05014", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    ps1.deck.push(test_inst("d1", "B08068P", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+    let mut ps2 = engine::PlayerState::new("p2".to_string());
+    ps2.partner = Some(test_inst("p2_p", "B01079", "p2", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps2.case = Some(test_inst("p2_c", "PR115", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), ps2);
+    engine.resolve_deployed_characters(
+        "p1",
+        None,
+        &[("b09078".to_string(), "B09078".to_string(), models::CardOrientation::ACTIVE)],
+        "MAIN",
+    );
+
+    let dec = engine.pending_decision.as_ref().unwrap();
+    assert_eq!(dec["kind"], "deckSearch");
+    assert_eq!(dec["options"]["postAddDiscard"], 1);
+    assert_eq!(dec["options"]["postAddDiscardMinPicked"], 2);
+    assert_eq!(dec["options"]["maxSelect"], 2, "キャラ1枚とイベント1枚の計2枚まで選択可能であること");
+    let revealed = dec["options"]["revealedCards"].as_array().unwrap();
+    assert!(revealed.iter().all(|c| c["selectable"] == true), "黄キャラ・黄イベントすべてが選択可能であること");
+
+    // キャラ1枚(d1)とイベント1枚(d2)の2枚を選択
+    let ds_id = dec["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": ds_id,
+        "revision": engine.revision,
+        "value": {"chosenCardIds": ["d1", "d2"]}
+    })).unwrap();
+
+    let after_2 = engine.pending_decision.as_ref().unwrap();
+    assert_eq!(engine.players["p1"].hand.len(), 3, "h_keep + d1 + d2 の3枚が手札にあること");
+    assert_eq!(after_2["kind"], "targetSelect", "2枚手札に加えた場合は手札1枚リムーブが発生すること");
+
+    // ケース2: 1枚だけ手札に加えた場合は手札リムーブが発生しない
+    let mut engine2 = MatchEngine::new(catalog);
+    engine2.phase = models::MatchPhase::MAIN;
+    engine2.turn_player_id = "p1".to_string();
+    let mut ps1_b = engine::PlayerState::new("p1".to_string());
+    ps1_b.partner = Some(test_inst("p1_p", "B01079", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps1_b.case = Some(test_inst("p1_c", "PR115", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    ps1_b.case_phase = models::CasePhase::INTRO;
+    for i in 0..4 {
+        ps1_b.file.push(test_inst(&format!("f{}", i), "B06089", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+    }
+    ps1_b.field.push(test_inst("b09078", "B09078", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+    ps1_b.hand.push(test_inst("h_keep", "B06089", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+    ps1_b.deck.push(test_inst("d3", "B06089", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    ps1_b.deck.push(test_inst("d2", "D05014", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    ps1_b.deck.push(test_inst("d1", "B08068P", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    engine2.player_order = vec!["p1".to_string(), "p2".to_string()];
+    engine2.players.insert("p1".to_string(), ps1_b);
+    let mut ps2_b = engine::PlayerState::new("p2".to_string());
+    ps2_b.partner = Some(test_inst("p2_p", "B01079", "p2", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps2_b.case = Some(test_inst("p2_c", "PR115", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    engine2.players.insert("p2".to_string(), ps2_b);
+    engine2.resolve_deployed_characters(
+        "p1",
+        None,
+        &[("b09078".to_string(), "B09078".to_string(), models::CardOrientation::ACTIVE)],
+        "MAIN",
+    );
+
+    let ds_id2 = engine2.pending_decision.as_ref().unwrap()["decisionId"].as_str().unwrap().to_string();
+    engine2.submit_decision("p1", &serde_json::json!({
+        "decisionId": ds_id2,
+        "revision": engine2.revision,
+        "value": {"chosenCardIds": ["d1"]}
+    })).unwrap();
+
+    let after_1 = engine2.pending_decision.as_ref().unwrap();
+    assert_eq!(after_1["kind"], "mainAction", "1枚しか手札に加えていない場合は手札リムーブが発生せずメインアクションに戻ること");
 }
 

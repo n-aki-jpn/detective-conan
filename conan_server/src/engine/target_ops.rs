@@ -1289,6 +1289,11 @@ impl MatchEngine {
                         .branches
                         .iter()
                         .any(|b| branch_matches_with_ctx(def, def.ap, b, self_file_count))
+                        || ds.extra_filters.iter().any(|ef| {
+                            ef.branches
+                                .iter()
+                                .any(|b| branch_matches_with_ctx(def, def.ap, b, self_file_count))
+                        })
                 })
                 .unwrap_or(false);
             candidates.push(json!({
@@ -1312,7 +1317,11 @@ impl MatchEngine {
             DeckPickAction::PlayActive => "現場に登場させる",
             DeckPickAction::PlaySleep => "スリープ状態で現場に登場させる",
         };
-        let max_select = ds.pick_count.max(ds.filter.count).max(1);
+        let max_select = if ds.extra_filters.is_empty() {
+            ds.pick_count.max(ds.filter.count).max(1)
+        } else {
+            ds.filter.count.max(1) + ds.extra_filters.iter().map(|f| f.count.max(1)).sum::<usize>()
+        };
         let rem_label = if ds.remainder_to_remove {
             "残りはリムーブエリアへ"
         } else if ds.shuffle_remainder {
@@ -1335,6 +1344,9 @@ impl MatchEngine {
                 "distinctColors": ds.filter.distinct_colors,
                 "pickAction": pick_action_str,
                 "postAddDiscard": ds.post_add_discard,
+                "postAddDiscardMinPicked": ds.post_add_discard_min_picked,
+                "primaryFilter": ds.filter,
+                "extraFilters": ds.extra_filters,
                 "postOps": ds.post_ops,
                 "remainderToRemove": ds.remainder_to_remove,
                 "shuffleRemainder": ds.shuffle_remainder,

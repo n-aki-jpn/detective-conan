@@ -627,6 +627,30 @@ pub fn parse_effect_steps(
 
         // 2) 条件付き追撃文（例：「〚カード名［江戸川コナン］〛を登場させた場合、カードを1枚引く」）
         if seen_target_or_search {
+            if let Some(ds) = plan.deck_search.as_mut() {
+                let s = sentence.trim_end_matches('。').trim();
+                if let Some(c_idx) = s.find("カードを手札に") {
+                    if s.contains("加えた場合、手札を") && s.ends_with("枚リムーブする") {
+                        if let Some(h_idx) = s.find("加えた場合、手札を") {
+                            let after_h = &s[h_idx + "加えた場合、手札を".len()..];
+                            if let Some(m_idx) = after_h.find("枚リムーブ") {
+                                if let Ok(dc) = after_h[..m_idx].trim().parse::<usize>() {
+                                    ds.post_add_discard = dc;
+                                }
+                            }
+                        }
+                        let rest = &s[c_idx + "カードを手札に".len()..];
+                        if let Some(idx) = rest.find("枚加えた場合") {
+                            if let Ok(min_p) = rest[..idx].trim().parse::<usize>() {
+                                if min_p > 0 {
+                                    ds.post_add_discard_min_picked = min_p;
+                                }
+                            }
+                        }
+                        continue;
+                    }
+                }
+            }
             if let Some(tstep) = plan.target_step.as_mut() {
                 if tstep.conditional_follow_up.is_none() {
                     if let Some((cond_branch, ops)) = parse_conditional_follow_up(sentence) {
@@ -1378,11 +1402,13 @@ pub fn parse_deck_search_step(
         DeckPickAction::ToHand
     };
 
-    let target_slice = if let Some(idx) = text.find("その中から") {
+    let full_target_slice = if let Some(idx) = text.find("その中から") {
         let sub = &text[idx + "その中から".len()..];
-        if let Some(end) = sub.find("枚まで") {
+        if let Some(end) = sub.find("公開して") {
             &sub[..end]
-        } else if let Some(end) = sub.find("公開して") {
+        } else if let Some(end) = sub.find("手札に加え") {
+            &sub[..end]
+        } else if let Some(end) = sub.find("登場させ") {
             &sub[..end]
         } else {
             sub
@@ -1391,10 +1417,44 @@ pub fn parse_deck_search_step(
         text
     };
 
-    let mut filter = parse_target_filter(target_slice, TargetZone::Deck, true, dynamic_level);
-    filter.owner = OwnerScope::SelfOnly;
+    let mut extra_filters = Vec::new();
+    let (mut filter, mut count) = if full_target_slice.contains("枚までと")
+        && !full_target_slice.contains("同じ色を持たない")
+    {
+        let parts: Vec<&str> = full_target_slice
+            .split("枚までと")
+            .map(|p| p.trim_start_matches('、').trim())
+            .filter(|p| !p.is_empty())
+            .collect();
+        let mut parsed_filters = Vec::new();
+        for part in parts {
+            let mut f = parse_target_filter(part, TargetZone::Deck, true, dynamic_level);
+            f.owner = OwnerScope::SelfOnly;
+            let c = extract_count_around(part, "を", "枚")
+                .max(extract_count_around(part, "を", ""))
+                .max(1);
+            f.count = c;
+            f.up_to = true;
+            parsed_filters.push(f);
+        }
+        let first = parsed_filters.remove(0);
+        extra_filters = parsed_filters;
+        let total = first.count + extra_filters.iter().map(|f| f.count).sum::<usize>();
+        (first, total)
+    } else {
+        let target_slice = if let Some(end) = full_target_slice.find("枚まで") {
+            &full_target_slice[..end]
+        } else {
+            full_target_slice
+        };
+        let mut f = parse_target_filter(target_slice, TargetZone::Deck, true, dynamic_level);
+        f.owner = OwnerScope::SelfOnly;
+        (f, 0)
+    };
 
-    let mut count = extract_count_around(text, "を", "枚まで公開");
+    if count == 0 {
+        count = extract_count_around(text, "を", "枚まで公開");
+    }
     if count == 0 {
         count = extract_count_around(text, "を", "枚まで手札");
     }
@@ -1409,14 +1469,26 @@ pub fn parse_deck_search_step(
         count = count.max(2);
         filter.distinct_colors = true;
     }
-    filter.count = count.max(1);
-    filter.up_to = true;
+    if extra_filters.is_empty() {
+        filter.count = count.max(1);
+        filter.up_to = true;
+    }
 
     let mut post_add_discard = 0;
+    let mut post_add_discard_min_picked = 1;
     let mut post_clauses = Vec::new();
     for s in text.split('。').map(str::trim).filter(|s| !s.is_empty()) {
-        if s.starts_with("カードを手札に加えた場合、手札を") && s.ends_with("枚リムーブする") {
+        if s.starts_with("カードを手札に") && s.contains("加えた場合、手札を") && s.ends_with("枚リムーブする") {
             post_add_discard = extract_count_around(s, "手札を", "枚リムーブ");
+            if let Some(rest) = s.strip_prefix("カードを手札に") {
+                if let Some(idx) = rest.find("枚加えた場合") {
+                    if let Ok(min_p) = rest[..idx].trim().parse::<usize>() {
+                        if min_p > 0 {
+                            post_add_discard_min_picked = min_p;
+                        }
+                    }
+                }
+            }
         } else if (s.contains("手札に加えた場合、") || s.contains("登場させた場合、"))
             && !s.contains("デッキのカードを上から")
         {
@@ -1431,7 +1503,9 @@ pub fn parse_deck_search_step(
         search_count,
         pick_action,
         filter,
+        extra_filters,
         post_add_discard,
+        post_add_discard_min_picked,
         post_ops: Vec::new(),
         remainder_to_remove,
         pick_count: count.max(1),

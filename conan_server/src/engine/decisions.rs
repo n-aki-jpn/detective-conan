@@ -1382,6 +1382,10 @@ impl MatchEngine {
         let max_select = opts.get("maxSelect").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
         let source_level = opts.get("sourceLevel").and_then(|v| v.as_i64()).map(|n| n as i32);
         let post_add_discard = opts.get("postAddDiscard").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        let post_add_discard_min_picked = opts
+            .get("postAddDiscardMinPicked")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(1) as usize;
         let remainder_to_remove = opts.get("remainderToRemove").and_then(|v| v.as_bool()).unwrap_or(false);
         let shuffle_remainder = opts.get("shuffleRemainder").and_then(|v| v.as_bool()).unwrap_or(false);
         let record_removed_levels = opts.get("recordRemovedLevels").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -1659,7 +1663,10 @@ impl MatchEngine {
                     self.log(format!("✨ [{}] の効果でデッキから [{}] を手札に加え、残りをデッキ下に移しました", actor_name, cname));
                 }
             }
-            if post_add_discard > 0 && pick_action == "TO_HAND" {
+            if post_add_discard > 0
+                && pick_action == "TO_HAND"
+                && picked_defs.len() >= post_add_discard_min_picked
+            {
                 let mut combined = vec![ImmediateOp::DiscardHand(post_add_discard)];
                 combined.extend(post_ops.clone());
                 if self.execute_immediate_ops_with_continuation(

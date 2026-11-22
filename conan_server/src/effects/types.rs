@@ -467,7 +467,11 @@ pub struct DeckSearchStep {
     pub search_count: usize,
     pub pick_action: DeckPickAction,
     pub filter: TargetFilter,
+    #[serde(default)]
+    pub extra_filters: Vec<TargetFilter>,
     pub post_add_discard: usize,
+    #[serde(default = "default_one_usize")]
+    pub post_add_discard_min_picked: usize,
     pub post_ops: Vec<ImmediateOp>,
     pub remainder_to_remove: bool,
     #[serde(default = "default_one_usize")]
