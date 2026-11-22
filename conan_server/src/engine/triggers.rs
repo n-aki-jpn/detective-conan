@@ -769,7 +769,13 @@ impl MatchEngine {
             if let Some(ps) = self.players.get(&pid) {
                 for c in &ps.field {
                     if let Some(c_def) = self.catalog.get(&c.definition_id) {
-                        for clause in extract_clauses(&c_def.description, TriggerKind::OnTurnEnd, c_def.card_type) {
+                        let mut end_clauses = extract_clauses(&c_def.description, TriggerKind::OnTurnEnd, c_def.card_type);
+                        if let Some(granted_list) = self.granted_abilities_this_turn.get(&c.instance_id) {
+                            for g in granted_list {
+                                end_clauses.extend(extract_clauses(g, TriggerKind::OnTurnEnd, CardType::CHARACTER));
+                            }
+                        }
+                        for clause in end_clauses {
                             let is_opp_end = clause.contains("相手のターン終了時") || clause.contains("自分か相手のターン終了時");
                             let is_self_end = clause.contains("自分のターン終了時") || clause.contains("自分か相手のターン終了時") || (!clause.contains("相手の"));
                             if (pid == current_turn_pid && is_self_end) || (pid != current_turn_pid && is_opp_end) {
@@ -1102,7 +1108,13 @@ impl MatchEngine {
             }
             if let Some(def) = self.catalog.get(&a_card.definition_id).cloned() {
                 let ori = a_card.orientation;
-                for clause in extract_clauses(&def.description, TriggerKind::OnContact, def.card_type) {
+                let mut contact_clauses = extract_clauses(&def.description, TriggerKind::OnContact, def.card_type);
+                if let Some(granted_list) = self.granted_abilities_this_turn.get(actor_id) {
+                    for g in granted_list {
+                        contact_clauses.extend(extract_clauses(g, TriggerKind::OnContact, CardType::CHARACTER));
+                    }
+                }
+                for clause in contact_clauses {
                     if !clause.contains("コンタクトしたとき") {
                         continue;
                     }

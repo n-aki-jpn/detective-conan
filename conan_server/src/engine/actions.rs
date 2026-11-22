@@ -265,7 +265,12 @@ impl MatchEngine {
 
         // 8. Declare (宣言効果)
         let can_declare_clause = |actor_id: &str, actor_ori: CardOrientation, used_turn: bool, in_partner_area: bool, in_hand: bool, def: &crate::models::CardDefinition| -> bool {
-            let clauses = extract_clauses(&def.description, TriggerKind::Declare, def.card_type);
+            let mut clauses = extract_clauses(&def.description, TriggerKind::Declare, def.card_type);
+            if let Some(granted_list) = self.granted_abilities_this_turn.get(actor_id) {
+                for g in granted_list {
+                    clauses.extend(extract_clauses(g, TriggerKind::Declare, CardType::CHARACTER));
+                }
+            }
             if clauses.is_empty() {
                 return false;
             }
@@ -821,6 +826,15 @@ impl MatchEngine {
         let card_name = self.card_name_by_def(&def_id);
         let ori = self.find_actor_orientation(player_id, set_host_id.as_deref().unwrap_or(actor_id));
         let mut clauses = extract_clauses(&def.description, TriggerKind::Declare, def.card_type);
+        if let Some(granted_list) = self.granted_abilities_this_turn.get(actor_id) {
+            for g in granted_list {
+                for inner in extract_clauses(g, TriggerKind::Declare, CardType::CHARACTER) {
+                    if !clauses.contains(&inner) {
+                        clauses.push(inner);
+                    }
+                }
+            }
+        }
         if is_set_card {
             for inner in self.extract_set_card_granted_clauses(&def.description, TriggerKind::Declare) {
                 if !clauses.contains(&inner) {
