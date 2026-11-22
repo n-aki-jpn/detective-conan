@@ -555,8 +555,25 @@ impl MatchEngine {
                         opp_ps.deck.insert(0, d);
                     }
                 }
-                for did in revealed_def_ids {
-                    revealed_names.push(self.card_name_by_def(&did));
+                let mut candidates = Vec::new();
+                for (r_idx, did) in revealed_def_ids.iter().enumerate() {
+                    let def_opt = self.catalog.get(did);
+                    let lv = def_opt.map(|d| d.level).unwrap_or(0);
+                    let cname = self.card_name_by_def(did);
+                    revealed_names.push(format!("{}(Lv.{})", cname, lv));
+                    candidates.push(json!({
+                        "instanceId": format!("sousaku_{}", r_idx),
+                        "definitionId": did,
+                        "name": cname,
+                        "level": lv,
+                        "ap": def_opt.map(|d| d.ap).unwrap_or(0),
+                        "colors": def_opt.map(|d| d.colors.clone()).unwrap_or_default(),
+                        "traits": def_opt.map(|d| d.traits.clone()).unwrap_or_default(),
+                        "orientation": "ACTIVE",
+                        "faceUp": true,
+                        "isOpponent": true,
+                        "zoneLabel": "相手山札",
+                    }));
                 }
                 self.log(format!(
                     "🔎 [{}] 〚捜査{}〛 指定名「{}」 ➔ 公開: [{}] ({})",
@@ -566,6 +583,30 @@ impl MatchEngine {
                     revealed_names.join(", "),
                     if found { "発見！" } else { "見つからず" }
                 ));
+                if !candidates.is_empty() {
+                    let dec_id = self.generate_decision_id();
+                    self.pending_decision = Some(json!({
+                        "decisionId": dec_id,
+                        "revision": self.revision,
+                        "playerId": player_id,
+                        "kind": "targetSelect",
+                        "options": {
+                            "actorId": actor_id,
+                            "actorName": actor_name,
+                            "sourceLevel": source_level,
+                            "effectType": "VIEW_SOUSAKU_CARDS",
+                            "targetZone": "DECK",
+                            "maxSelect": 0,
+                            "optional": true,
+                            "title": format!("〚捜査{}〛めくったカード: {}（確認後、決定/スキップで次へ）", count, revealed_names.join(", ")),
+                            "candidates": candidates,
+                            "sousakuFound": found,
+                            "sousakuThenClause": then_clause,
+                            "resumeContext": resume_context,
+                        }
+                    }));
+                    return;
+                }
                 if found && !then_clause.is_empty() {
                     self.enqueue_mode_clauses(player_id, &actor_id, &actor_name, source_level, &[then_clause], &[], &resume_context);
                 }
@@ -769,7 +810,30 @@ impl MatchEngine {
         let mut chosen_def_for_cond: Option<String> = None;
         let mut applied = false;
 
-        if effect_type == "B08068_REVEAL_HAND" {
+        if effect_type == "VIEW_SOUSAKU_CARDS" {
+            let found = opts.get("sousakuFound").and_then(|v| v.as_bool()).unwrap_or(false);
+            let then_clause = opts
+                .get("sousakuThenClause")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            if found && !then_clause.is_empty() {
+                self.enqueue_mode_clauses(
+                    player_id,
+                    &actor_id,
+                    &actor_name,
+                    source_level,
+                    &[then_clause],
+                    &[],
+                    &resume_context,
+                );
+            }
+            if self.drain_pending_clause_queue() {
+                return;
+            }
+            self.resume_after_decision(player_id, &resume_context);
+            return;
+        } else if effect_type == "B08068_REVEAL_HAND" {
             let revealed_count = valid_chosen.len();
             if revealed_count > 0 {
                 let names: Vec<String> = valid_chosen.iter().map(|id| self.card_name_by_inst(id)).collect();
