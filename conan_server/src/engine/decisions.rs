@@ -769,7 +769,22 @@ impl MatchEngine {
         let mut chosen_def_for_cond: Option<String> = None;
         let mut applied = false;
 
-        if effect_type == "DISCARD_HAND" {
+        if effect_type == "B08068_REVEAL_HAND" {
+            let revealed_count = valid_chosen.len();
+            if revealed_count > 0 {
+                let names: Vec<String> = valid_chosen.iter().map(|id| self.card_name_by_inst(id)).collect();
+                self.log(format!(
+                    "👁️ [{}] のコストで手札から [{}] を公開しました（計 {} 枚）",
+                    actor_name,
+                    names.join("], ["),
+                    revealed_count
+                ));
+            } else {
+                self.log(format!("👁️ [{}] のコストで手札を公開しませんでした（0枚）", actor_name));
+            }
+            self.resolve_b08068_remove(player_id, &actor_id, revealed_count);
+            return;
+        } else if effect_type == "DISCARD_HAND" {
             let reveal_only = opts.get("revealOnly").and_then(|v| v.as_bool()).unwrap_or(false);
             let also_orient = opts.get("alsoOrientActor").and_then(|v| v.as_str());
             if valid_chosen.is_empty() {

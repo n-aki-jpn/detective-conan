@@ -1364,6 +1364,109 @@ impl MatchEngine {
         true
     }
 
+    pub(super) fn prompt_b08068_reveal_hand(&mut self, player_id: &str, actor_id: &str) {
+        let actor_name = self.card_name_by_inst(actor_id);
+        let mut candidates = Vec::new();
+        if let Some(ps) = self.players.get(player_id) {
+            for c in &ps.hand {
+                if let Some(def) = self.catalog.get(&c.definition_id) {
+                    if def.card_type == CardType::CHARACTER && def.traits.iter().any(|t| t == "喫茶ポアロ") {
+                        candidates.push(json!({
+                            "instanceId": c.instance_id,
+                            "definitionId": c.definition_id,
+                            "name": self.card_name_by_def(&c.definition_id),
+                            "level": def.level,
+                            "ap": def.ap,
+                            "colors": def.colors,
+                            "traits": def.traits,
+                            "orientation": format!("{:?}", c.orientation),
+                            "faceUp": c.face_up,
+                            "isOpponent": false,
+                            "zoneLabel": "手札",
+                        }));
+                    }
+                }
+            }
+        }
+        if candidates.is_empty() {
+            self.resolve_b08068_remove(player_id, actor_id, 0);
+            return;
+        }
+        let max_sel = candidates.len();
+        let dec_id = self.generate_decision_id();
+        self.pending_decision = Some(json!({
+            "decisionId": dec_id,
+            "revision": self.revision,
+            "playerId": player_id,
+            "kind": "targetSelect",
+            "options": {
+                "actorId": actor_id,
+                "actorName": actor_name,
+                "effectType": "B08068_REVEAL_HAND",
+                "targetZone": "HAND",
+                "maxSelect": max_sel,
+                "optional": true,
+                "title": "公開する手札（特徴［喫茶ポアロ］のキャラ）を好きな枚数選んでください（0枚も可）",
+                "candidates": candidates,
+                "resumeContext": "MAIN",
+            }
+        }));
+    }
+
+    pub(super) fn resolve_b08068_remove(&mut self, player_id: &str, actor_id: &str, revealed_count: usize) {
+        let actor_name = self.card_name_by_inst(actor_id);
+        let poaro_field_count = self
+            .players
+            .get(player_id)
+            .map(|ps| {
+                ps.field
+                    .iter()
+                    .filter(|c| {
+                        self.catalog
+                            .get(&c.definition_id)
+                            .map(|d| d.card_type == CardType::CHARACTER && d.traits.iter().any(|t| t == "喫茶ポアロ"))
+                            .unwrap_or(false)
+                    })
+                    .count()
+            })
+            .unwrap_or(0);
+        let max_level = (revealed_count + poaro_field_count) as i32;
+        let step = TargetStep {
+            action: TargetAction::Remove,
+            filter: TargetFilter {
+                zone: TargetZone::Field,
+                owner: OwnerScope::OppOnly,
+                count: 1,
+                up_to: true,
+                branches: vec![crate::effects::TargetBranch {
+                    card_types: vec![CardType::CHARACTER],
+                    max_level: Some(max_level),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            },
+            bonuses: Vec::new(),
+            follow_up: Vec::new(),
+            conditional_follow_up: None,
+            optional: true,
+            then_abort_if_skipped: false,
+            scale_by_cost_flipped_evidence: false,
+        };
+        if self.prompt_target_step(
+            player_id,
+            actor_id,
+            &actor_name,
+            None,
+            &step,
+            None,
+            "MAIN",
+            None,
+        ) {
+            return;
+        }
+        self.prompt_main_action(player_id);
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(super) fn prompt_hand_discard(
         &mut self,

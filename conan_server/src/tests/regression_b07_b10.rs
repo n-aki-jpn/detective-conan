@@ -936,3 +936,72 @@ fn test_b09078_deck_search_dual_pick_and_conditional_discard() {
     assert_eq!(after_1["kind"], "mainAction", "1枚しか手札に加えていない場合は手札リムーブが発生せずメインアクションに戻ること");
 }
 
+#[test]
+fn test_b08068_declare_reveal_hand_and_remove_opponent_only() {
+    let catalog = load_test_catalog();
+    let mut engine = MatchEngine::new(catalog);
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn_player_id = "p1".to_string();
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    ps1.partner = Some(test_inst("p1_p", "B01079", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps1.case = Some(test_inst("p1_c", "PR115", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    ps1.field.push(test_inst("b08068", "B08068P", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+    ps1.field.push(test_inst("p1_poaro", "B09078", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+    ps1.hand.push(test_inst("h1", "B06089", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+    ps1.hand.push(test_inst("h2", "B06089", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+
+    let mut ps2 = engine::PlayerState::new("p2".to_string());
+    ps2.partner = Some(test_inst("p2_p", "B01079", "p2", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps2.case = Some(test_inst("p2_c", "PR115", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    ps2.field.push(test_inst("p2_lv4", "B09078", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+    ps2.field.push(test_inst("p2_lv5", "PR163", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), ps2);
+    engine.prompt_main_action("p1");
+
+    let desc = engine.catalog.get("B08068P").unwrap().description.clone();
+    engine.execute_declare_clause(
+        "p1",
+        "b08068",
+        "B08068P",
+        false,
+        None,
+        models::CardOrientation::ACTIVE,
+        &desc,
+    );
+
+    // 1. まず手札の喫茶ポアロキャラを公開するフェーズが開くこと
+    let rev_dec = engine.pending_decision.as_ref().unwrap();
+    assert_eq!(rev_dec["kind"], "targetSelect");
+    assert_eq!(rev_dec["options"]["effectType"], "B08068_REVEAL_HAND");
+    let rev_id = rev_dec["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": rev_id,
+        "revision": engine.revision,
+        "value": {"targetIds": ["h1", "h2"]}
+    })).unwrap();
+
+    // 2. 公開2枚 + 現場の喫茶ポアロ2枚 = Lv.4以下、かつ相手キャラのみが対象になること
+    assert!(engine.logs.iter().any(|l| l.contains("計 2 枚")), "logs={:?}", engine.logs);
+    let rem_dec = engine.pending_decision.as_ref().unwrap();
+    assert_eq!(rem_dec["kind"], "targetSelect");
+    assert_eq!(rem_dec["options"]["maxSelect"], 1);
+    let cands = rem_dec["options"]["candidates"].as_array().unwrap();
+    assert_eq!(cands.len(), 1);
+    assert_eq!(cands[0]["instanceId"], "p2_lv4");
+
+    let rem_id = rem_dec["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": rem_id,
+        "revision": engine.revision,
+        "value": {"targetIds": ["p2_lv4"]}
+    })).unwrap();
+
+    assert_eq!(engine.players["p1"].hand.len(), 2, "公開コストなので手札は減らないこと");
+    assert_eq!(engine.players["p1"].field.len(), 2, "自分のキャラはリムーブされないこと");
+    assert_eq!(engine.players["p2"].field.len(), 1, "相手のLv.4のみリムーブされること");
+}
+

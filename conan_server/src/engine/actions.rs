@@ -921,7 +921,7 @@ impl MatchEngine {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn execute_declare_clause(
+    pub(crate) fn execute_declare_clause(
         &mut self,
         player_id: &str,
         actor_id: &str,
@@ -965,6 +965,10 @@ impl MatchEngine {
         let _ = is_hand_event_declare;
 
         self.mark_clause_used_this_turn(actor_id, &clause);
+        if def_id == "B08068" || def_id == "B08068P" {
+            self.prompt_b08068_reveal_hand(player_id, actor_id);
+            return;
+        }
         if let Some(ps) = self.players.get_mut(player_id) {
             if let Some(ref mut p) = ps.partner {
                 if p.instance_id == actor_id {
