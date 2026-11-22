@@ -385,6 +385,7 @@ pub enum ImmediateOp {
     OppDiscardHand(usize),
     OppDiscardRandom(usize),
     OppFlipEvidenceUp(usize),
+    RevealOpponentHand,
     MoveSelfFromEvidenceToFieldSleep,
     MoveSelfFromEvidenceToHand,
     MoveSelfFromEvidenceToPartner,

@@ -1736,4 +1736,62 @@ fn test_b02025_on_remove_does_not_pick_self_without_cutin() {
     );
 }
 
+#[test]
+fn test_b06084_on_enter_reveals_opponent_hand_then_removes_lv9_or_less() {
+    let catalog = load_test_catalog();
+    let mut engine = MatchEngine::new(catalog);
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn_player_id = "p1".to_string();
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    ps1.partner = Some(test_inst("p1_p", "B01079", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps1.case = Some(test_inst("p1_c", "PR115", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    ps1.field.push(test_inst("b06084", "B06084", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+
+    let mut ps2 = engine::PlayerState::new("p2".to_string());
+    ps2.partner = Some(test_inst("p2_p", "B01079", "p2", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps2.case = Some(test_inst("p2_c", "PR115", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    ps2.hand.push(test_inst("p2_h1", "B06089", "p2", models::Zone::HAND, models::CardOrientation::ACTIVE));
+    ps2.field.push(test_inst("p2_pr096", "PR096", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), ps2);
+
+    engine.resolve_deployed_characters(
+        "p1",
+        None,
+        &[("b06084".to_string(), "B06084".to_string(), models::CardOrientation::ACTIVE)],
+        "MAIN",
+    );
+
+    // 1. まず相手の手札を公開するフェーズが開くこと
+    let view_dec = engine.pending_decision.as_ref().unwrap();
+    assert_eq!(view_dec["kind"], "targetSelect");
+    assert_eq!(view_dec["options"]["effectType"], "VIEW_OPPONENT_HAND");
+    let cands = view_dec["options"]["candidates"].as_array().unwrap();
+    assert_eq!(cands.len(), 1);
+    assert_eq!(cands[0]["definitionId"], "B06089");
+
+    // 確認後、次へ進む
+    let view_id = view_dec["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": view_id,
+        "revision": engine.revision,
+        "value": {"targetIds": []}
+    })).unwrap();
+
+    // 2. 続いてレベル9以下のキャラを1枚まで選びリムーブするフェーズが開くこと
+    let rem_dec = engine.pending_decision.as_ref().unwrap();
+    assert_eq!(rem_dec["kind"], "targetSelect");
+    let rem_id = rem_dec["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": rem_id,
+        "revision": engine.revision,
+        "value": {"targetIds": ["p2_pr096"]}
+    })).unwrap();
+
+    assert_eq!(engine.players["p2"].field.len(), 0, "相手のPR096がリムーブされること");
+}
+
 

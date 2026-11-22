@@ -463,6 +463,10 @@ pub fn parse_immediate_ops(sentence: &str) -> Vec<ImmediateOp> {
         ops.push(ImmediateOp::MassContactRemove);
         return ops;
     }
+    if sentence.contains("相手は手札を公開する") {
+        ops.push(ImmediateOp::RevealOpponentHand);
+        return ops;
+    }
     if sentence.contains("すべてのキャラをリムーブする") {
         ops.push(ImmediateOp::MassAllRemove);
     }

@@ -894,6 +894,62 @@ impl MatchEngine {
                         self.log(format!("🎲 [{}] の効果で {} の手札からランダムに [{}] をリムーブしました", actor_name, opp_id, cname));
                     }
                 }
+                ImmediateOp::RevealOpponentHand => {
+                    let opp_id = self.opponent_id_of(player_id);
+                    let mut candidates = Vec::new();
+                    let mut names = Vec::new();
+                    if let Some(ops_ps) = self.players.get(&opp_id) {
+                        for c in &ops_ps.hand {
+                            let def_opt = self.catalog.get(&c.definition_id);
+                            let cname = self.card_name_by_def(&c.definition_id);
+                            names.push(cname.clone());
+                            candidates.push(json!({
+                                "instanceId": c.instance_id,
+                                "definitionId": c.definition_id,
+                                "name": cname,
+                                "level": def_opt.map(|d| d.level).unwrap_or(0),
+                                "ap": def_opt.map(|d| d.ap).unwrap_or(0),
+                                "colors": def_opt.map(|d| d.colors.clone()).unwrap_or_default(),
+                                "traits": def_opt.map(|d| d.traits.clone()).unwrap_or_default(),
+                                "orientation": format!("{:?}", c.orientation),
+                                "faceUp": true,
+                                "isOpponent": true,
+                                "zoneLabel": "相手手札",
+                            }));
+                        }
+                    }
+                    if candidates.is_empty() {
+                        self.log(format!("👁️ [{}] の効果で {} の手札を公開しましたが、手札は0枚でした", actor_name, opp_id));
+                    } else {
+                        self.log(format!("👁️ [{}] の効果で {} の手札が公開されました: [{}]", actor_name, opp_id, names.join("], [")));
+                        let remaining = &ops[idx + 1..];
+                        let dec_id = self.generate_decision_id();
+                        self.pending_decision = Some(json!({
+                            "decisionId": dec_id,
+                            "revision": self.revision,
+                            "playerId": player_id,
+                            "kind": "targetSelect",
+                            "options": {
+                                "actorId": actor_id,
+                                "actorName": actor_name,
+                                "sourceLevel": None::<i32>,
+                                "effectType": "VIEW_OPPONENT_HAND",
+                                "targetZone": "HAND",
+                                "maxSelect": 0,
+                                "optional": true,
+                                "title": "相手の手札が公開されました（確認後、決定/スキップで次へ進みます）",
+                                "candidates": candidates,
+                                "followUpOps": remaining,
+                                "followUpTarget": follow_up_target,
+                                "followUpDeckSearch": follow_up_deck_search,
+                                "pendingClausePlan": pending_clause_plan,
+                                "afterHintLevel": after_hint_level,
+                                "resumeContext": resume_context,
+                            }
+                        }));
+                        return true;
+                    }
+                }
                 ImmediateOp::BlockHintThisTurn => {
                     self.turn_hint_blocked_players.insert(player_id.to_string());
                     self.log(format!("🚫 [{}] の効果: このターン中、{} は【ネクストヒント】を使用できません", actor_name, player_id));
@@ -978,6 +1034,7 @@ impl MatchEngine {
                     let has_file = self.players.get(player_id).map(|p| p.file.len() >= *count).unwrap_or(false);
                     if has_file {
                         self.enqueue_continuation_from_ops(player_id, actor_id, actor_name, &ops[idx + 1..], evidence_source_inst_id, follow_up_target, follow_up_deck_search, pending_clause_plan, resume_context);
+                        let remaining = &ops[idx + 1..];
                         let dec_id = self.generate_decision_id();
                         self.pending_decision = Some(json!({
                             "decisionId": dec_id,
@@ -1428,6 +1485,7 @@ impl MatchEngine {
                                 })
                             })
                             .collect();
+                        let remaining = &ops[idx + 1..];
                         let dec_id = self.generate_decision_id();
                         self.pending_decision = Some(json!({
                             "decisionId": dec_id,
@@ -1460,6 +1518,7 @@ impl MatchEngine {
                     let has_deck = self.players.get(player_id).map(|p| p.deck.len() >= *count).unwrap_or(false);
                     if has_deck {
                         self.enqueue_continuation_from_ops(player_id, actor_id, actor_name, &ops[idx + 1..], evidence_source_inst_id, follow_up_target, follow_up_deck_search, pending_clause_plan, resume_context);
+                        let remaining = &ops[idx + 1..];
                         let dec_id = self.generate_decision_id();
                         self.pending_decision = Some(json!({
                             "decisionId": dec_id,
@@ -1498,6 +1557,7 @@ impl MatchEngine {
                     }).unwrap_or(false);
                     if can_pay {
                         self.enqueue_continuation_from_ops(player_id, actor_id, actor_name, &ops[idx + 1..], evidence_source_inst_id, follow_up_target, follow_up_deck_search, pending_clause_plan, resume_context);
+                        let remaining = &ops[idx + 1..];
                         let dec_id = self.generate_decision_id();
                         self.pending_decision = Some(json!({
                             "decisionId": dec_id,
