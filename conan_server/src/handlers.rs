@@ -283,6 +283,20 @@ pub async fn handle_get_deck_by_id(
             return Json(val).into_response();
         }
     }
+    if let Ok(entries) = std::fs::read_dir(&mgr.decks_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                if let Ok(content) = std::fs::read_to_string(&path) {
+                    if let Ok(val) = serde_json::from_str::<Value>(&content) {
+                        if val.get("deckId").and_then(|v| v.as_str()) == Some(deck_id.as_str()) {
+                            return Json(val).into_response();
+                        }
+                    }
+                }
+            }
+        }
+    }
     (
         StatusCode::NOT_FOUND,
         Json(json!({"error": "Deck not found"})),

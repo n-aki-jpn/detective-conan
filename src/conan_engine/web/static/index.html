@@ -5055,7 +5055,7 @@
             const loadedPresets = [];
             for (const meta of presetMetas) {
               try {
-                const r = await fetch(`/api/decks/${encodeURIComponent(meta.deckId)}`);
+                const r = await fetch(`/api/decks/${encodeURIComponent(meta.fileId || meta.deckId)}`);
                 if (r.ok) {
                   const dObj = await r.json();
                   dObj.deckId = `user_${meta.deckId}`;
