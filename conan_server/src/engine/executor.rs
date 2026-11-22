@@ -306,7 +306,13 @@ impl MatchEngine {
             self.log(format!("💸 コスト支払い: {} のFILEから [{}] をリムーブしました", player_id, n));
         }
         if !milled.is_empty() {
-            self.log(format!("💸 コスト支払い: {} はデッキの上から {} 枚をリムーブしました", player_id, milled.len()));
+            let names: Vec<String> = milled.iter().map(|did| self.card_name_by_def(did)).collect();
+            self.log(format!(
+                "💸 コスト支払い: {} はデッキの上から {} 枚（[{}]）をリムーブしました",
+                player_id,
+                milled.len(),
+                names.join("], [")
+            ));
         }
         true
     }
