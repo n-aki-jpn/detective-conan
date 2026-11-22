@@ -810,7 +810,38 @@ impl MatchEngine {
         let mut chosen_def_for_cond: Option<String> = None;
         let mut applied = false;
 
-        if effect_type == "VIEW_SOUSAKU_CARDS" {
+        if effect_type == "FORCE_CONTACT_PICK_ALLY" {
+            let tid = opts
+                .get("forcedContactTargetId")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            if let Some(c_actor_id) = valid_chosen.into_iter().next() {
+                let opp_id = self.opponent_id_of(player_id);
+                let c_actor_name = self.card_name_by_inst(&c_actor_id);
+                let target_name = self.card_name_by_inst(&tid);
+                self.log(format!(
+                    "⚔️ [{}] の効果で [{}] と [{}] のコンタクト（バトル）が発生！",
+                    actor_name, c_actor_name, target_name
+                ));
+                self.contact_ap_buffs.clear();
+                self.action_context = Some(json!({
+                    "attackerPlayerId": player_id,
+                    "defenderPlayerId": opp_id,
+                    "actorId": c_actor_id,
+                    "targetId": tid,
+                    "attackerPass": false,
+                    "defenderPass": false,
+                    "cutinUsed": false,
+                    "isForcedContact": true
+                }));
+                self.trigger_on_contact(player_id, &c_actor_id, &opp_id, &tid);
+                self.proceed_to_action_resolution(None);
+                return;
+            }
+            self.prompt_main_action(player_id);
+            return;
+        } else if effect_type == "VIEW_SOUSAKU_CARDS" {
             let found = opts.get("sousakuFound").and_then(|v| v.as_bool()).unwrap_or(false);
             let then_clause = opts
                 .get("sousakuThenClause")

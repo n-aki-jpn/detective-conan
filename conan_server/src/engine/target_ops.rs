@@ -912,6 +912,50 @@ impl MatchEngine {
                     .and_then(|c| self.catalog.get(&c.definition_id))
                     .map(|d| d.description.contains("このキャラ以外のスリープ状態のキャラ"))
                     .unwrap_or(false);
+                let opp_ok = self.players.get(&opp_id).map(|ps| ps.field.iter().any(|c| c.instance_id == tid)).unwrap_or(false);
+                if needs_other_sleeping && opp_ok {
+                    let sleeping_allies: Vec<_> = self.players.get(player_id)
+                        .map(|ps| ps.field.iter().filter(|c| c.instance_id != actor_id && c.orientation == CardOrientation::SLEEP).cloned().collect())
+                        .unwrap_or_default();
+                    if sleeping_allies.len() > 1 {
+                        let candidates: Vec<Value> = sleeping_allies.iter().map(|c| {
+                            let def_opt = self.catalog.get(&c.definition_id);
+                            json!({
+                                "instanceId": c.instance_id,
+                                "definitionId": c.definition_id,
+                                "name": self.card_name_by_def(&c.definition_id),
+                                "level": def_opt.map(|d| d.level).unwrap_or(0),
+                                "ap": def_opt.map(|d| d.ap).unwrap_or(0),
+                                "colors": def_opt.map(|d| d.colors.clone()).unwrap_or_default(),
+                                "traits": def_opt.map(|d| d.traits.clone()).unwrap_or_default(),
+                                "orientation": format!("{:?}", c.orientation),
+                                "faceUp": c.face_up,
+                                "isOpponent": false,
+                                "zoneLabel": "自分現場",
+                            })
+                        }).collect();
+                        let dec_id = self.generate_decision_id();
+                        self.pending_decision = Some(json!({
+                            "decisionId": dec_id,
+                            "revision": self.revision,
+                            "playerId": player_id,
+                            "kind": "targetSelect",
+                            "options": {
+                                "actorId": actor_id,
+                                "actorName": actor_name,
+                                "effectType": "FORCE_CONTACT_PICK_ALLY",
+                                "targetZone": "FIELD",
+                                "maxSelect": 1,
+                                "optional": false,
+                                "title": "コンタクトを発生させる自分のキャラ（このキャラ以外のスリープ状態）を1枚選んでください",
+                                "candidates": candidates,
+                                "forcedContactTargetId": tid,
+                                "resumeContext": "MAIN",
+                            }
+                        }));
+                        return;
+                    }
+                }
                 let contact_actor_id = if needs_other_sleeping {
                     self.players.get(player_id)
                         .and_then(|ps| ps.field.iter().find(|c| c.instance_id != actor_id && c.orientation == CardOrientation::SLEEP))
@@ -921,7 +965,6 @@ impl MatchEngine {
                 } else {
                     None
                 };
-                let opp_ok = self.players.get(&opp_id).map(|ps| ps.field.iter().any(|c| c.instance_id == tid)).unwrap_or(false);
                 if let (Some(c_actor_id), true) = (contact_actor_id, opp_ok) {
                     let c_actor_name = self.players.get(player_id)
                         .and_then(|ps| ps.field.iter().find(|c| c.instance_id == c_actor_id))

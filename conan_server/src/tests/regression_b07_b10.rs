@@ -1005,3 +1005,60 @@ fn test_b08068_declare_reveal_hand_and_remove_opponent_only() {
     assert_eq!(engine.players["p2"].field.len(), 1, "相手のLv.4のみリムーブされること");
 }
 
+#[test]
+fn test_b10036_forced_contact_picks_from_multiple_sleeping_allies() {
+    let catalog = load_test_catalog();
+    let mut engine = MatchEngine::new(catalog);
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    ps1.partner = Some(test_inst("p1_p", "PR250", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps1.case = Some(test_inst("p1_c", "B10101", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    ps1.field.push(test_inst("b10036", "B10036", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+    ps1.field.push(test_inst("ally_1", "B06067", "p1", models::Zone::FIELD, models::CardOrientation::SLEEP));
+    ps1.field.push(test_inst("ally_2", "B10037", "p1", models::Zone::FIELD, models::CardOrientation::SLEEP));
+
+    let mut ps2 = engine::PlayerState::new("p2".to_string());
+    ps2.partner = Some(test_inst("p2_p", "B03106", "p2", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps2.case = Some(test_inst("p2_c", "B06105P", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    ps2.field.push(test_inst("opp_target", "D07019", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), ps2);
+
+    let desc = engine.catalog.get("B10036").unwrap().description.clone();
+    engine.execute_declare_clause("p1", "b10036", "B10036", false, None, models::CardOrientation::ACTIVE, &desc);
+
+    // 1. まず相手キャラを選ぶ
+    let dec1 = engine.pending_decision.as_ref().unwrap();
+    assert_eq!(dec1["kind"], "targetSelect");
+    let id1 = dec1["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": id1,
+        "revision": engine.revision,
+        "value": {"targetIds": ["opp_target"]}
+    })).unwrap();
+
+    // 2. 自分の場にスリープキャラが2体いるため、コンタクトさせるキャラを選ぶフェーズが開くこと
+    let dec2 = engine.pending_decision.as_ref().unwrap();
+    assert_eq!(dec2["kind"], "targetSelect");
+    assert_eq!(dec2["options"]["effectType"], "FORCE_CONTACT_PICK_ALLY");
+    let cands = dec2["options"]["candidates"].as_array().unwrap();
+    assert_eq!(cands.len(), 2);
+
+    // ally_2 (B10037) を選んでコンタクトを発生させる
+    let id2 = dec2["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": id2,
+        "revision": engine.revision,
+        "value": {"targetIds": ["ally_2"]}
+    })).unwrap();
+
+    assert!(
+        engine.logs.iter().any(|l| l.contains("京極真(B10037)") && l.contains("コンタクト（バトル）が発生")),
+        "選んだ ally_2 (京極真) でコンタクトが発生すること"
+    );
+}
+
