@@ -467,6 +467,25 @@ pub fn parse_immediate_ops(sentence: &str) -> Vec<ImmediateOp> {
         ops.push(ImmediateOp::RevealOpponentHand);
         return ops;
     }
+    if let Some(h_idx) = sentence.find("自分の手札が") {
+        if sentence.contains("枚以上ある場合、手札を") && sentence.contains("枚リムーブ") {
+            let after_h = &sentence[h_idx + "自分の手札が".len()..];
+            if let Some(m_idx) = after_h.find("枚以上ある場合、手札を") {
+                if let Ok(min_hand) = after_h[..m_idx].trim().parse::<usize>() {
+                    let after_d = &after_h[m_idx + "枚以上ある場合、手札を".len()..];
+                    if let Some(d_idx) = after_d.find("枚リムーブ") {
+                        if let Ok(discard_count) = after_d[..d_idx].trim().parse::<usize>() {
+                            ops.push(ImmediateOp::DiscardHandIfHandAtLeast {
+                                discard_count,
+                                min_hand,
+                            });
+                            return ops;
+                        }
+                    }
+                }
+            }
+        }
+    }
     if sentence.contains("すべてのキャラをリムーブする") {
         ops.push(ImmediateOp::MassAllRemove);
     }

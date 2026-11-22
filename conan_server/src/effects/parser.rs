@@ -627,6 +627,25 @@ pub fn parse_effect_steps(
 
         // 2) 条件付き追撃文（例：「〚カード名［江戸川コナン］〛を登場させた場合、カードを1枚引く」）
         if seen_target_or_search {
+            if let Some(h_idx) = sentence.find("自分の手札が") {
+                if sentence.contains("枚以上ある場合、手札を") && sentence.contains("枚リムーブ") {
+                    let after_h = &sentence[h_idx + "自分の手札が".len()..];
+                    if let Some(m_idx) = after_h.find("枚以上ある場合、手札を") {
+                        if let Ok(min_hand) = after_h[..m_idx].trim().parse::<usize>() {
+                            let after_d = &after_h[m_idx + "枚以上ある場合、手札を".len()..];
+                            if let Some(d_idx) = after_d.find("枚リムーブ") {
+                                if let Ok(discard_count) = after_d[..d_idx].trim().parse::<usize>() {
+                                    plan.post_target_ops.push(ImmediateOp::DiscardHandIfHandAtLeast {
+                                        discard_count,
+                                        min_hand,
+                                    });
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             if let Some(ds) = plan.deck_search.as_mut() {
                 let s = sentence.trim_end_matches('。').trim();
                 if let Some(c_idx) = s.find("カードを手札に") {

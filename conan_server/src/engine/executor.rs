@@ -359,6 +359,30 @@ impl MatchEngine {
                     self.draw_cards(player_id, *n);
                     self.log(format!("✨ [{}] の効果でカードを {} 枚引きました", actor_name, n));
                 }
+                ImmediateOp::DiscardHandIfHandAtLeast { discard_count, min_hand } => {
+                    let hand_len = self.players.get(player_id).map(|ps| ps.hand.len()).unwrap_or(0);
+                    if hand_len >= *min_hand {
+                        let remaining = &ops[idx + 1..];
+                        if self.prompt_hand_discard(
+                            player_id,
+                            actor_id,
+                            actor_name,
+                            None,
+                            *discard_count,
+                            None,
+                            false,
+                            false,
+                            remaining,
+                            follow_up_target,
+                            follow_up_deck_search,
+                            pending_clause_plan,
+                            resume_context,
+                            after_hint_level,
+                        ) {
+                            return true;
+                        }
+                    }
+                }
                 ImmediateOp::DiscardHand(n) => {
                     let remaining = &ops[idx + 1..];
                     if self.prompt_hand_discard(
@@ -1394,7 +1418,16 @@ impl MatchEngine {
                 ImmediateOp::ConditionalClause { condition, then_clause, else_clause } => {
                     let ori = self.find_actor_orientation(player_id, actor_id);
                     let cond_ctx = self.build_cond_info(player_id, Some(actor_id), ori, None);
-                    let ok = crate::effects::eval_cond_phrase(condition, &cond_ctx);
+                    let mut ok = crate::effects::eval_cond_phrase(condition, &cond_ctx);
+                    if let Some(h_idx) = condition.find("自分の手札が") {
+                        let after_h = &condition[h_idx + "自分の手札が".len()..];
+                        if let Some(m_idx) = after_h.find("枚以上ある") {
+                            if let Ok(min_hand) = after_h[..m_idx].trim().parse::<usize>() {
+                                let hand_len = self.players.get(player_id).map(|ps| ps.hand.len()).unwrap_or(0);
+                                ok = ok && hand_len >= min_hand;
+                            }
+                        }
+                    }
                     let chosen = if ok { Some(then_clause.clone()) } else { else_clause.clone() };
                     if let Some(cl) = chosen {
                         if !cl.is_empty() {

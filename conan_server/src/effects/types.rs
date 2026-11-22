@@ -360,6 +360,7 @@ pub struct ClauseCost {
 pub enum ImmediateOp {
     Draw(usize),
     DiscardHand(usize),
+    DiscardHandIfHandAtLeast { discard_count: usize, min_hand: usize },
     DiscardFilteredHand { count: usize, filter: TargetFilter },
     OptionalDiscardHand { count: usize, filter: Option<TargetFilter> },
     GainEvidence(usize),

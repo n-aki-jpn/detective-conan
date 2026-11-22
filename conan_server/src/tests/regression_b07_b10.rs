@@ -1062,3 +1062,89 @@ fn test_b10036_forced_contact_picks_from_multiple_sleeping_allies() {
     );
 }
 
+#[test]
+fn test_b07081_on_enter_recover_event_only_discards_if_hand_at_least_6() {
+    let catalog = load_test_catalog();
+
+    // ケース1: 加えた後の手札が5枚 -> リムーブは発生しない
+    let mut engine1 = MatchEngine::new(catalog.clone());
+    engine1.phase = models::MatchPhase::MAIN;
+    engine1.turn_player_id = "p1".to_string();
+    engine1.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    ps1.partner = Some(test_inst("p1_p", "B01079", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps1.case = Some(test_inst("p1_c", "PR115", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    ps1.field.push(test_inst("b07081", "B07081", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+    for i in 0..4 {
+        ps1.hand.push(test_inst(&format!("h{}", i), "B06089", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+    }
+    ps1.remove.push(test_inst("rem_ev", "D05014", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE));
+
+    engine1.players.insert("p1".to_string(), ps1);
+    engine1.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+
+    engine1.resolve_deployed_characters(
+        "p1",
+        None,
+        &[("b07081".to_string(), "B07081".to_string(), models::CardOrientation::ACTIVE)],
+        "MAIN",
+    );
+
+    let dec1 = engine1.pending_decision.as_ref().unwrap();
+    let id1 = dec1["decisionId"].as_str().unwrap().to_string();
+    engine1.submit_decision("p1", &serde_json::json!({
+        "decisionId": id1,
+        "revision": engine1.revision,
+        "value": {"targetIds": ["rem_ev"]}
+    })).unwrap();
+
+    assert_eq!(engine1.players["p1"].hand.len(), 5, "手札は5枚になること");
+    assert_eq!(
+        engine1.pending_decision.as_ref().unwrap()["kind"],
+        "mainAction",
+        "手札が5枚（6枚未満）のときは手札リムーブが発生しないこと dec={:?}",
+        engine1.pending_decision
+    );
+
+    // ケース2: 加えた後の手札が6枚 -> 手札1枚リムーブが発生する
+    let mut engine2 = MatchEngine::new(catalog);
+    engine2.phase = models::MatchPhase::MAIN;
+    engine2.turn_player_id = "p1".to_string();
+    engine2.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    let mut ps1_b = engine::PlayerState::new("p1".to_string());
+    ps1_b.partner = Some(test_inst("p1_p", "B01079", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps1_b.case = Some(test_inst("p1_c", "PR115", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    ps1_b.field.push(test_inst("b07081", "B07081", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+    for i in 0..5 {
+        ps1_b.hand.push(test_inst(&format!("h{}", i), "B06089", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+    }
+    ps1_b.remove.push(test_inst("rem_ev", "D05014", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE));
+
+    engine2.players.insert("p1".to_string(), ps1_b);
+    engine2.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+
+    engine2.resolve_deployed_characters(
+        "p1",
+        None,
+        &[("b07081".to_string(), "B07081".to_string(), models::CardOrientation::ACTIVE)],
+        "MAIN",
+    );
+
+    let dec2 = engine2.pending_decision.as_ref().unwrap();
+    let id2 = dec2["decisionId"].as_str().unwrap().to_string();
+    engine2.submit_decision("p1", &serde_json::json!({
+        "decisionId": id2,
+        "revision": engine2.revision,
+        "value": {"targetIds": ["rem_ev"]}
+    })).unwrap();
+
+    assert_eq!(engine2.players["p1"].hand.len(), 6, "手札は6枚になること");
+    assert_eq!(
+        engine2.pending_decision.as_ref().unwrap()["kind"],
+        "targetSelect",
+        "手札が6枚以上のときは手札1枚リムーブが発生すること"
+    );
+}
+
