@@ -4669,6 +4669,15 @@
                   <span class="split-role-tag" data-id="${cand.instanceId}" style="font-size:0.7rem; font-weight:bold; color:#fde047; margin-top:2px;"></span>
                 </div>
               `;
+            } else if (cand.faceUp === false) {
+              // 裏向きにセットされたカード等も中身（画像・名前・ステータス）を表示しない
+              const hiddenLabel = cand.zoneLabel === 'セット' ? '裏向きのセットカード' : '裏向きのカード';
+              btn.innerHTML = `
+                <div style="display:flex; flex-direction:column; align-items:flex-start;">
+                  <span style="font-weight:bold; display:flex; align-items:center; gap:4px;">${zoneBadge}${sideLabel} 🔒 ${hiddenLabel}</span>
+                  <span class="split-role-tag" data-id="${cand.instanceId}" style="font-size:0.7rem; font-weight:bold; color:#fde047; margin-top:2px;"></span>
+                </div>
+              `;
             } else {
               const stateLabel = cand.orientation === 'SLEEP' ? ' 💤' : cand.orientation === 'STUN' ? ' 💫' : '';
               const traitsStr = (cand.traits && cand.traits.length > 0) ? ` ［${cand.traits.join('/')}］` : '';
