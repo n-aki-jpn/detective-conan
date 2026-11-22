@@ -494,8 +494,26 @@ pub fn load_deck_from_dir(decks_dir: &Path, id: &str) -> Option<DeckDefinition> 
         return None;
     }
     let target = decks_dir.join(format!("{}.json", safe_id));
-    let content = std::fs::read_to_string(&target).ok()?;
-    serde_json::from_str::<DeckDefinition>(&content).ok()
+    if let Ok(content) = std::fs::read_to_string(&target) {
+        if let Ok(deck) = serde_json::from_str::<DeckDefinition>(&content) {
+            return Some(deck);
+        }
+    }
+    if let Ok(entries) = std::fs::read_dir(decks_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                if let Ok(content) = std::fs::read_to_string(&path) {
+                    if let Ok(deck) = serde_json::from_str::<DeckDefinition>(&content) {
+                        if deck.deck_id.as_deref() == Some(id) {
+                            return Some(deck);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
 }
 
 impl MatchManager {
