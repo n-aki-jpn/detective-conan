@@ -1674,6 +1674,7 @@ impl MatchEngine {
                     b09033_next_candidates = Some(rem_candidates);
                 }
             }
+            let mut removed_def_ids: Vec<String> = Vec::new();
             if let Some(mut rem) = remaining_opt.take() {
                 if shuffle_remainder {
                     let mut rng = rand::thread_rng();
@@ -1684,6 +1685,7 @@ impl MatchEngine {
                         if let Some(d) = self.catalog.get(&c.definition_id) {
                             removed_lv_sum += d.level;
                         }
+                        removed_def_ids.push(c.definition_id.clone());
                         c.zone = Zone::REMOVE;
                         c.face_up = true;
                         ps.remove.push(c);
@@ -1692,6 +1694,14 @@ impl MatchEngine {
                         ps.deck.insert(0, c);
                     }
                 }
+            }
+            if !removed_def_ids.is_empty() {
+                let rem_names: Vec<String> = removed_def_ids.iter().map(|did| self.card_name_by_def(did)).collect();
+                self.log(format!(
+                    "🗑️ [{}] の効果で残りの [{}] をリムーブエリアに移しました",
+                    actor_name,
+                    rem_names.join("], [")
+                ));
             }
         }
         self.last_deployed_count = deployed_count_delta;
