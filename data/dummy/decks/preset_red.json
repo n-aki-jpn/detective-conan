@@ -6,59 +6,59 @@
   "caseId": "B01078",
   "mainDeck": [
     {
-      "definitionId": "B11052",
+      "definitionId": "B11055",
       "count": 3
     },
     {
-      "definitionId": "B11053",
+      "definitionId": "B11056",
       "count": 3
     },
     {
-      "definitionId": "B10050",
+      "definitionId": "B11057",
       "count": 3
     },
     {
-      "definitionId": "B09110",
+      "definitionId": "B11058",
       "count": 3
     },
     {
-      "definitionId": "B08046",
+      "definitionId": "B11061",
+      "count": 3
+    },
+    {
+      "definitionId": "B11065",
+      "count": 3
+    },
+    {
+      "definitionId": "B10055",
+      "count": 3
+    },
+    {
+      "definitionId": "B10056",
+      "count": 3
+    },
+    {
+      "definitionId": "B10058",
+      "count": 3
+    },
+    {
+      "definitionId": "B09055",
+      "count": 3
+    },
+    {
+      "definitionId": "B09064",
       "count": 2
     },
     {
-      "definitionId": "B07066",
+      "definitionId": "B04042",
       "count": 3
     },
     {
-      "definitionId": "D04002",
+      "definitionId": "B04043",
       "count": 3
     },
     {
-      "definitionId": "D04004",
-      "count": 3
-    },
-    {
-      "definitionId": "D04005",
-      "count": 3
-    },
-    {
-      "definitionId": "D04006",
-      "count": 3
-    },
-    {
-      "definitionId": "D04008",
-      "count": 3
-    },
-    {
-      "definitionId": "D04010",
-      "count": 3
-    },
-    {
-      "definitionId": "D04015",
-      "count": 3
-    },
-    {
-      "definitionId": "D04016",
+      "definitionId": "B01061",
       "count": 2
     }
   ]

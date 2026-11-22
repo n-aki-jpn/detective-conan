@@ -528,6 +528,16 @@ pub fn branch_matches_with_ctx(
             if !has_innate_rush {
                 return false;
             }
+        } else if req_kw.starts_with('【') && req_kw.ends_with('】') {
+            let tag = req_kw.trim_start_matches('【').trim_end_matches('】');
+            let has_tag = def.description.lines().any(|line| {
+                crate::effects::text_utils::extract_leading_bracket_tags(line)
+                    .iter()
+                    .any(|t| *t == tag)
+            });
+            if !has_tag {
+                return false;
+            }
         } else if !def.description.contains(req_kw.as_str()) {
             return false;
         }

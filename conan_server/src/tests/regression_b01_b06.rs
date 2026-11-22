@@ -1713,3 +1713,27 @@ fn test_b06067_declare_discard_selects_police_and_grants_can_attack_active() {
     );
 }
 
+#[test]
+fn test_b02025_on_remove_does_not_pick_self_without_cutin() {
+    let mut engine = setup_main_match(7, "p2");
+    let mut kazuha = test_inst("c_kazuha", "B02025", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+    kazuha.entered_turn = 6;
+    engine.players.get_mut("p1").unwrap().field.push(kazuha);
+
+    // 相手ターン中に B02025 がリムーブされ、リムーブエリアに B02025 自身（カットイン非所持）のみがある状態
+    if let Some((rem_def, _)) = engine.move_field_char_to_remove("p1", "c_kazuha", false, false) {
+        engine.trigger_on_remove_char("p1", "c_kazuha", &rem_def, false);
+    }
+
+    assert!(
+        engine.pending_decision.is_none(),
+        "B02025自身は【カットイン】を持たないため、対象不在でRECOVER_TO_HANDの選択が開かないこと"
+    );
+    assert_eq!(
+        engine.players["p1"].hand.len(),
+        0,
+        "【カットイン】を持たないB02025自身が手札に加わってはならないこと"
+    );
+}
+
+
