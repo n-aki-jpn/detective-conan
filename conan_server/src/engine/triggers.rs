@@ -1205,13 +1205,21 @@ impl MatchEngine {
             let Some(def) = self.catalog.get(&wdef_id).cloned() else {
                 continue;
             };
-            let clauses = extract_clauses(&def.description, TriggerKind::OnContactWin, def.card_type);
+            let mut clauses = extract_clauses(&def.description, TriggerKind::OnContactWin, def.card_type);
+            if let Some(granted_list) = self.granted_abilities_this_turn.get(&watcher_id) {
+                for g in granted_list {
+                    clauses.extend(extract_clauses(g, TriggerKind::OnContactWin, CardType::CHARACTER));
+                }
+            }
             if clauses.is_empty() {
                 continue;
             }
             let card_name = self.card_name_by_def(&wdef_id);
 
             for clause in clauses {
+                if !self.can_use_clause_this_turn(&watcher_id, &clause) {
+                    continue;
+                }
                 let is_self_only = clause.contains("このキャラとのコンタクト") || !clause.contains("自分の現場にいる");
                 if is_self_only && watcher_id != actor_id {
                     continue;
@@ -1232,6 +1240,7 @@ impl MatchEngine {
                 if !self.pay_clause_cost(attacker_pid, &watcher_id, &cost) {
                     continue;
                 }
+                self.mark_clause_used_this_turn(&watcher_id, &clause);
                 let plan = parse_effect_steps(&clause, None, def.card_type);
                 self.execute_or_enqueue_plan(
                     attacker_pid,

@@ -193,6 +193,21 @@ pub fn parse_target_step(
     })
 }
 
+fn find_outside_quotes(haystack: &str, needle: &str) -> Option<usize> {
+    let mut depth = 0usize;
+    for (idx, ch) in haystack.char_indices() {
+        if depth == 0 && haystack[idx..].starts_with(needle) {
+            return Some(idx);
+        }
+        match ch {
+            '「' => depth += 1,
+            '」' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+    }
+    None
+}
+
 pub fn split_action_and_follow_up(action_phrase: &str) -> (&str, Option<&str>) {
     // 複合ターゲットボーナス（「〜AP＋2000し、〚突撃［キャラ］〛を与える」や「〜〚突撃［事件］〛と「...引く。」を与える」「〜AP＋3000し、〜セットする」）は分割せず primary 内に残す
     for sep in [
@@ -207,7 +222,7 @@ pub fn split_action_and_follow_up(action_phrase: &str) -> (&str, Option<&str>) {
         "裏向きにし、",
         "表向きにし、",
     ] {
-        if let Some(idx) = action_phrase.find(sep) {
+        if let Some(idx) = find_outside_quotes(action_phrase, sep) {
             let cut = idx + sep.len() - "、".len();
             return (&action_phrase[..cut], Some(&action_phrase[idx + sep.len()..]));
         }
@@ -303,6 +318,12 @@ pub fn parse_target_action(text: &str) -> Option<TargetAction> {
     }
     if text.contains("手札に移す") || text.contains("手札に移し") {
         return Some(TargetAction::BounceToHand);
+    }
+    if let (Some(a), Some(b)) = (text.find('「'), text.rfind('」')) {
+        if b > a && text[b..].contains("を与える") {
+            let granted = text[a + '「'.len_utf8()..b].to_string();
+            return Some(TargetAction::GrantAbility(granted));
+        }
     }
     if text.contains("デッキの上に移") {
         return Some(TargetAction::DeckTopFromRemove);

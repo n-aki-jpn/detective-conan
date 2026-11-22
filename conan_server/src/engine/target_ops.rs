@@ -461,6 +461,20 @@ impl MatchEngine {
             "GRANT_BOND_AS_ANY" => {
                 self.log(format!("🤝 [{}] の効果で [{}] に【絆】条件緩和を付与しました", actor_name, target_name));
             }
+            "GRANT_ABILITY" => {
+                let ab = opts
+                    .get("grantedAbility")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                if !ab.is_empty() {
+                    self.granted_abilities_this_turn
+                        .entry(tid.to_string())
+                        .or_default()
+                        .push(ab);
+                    self.log(format!("✨ [{}] の効果で [{}] にターン終了時まで能力を付与しました", actor_name, target_name));
+                }
+            }
             "LEVEL_DELTA" => {
                 let d_lv = opts.get("levelDelta").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                 for pid in [opp_id.as_str(), player_id] {
@@ -1486,6 +1500,10 @@ impl MatchEngine {
             TargetAction::GiveRush(rt) => rt.clone(),
             _ => None,
         };
+        let granted_ability = match &ts.action {
+            TargetAction::GrantAbility(ab) => Some(ab.clone()),
+            _ => None,
+        };
         // 「そのキャラを〜」の確定追撃は無駄な再確認モーダルを出さず自動適用する
         if ts.filter.target_prev_chosen && !ts.optional && candidates.len() == 1 {
             if let Some(tid) = candidates[0].get("instanceId").and_then(|v| v.as_str()) {
@@ -1494,6 +1512,7 @@ impl MatchEngine {
                     "levelDelta": level_delta,
                     "setDeckCount": set_deck_count,
                     "rushTarget": rush_target,
+                    "grantedAbility": granted_ability,
                     "resumeContext": resume_context,
                 });
                 let mut deployed_dummy = vec![];
@@ -1595,6 +1614,7 @@ impl MatchEngine {
                 "levelDelta": level_delta,
                 "setDeckCount": set_deck_count,
                 "rushTarget": rush_target,
+                "grantedAbility": granted_ability,
                 "bonuses": ts.bonuses,
                 "followUpOps": ts.follow_up,
                 "condFollowUp": ts.conditional_follow_up.as_ref().map(|(br, ops)| json!({"branch": br, "ops": ops})),
@@ -1663,6 +1683,7 @@ pub(super) fn target_action_prompt_title(action: &TargetAction, filter: &TargetF
         TargetAction::CopyNameFromRevealed => "カード名を書き換えるキャラを選択してください".to_string(),
         TargetAction::TriggerTargetHirameki => "【ヒラメキ】を発動させるカードを選択してください".to_string(),
         TargetAction::GrantBondAsAny => "【絆】条件を緩和するキャラを選択してください".to_string(),
+        TargetAction::GrantAbility(_) => format!("能力を与える{}キャラを選択してください", prefix),
         TargetAction::LevelDelta(d) => {
             if *d >= 0 {
                 format!("レベル＋{}する{}キャラを選択してください", d, prefix)

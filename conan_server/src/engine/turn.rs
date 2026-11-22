@@ -110,6 +110,7 @@ impl MatchEngine {
         self.turn = turn;
         self.turn_player_id = turn_player_id.to_string();
         self.turn_clause_usage.clear();
+        self.granted_abilities_this_turn.clear();
         self.turn_field_plays_by_player.clear();
         self.turn_disguise_blocked_players.clear();
         self.turn_hint_blocked_players.clear();

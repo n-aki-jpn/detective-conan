@@ -200,6 +200,47 @@ pub fn extract_hand_remove_spec(text: &str) -> (usize, Option<TargetFilter>) {
 }
 
 /// 能力句の解決プラン（事前処理・対象選択・デッキサーチ・事後効果）を解析する
+/// 引用符「...」内の「。」では分割せず、外側の「。」のみで文を分割する
+fn split_sentences_outside_quotes(text: &str) -> Vec<&str> {
+    let mut res = Vec::new();
+    let mut depth = 0usize;
+    let mut start = 0usize;
+    for (idx, ch) in text.char_indices() {
+        match ch {
+            '「' => depth += 1,
+            '」' => depth = depth.saturating_sub(1),
+            '。' if depth == 0 => {
+                let s = text[start..idx].trim();
+                if !s.is_empty() {
+                    res.push(s);
+                }
+                start = idx + ch.len_utf8();
+            }
+            _ => {}
+        }
+    }
+    let tail = text[start..].trim();
+    if !tail.is_empty() {
+        res.push(tail);
+    }
+    res
+}
+
+/// 引用符「...」で囲まれた部分を除去したテキストを返す
+fn strip_quoted_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut depth = 0usize;
+    for ch in text.chars() {
+        match ch {
+            '「' => depth += 1,
+            '」' => depth = depth.saturating_sub(1),
+            _ if depth == 0 => out.push(ch),
+            _ => {}
+        }
+    }
+    out
+}
+
 pub fn parse_effect_steps(
     clause: &str,
     dynamic_level: Option<i32>,
@@ -322,11 +363,7 @@ pub fn parse_effect_steps(
     // 「AP7000以上のキャラを1枚までと、AP5000以下のキャラを1枚まで選び、リムーブする」（B04027）等を2文へ正規化
     let expanded_chunk = expand_multi_target_and_sentences(primary_chunk);
 
-    let sentences: Vec<&str> = expanded_chunk
-        .split('。')
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .collect();
+    let sentences: Vec<&str> = split_sentences_outside_quotes(&expanded_chunk);
 
     let mut seen_target_or_search = false;
     let mut skip_indices: Vec<usize> = Vec::new();
@@ -567,11 +604,12 @@ pub fn parse_effect_steps(
         }
 
         // 1) デッキサーチ（「自分のデッキのカードを上からN枚見る...」を含む）
-        if parse_deck_look_count(expanded_chunk.as_str()).is_some()
-            && (sentence.contains("デッキのカードを上から")
-                || sentence.contains("その中から")
-                || (sentence.starts_with("カードを手札に加えた場合、手札を")
-                    && sentence.ends_with("枚リムーブする")))
+        let sentence_unquoted = strip_quoted_text(sentence);
+        if parse_deck_look_count(sentence_unquoted.as_str()).is_some()
+            && (sentence_unquoted.contains("デッキのカードを上から")
+                || sentence_unquoted.contains("その中から")
+                || (sentence_unquoted.starts_with("カードを手札に加えた場合、手札を")
+                    && sentence_unquoted.ends_with("枚リムーブする")))
         {
             if plan.deck_search.is_none() {
                 if let Some(search_n) = parse_deck_look_count(sentence)
@@ -705,8 +743,9 @@ pub fn parse_effect_steps(
     }
 
     // fallback: 1文に「〜を見る。その中から〜」がまとまっていたが上で捕捉済み以外の場合
-    if plan.deck_search.is_none() && effect_body.contains("デッキのカードを上から") && !effect_body.contains("1枚ずつ公開") {
-        if let Some(search_n) = parse_deck_look_count(effect_body) {
+    let unquoted_body = strip_quoted_text(effect_body);
+    if plan.deck_search.is_none() && unquoted_body.contains("デッキのカードを上から") && !unquoted_body.contains("1枚ずつ公開") {
+        if let Some(search_n) = parse_deck_look_count(&unquoted_body) {
             let search_scope = extract_deck_search_scope(effect_body);
             plan.deck_search = Some(parse_deck_search_step(search_n, search_scope, dynamic_level));
         }

@@ -5454,5 +5454,90 @@ fn test_cpu_strongest_difficulty_and_four_tier_behaviors() {
     }
 }
 
+#[test]
+fn test_b10101_declare_grants_contact_win_ability_without_immediate_deck_search() {
+    let catalog = load_test_catalog();
+    let mut engine = MatchEngine::new(catalog);
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn = 8;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    ps1.case = Some(test_inst("p1_case", "B10101", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    ps1.case_phase = models::CasePhase::RESOLUTION;
+    for i in 0..2 {
+        let mut ev = test_inst(&format!("ev_{}", i), "B01001", "p1", models::Zone::EVIDENCE, models::CardOrientation::ACTIVE);
+        ev.face_up = false;
+        ps1.evidence.push(ev);
+    }
+    let mut heiji = test_inst("c_heiji", "B02018", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+    heiji.entered_turn = 0;
+    ps1.field.push(heiji);
+    for i in 0..4 {
+        ps1.deck.push(test_inst(&format!("d_{}", i), "B01001", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    }
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+    engine.prompt_main_action("p1");
+
+    // 1) B10101 の【宣言】を発動（コスト: 裏向き証拠2つを表向きに）
+    let obs1 = build_player_observation(&engine, "p1");
+    let dec1 = obs1["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec1,
+        "revision": engine.revision,
+        "value": { "type": "DECLARE", "actorId": "p1_case" }
+    })).unwrap();
+
+    // 証拠表向きコスト選択 (FLIP_EVIDENCE_FACE_UP) が開くので2つ選択する
+    let obs_cost = build_player_observation(&engine, "p1");
+    assert_eq!(obs_cost["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+    assert_eq!(obs_cost["pendingDecision"]["options"]["effectType"].as_str(), Some("FLIP_EVIDENCE_FACE_UP"));
+    let dec_cost = obs_cost["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec_cost,
+        "revision": engine.revision,
+        "value": { "targetIds": ["ev_0", "ev_1"] }
+    })).unwrap();
+
+    // 証拠表向き直後に deckSearch が即座に開いてはならず、能力付与対象の targetSelect (GRANT_ABILITY) が開くこと
+    let obs2 = build_player_observation(&engine, "p1");
+    assert_eq!(
+        obs2["pendingDecision"]["kind"].as_str(),
+        Some("targetSelect"),
+        "証拠を表向きにした瞬間にdeckSearchではなく対象キャラ選択が開くこと"
+    );
+    assert_eq!(
+        obs2["pendingDecision"]["options"]["effectType"].as_str(),
+        Some("GRANT_ABILITY")
+    );
+    let dec2 = obs2["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec2,
+        "revision": engine.revision,
+        "value": { "targetId": "c_heiji" }
+    })).unwrap();
+
+    // 付与完了後は mainAction に戻り、まだデッキは見ていないこと
+    let obs3 = build_player_observation(&engine, "p1");
+    assert_eq!(obs3["pendingDecision"]["kind"].as_str(), Some("mainAction"));
+    assert_eq!(
+        engine.granted_abilities_this_turn.get("c_heiji").map(|v| v.len()),
+        Some(1),
+        "対象キャラにターン終了時までの能力が付与されていること"
+    );
+
+    // 2) コンタクト勝利時に初めて deckSearch が発動すること
+    engine.trigger_on_contact_win("p1", "c_heiji", "B02018");
+    let obs4 = build_player_observation(&engine, "p1");
+    assert_eq!(
+        obs4["pendingDecision"]["kind"].as_str(),
+        Some("deckSearch"),
+        "コンタクトによって相手キャラをリムーブした瞬間に初めて上から4枚見るdeckSearchが発動すること"
+    );
+}
+
+
 
 

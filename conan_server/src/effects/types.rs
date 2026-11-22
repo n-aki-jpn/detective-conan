@@ -93,6 +93,7 @@ pub enum TargetAction {
     CopyNameFromRevealed,
     TriggerTargetHirameki,
     GrantBondAsAny,
+    GrantAbility(String),
 }
 
 impl TargetAction {
@@ -148,6 +149,7 @@ impl TargetAction {
             TargetAction::CopyNameFromRevealed => "COPY_NAME_FROM_REVEALED",
             TargetAction::TriggerTargetHirameki => "TRIGGER_TARGET_HIRAMEKI",
             TargetAction::GrantBondAsAny => "GRANT_BOND_AS_ANY",
+            TargetAction::GrantAbility(_) => "GRANT_ABILITY",
         }
     }
 
