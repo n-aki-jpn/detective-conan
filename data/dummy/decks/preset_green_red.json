@@ -1,0 +1,77 @@
+{
+  "deckId": "preset_meta_green_red_who_are_you_202611",
+  "deckName": "【11弾環境】緑＆赤 あんた何者や（平次・赤井・FBI軸）",
+  "catalogVersion": "official-raw-v1",
+  "partnerId": "B01060",
+  "caseId": "B11099",
+  "mainDeck": [
+    {
+      "definitionId": "B11022",
+      "count": 2
+    },
+    {
+      "definitionId": "D04013",
+      "count": 3
+    },
+    {
+      "definitionId": "B03067P",
+      "count": 2
+    },
+    {
+      "definitionId": "B11096",
+      "count": 2
+    },
+    {
+      "definitionId": "B11021",
+      "count": 3
+    },
+    {
+      "definitionId": "D04007",
+      "count": 2
+    },
+    {
+      "definitionId": "B11061",
+      "count": 3
+    },
+    {
+      "definitionId": "B09058P",
+      "count": 2
+    },
+    {
+      "definitionId": "B11053",
+      "count": 3
+    },
+    {
+      "definitionId": "D04003",
+      "count": 2
+    },
+    {
+      "definitionId": "B11057",
+      "count": 2
+    },
+    {
+      "definitionId": "B11056P",
+      "count": 1
+    },
+    {
+      "definitionId": "B11054",
+      "count": 3
+    },
+    {
+      "definitionId": "B11058",
+      "count": 3
+    },
+    {
+      "definitionId": "B03080P",
+      "count": 3
+    },
+    {
+      "definitionId": "B11025",
+      "count": 2
+    },
+    {
+      "definitionId": "B09030P",
+      "count": 2
+    }
+  ]
+}

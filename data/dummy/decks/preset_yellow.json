@@ -1,0 +1,73 @@
+{
+  "deckId": "preset_winner_poirot_ohka_20261115",
+  "deckName": "【優勝構築】黄単 喫茶ポアロ",
+  "catalogVersion": "official-raw-v1",
+  "partnerId": "B01079",
+  "caseId": "PR115",
+  "mainDeck": [
+    {
+      "definitionId": "B06084",
+      "count": 3
+    },
+    {
+      "definitionId": "B07081",
+      "count": 3
+    },
+    {
+      "definitionId": "B11073",
+      "count": 3
+    },
+    {
+      "definitionId": "PR096",
+      "count": 3
+    },
+    {
+      "definitionId": "B01081P",
+      "count": 1
+    },
+    {
+      "definitionId": "B08068P",
+      "count": 2
+    },
+    {
+      "definitionId": "B06090",
+      "count": 3
+    },
+    {
+      "definitionId": "B11072",
+      "count": 3
+    },
+    {
+      "definitionId": "B02077P",
+      "count": 3
+    },
+    {
+      "definitionId": "PR163",
+      "count": 3
+    },
+    {
+      "definitionId": "B09078",
+      "count": 2
+    },
+    {
+      "definitionId": "B06089",
+      "count": 3
+    },
+    {
+      "definitionId": "B09077",
+      "count": 3
+    },
+    {
+      "definitionId": "B06092",
+      "count": 1
+    },
+    {
+      "definitionId": "B05102",
+      "count": 2
+    },
+    {
+      "definitionId": "D05014",
+      "count": 2
+    }
+  ]
+}
