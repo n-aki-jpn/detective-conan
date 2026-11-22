@@ -8,7 +8,11 @@ pub(crate) use std::collections::HashMap;
 
 mod basic_and_cpu;
 mod cards_and_combat;
-mod regression_bugs;
+mod regression_b01_b06;
+mod regression_b07_b10;
+mod regression_b11;
+mod regression_mechanics;
+mod ui_smoke;
 
 pub(super) fn test_inst(
     iid: &str,
@@ -40,4 +44,16 @@ pub(super) fn load_test_catalog() -> CardCatalog {
         "../data/dummy/cards.json"
     };
     CardCatalog::load_from_json(path).expect("catalog load failed")
+}
+
+#[allow(dead_code)]
+pub(super) fn setup_main_match(turn: i32, turn_player_id: &str) -> MatchEngine {
+    let mut engine = MatchEngine::new(load_test_catalog());
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn = turn;
+    engine.turn_player_id = turn_player_id.to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+    engine.players.insert("p1".to_string(), engine::PlayerState::new("p1".to_string()));
+    engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+    engine
 }
