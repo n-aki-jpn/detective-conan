@@ -1,69 +1,65 @@
 {
-  "deckId": "preset_red",
-  "deckName": "【プリセット】赤単",
+  "deckId": "meta_red_17years_ago_202611",
+  "deckName": "【11弾環境Tier1】赤単 17年前と同じ現場",
   "catalogVersion": "official-raw-v1",
   "partnerId": "B01060",
-  "caseId": "B10061P",
+  "caseId": "B01078",
   "mainDeck": [
     {
-      "definitionId": "B01069",
+      "definitionId": "B11052",
       "count": 3
     },
     {
-      "definitionId": "B02060",
+      "definitionId": "B11053",
       "count": 3
     },
     {
-      "definitionId": "B03066P",
+      "definitionId": "B10050",
+      "count": 3
+    },
+    {
+      "definitionId": "B09110",
+      "count": 3
+    },
+    {
+      "definitionId": "B08046",
       "count": 2
     },
     {
-      "definitionId": "B06072P",
+      "definitionId": "B07066",
+      "count": 3
+    },
+    {
+      "definitionId": "D04002",
+      "count": 3
+    },
+    {
+      "definitionId": "D04004",
+      "count": 3
+    },
+    {
+      "definitionId": "D04005",
+      "count": 3
+    },
+    {
+      "definitionId": "D04006",
+      "count": 3
+    },
+    {
+      "definitionId": "D04008",
+      "count": 3
+    },
+    {
+      "definitionId": "D04010",
+      "count": 3
+    },
+    {
+      "definitionId": "D04015",
+      "count": 3
+    },
+    {
+      "definitionId": "D04016",
       "count": 2
-    },
-    {
-      "definitionId": "B07072",
-      "count": 3
-    },
-    {
-      "definitionId": "B07073P",
-      "count": 3
-    },
-    {
-      "definitionId": "B09060",
-      "count": 3
-    },
-    {
-      "definitionId": "B09064",
-      "count": 3
-    },
-    {
-      "definitionId": "B10050P",
-      "count": 2
-    },
-    {
-      "definitionId": "B10057",
-      "count": 3
-    },
-    {
-      "definitionId": "B11055P",
-      "count": 3
-    },
-    {
-      "definitionId": "B11057",
-      "count": 1
-    },
-    {
-      "definitionId": "B11058",
-      "count": 3
-    },
-    {
-      "definitionId": "B11061",
-      "count": 3
-    },
-    {
-      "definitionId": "PR319",
-      "count": 3
     }
   ]
 }

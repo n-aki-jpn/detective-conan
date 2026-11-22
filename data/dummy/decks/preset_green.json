@@ -1,68 +1,64 @@
 {
-  "deckId": "preset_green",
-  "deckName": "【プリセット】緑単",
+  "deckId": "meta_green_kendo_heiji_202611",
+  "deckName": "【11弾環境Tier1】緑単 恋と推理の剣道大会",
   "catalogVersion": "official-raw-v1",
   "partnerId": "B01025",
-  "caseId": "B10034P",
+  "caseId": "B06043",
   "mainDeck": [
     {
-      "definitionId": "B03040",
+      "definitionId": "B11019",
       "count": 3
     },
     {
-      "definitionId": "B05037",
+      "definitionId": "B11020",
       "count": 3
     },
     {
-      "definitionId": "B07016P2",
-      "count": 2
-    },
-    {
-      "definitionId": "B07018P",
+      "definitionId": "B11021",
       "count": 3
     },
     {
-      "definitionId": "B07021",
+      "definitionId": "B11022",
+      "count": 3
+    },
+    {
+      "definitionId": "B10022",
+      "count": 3
+    },
+    {
+      "definitionId": "B10023",
+      "count": 3
+    },
+    {
+      "definitionId": "B10025",
+      "count": 3
+    },
+    {
+      "definitionId": "B06038",
+      "count": 3
+    },
+    {
+      "definitionId": "B04017",
+      "count": 3
+    },
+    {
+      "definitionId": "B04018",
+      "count": 3
+    },
+    {
+      "definitionId": "B04027",
       "count": 1
     },
     {
-      "definitionId": "B07023P",
+      "definitionId": "D06005",
       "count": 3
     },
     {
-      "definitionId": "B08028",
+      "definitionId": "B02024",
       "count": 3
     },
     {
-      "definitionId": "B10030",
-      "count": 3
-    },
-    {
-      "definitionId": "B10031",
-      "count": 3
-    },
-    {
-      "definitionId": "B11020P",
-      "count": 3
-    },
-    {
-      "definitionId": "B11021P",
-      "count": 2
-    },
-    {
-      "definitionId": "B11025",
-      "count": 3
-    },
-    {
-      "definitionId": "D02008",
-      "count": 3
-    },
-    {
-      "definitionId": "D06023",
-      "count": 2
-    },
-    {
-      "definitionId": "PR045",
+      "definitionId": "B02025",
       "count": 3
     }
   ]
