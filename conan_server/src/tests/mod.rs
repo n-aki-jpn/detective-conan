@@ -8,6 +8,7 @@ pub(crate) use std::collections::HashMap;
 
 mod basic_and_cpu;
 mod cards_and_combat;
+mod catalog_audit;
 mod fuzz_matches;
 mod regression_b01_b06;
 mod regression_b07_b10;
