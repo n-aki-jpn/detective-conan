@@ -1850,7 +1850,8 @@
               style="background:#0f172a; color:white; border:1px solid #475569; padding:3px 6px; border-radius:4px; font-size:0.72rem;">
               <option value="easy">よわい</option>
               <option value="normal">ふつう</option>
-              <option value="hard" selected>つよい</option>
+              <option value="hard">つよい</option>
+              <option value="strongest" selected>最強</option>
             </select>
             <button id="btn-toggle-deck-bar" class="btn btn-secondary" onclick="toggleBattleDeckBar()"
               style="padding:3px 8px; font-size:0.72rem; min-height:24px;">⚙️ デッキ設定</button>
@@ -2640,7 +2641,7 @@
 
     async function toggleCpu(isCpu) {
       const diffEl = document.getElementById('cpu-difficulty-select');
-      const difficulty = diffEl ? diffEl.value : 'hard';
+      const difficulty = diffEl ? diffEl.value : 'strongest';
       await fetch('/api/set_cpu', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

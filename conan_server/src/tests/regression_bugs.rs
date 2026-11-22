@@ -5110,4 +5110,349 @@ fn test_b06046_and_b06047_yaiba_card_set_triggers() {
     }
 }
 
+#[test]
+fn test_cpu_strongest_difficulty_and_four_tier_behaviors() {
+    use crate::agent::{CpuDifficulty, CpuWeights, RandomAgent};
+
+    // 1) CpuDifficulty 4種の JSON 往復および Default == Strongest
+    assert_eq!(CpuDifficulty::default(), CpuDifficulty::Strongest);
+    for (diff, raw) in [
+        (CpuDifficulty::Easy, "\"easy\""),
+        (CpuDifficulty::Normal, "\"normal\""),
+        (CpuDifficulty::Hard, "\"hard\""),
+        (CpuDifficulty::Strongest, "\"strongest\""),
+    ] {
+        assert_eq!(serde_json::to_string(&diff).unwrap(), raw);
+        let decoded: CpuDifficulty = serde_json::from_str(raw).unwrap();
+        assert_eq!(decoded, diff);
+    }
+
+    // 2) 旧形式(12フィールドのみ) JSON から CpuWeights への後方互換デシリアライズ
+    let legacy_json = r#"{
+        "level_weight": 1100.0,
+        "ap_weight": 0.5,
+        "lp_weight": 800.0,
+        "rush_bonus": 1000.0,
+        "on_play_bonus": 900.0,
+        "event_penalty": -500.0,
+        "removal_bonus": 700.0,
+        "assist_min_field": 2,
+        "deduce_lp_weight": 1100.0,
+        "attack_remove_weight": 900.0,
+        "case_attack_bonus": 1000.0,
+        "disguise_ap_threshold": 600
+    }"#;
+    let parsed_weights: CpuWeights = serde_json::from_str(legacy_json).expect("legacy weights deserialization");
+    assert_eq!(parsed_weights.level_weight, 1100.0);
+    assert_eq!(parsed_weights.evidence_distance_weight.early, CpuWeights::default().evidence_distance_weight.early);
+    assert_eq!(parsed_weights.evidence_distance_weight.late, CpuWeights::default().evidence_distance_weight.late);
+
+    // テスト用カタログ構築
+    let mut catalog = load_test_catalog();
+    let add_def = |cat: &mut catalog::CardCatalog, id: &str, ct: models::CardType, color: &str, lvl: i32, ap: i32, lp: i32, desc: &str| {
+        cat.definitions.insert(
+            id.to_string(),
+            models::CardDefinition {
+                definition_id: id.to_string(),
+                canonical_id: id.to_string(),
+                card_type: ct,
+                colors: vec![color.to_string()],
+                level: lvl,
+                ap,
+                lp,
+                names: vec![id.to_string()],
+                description: desc.to_string(),
+                traits: vec![],
+                case_levels: None,
+                main_thumb: None,
+                main_path: None,
+            },
+        );
+    };
+    add_def(&mut catalog, "T_PARTNER_BLUE", models::CardType::PARTNER, "青", 0, 0, 1, "");
+    add_def(&mut catalog, "T_PARTNER_RED", models::CardType::PARTNER, "赤", 0, 0, 1, "");
+    add_def(&mut catalog, "T_CASE_BLUE", models::CardType::CASE, "青", 0, 0, 0, "");
+    add_def(&mut catalog, "T_CHAR_LV4", models::CardType::CHARACTER, "青", 4, 4000, 1, "");
+    add_def(&mut catalog, "T_CHAR_LV6", models::CardType::CHARACTER, "青", 6, 6000, 1, "");
+    add_def(&mut catalog, "T_CHAR_LV7", models::CardType::CHARACTER, "青", 7, 7000, 1, "");
+    add_def(&mut catalog, "T_CHAR_AP5000", models::CardType::CHARACTER, "青", 5, 5000, 1, "");
+    add_def(&mut catalog, "T_CHAR_AP6000", models::CardType::CHARACTER, "青", 6, 6000, 1, "");
+    add_def(&mut catalog, "T_CHAR_AP7000", models::CardType::CHARACTER, "青", 7, 7000, 1, "");
+    add_def(&mut catalog, "T_CHAR_WEAK", models::CardType::CHARACTER, "青", 2, 2000, 1, "");
+    add_def(&mut catalog, "T_CI_1000", models::CardType::CHARACTER, "青", 2, 2000, 1, "【カットイン】AP+1000");
+    add_def(&mut catalog, "T_CI_3000", models::CardType::CHARACTER, "青", 4, 4000, 1, "【カットイン】AP+3000");
+
+    // 3) マリガン（Lv4単体キープ）: Lv2無しでも Lv4 はキープし Lv7 を戻す
+    {
+        let mut engine = MatchEngine::new(catalog.clone());
+        engine.turn = 0;
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.hand.push(test_inst("h_lv4", "T_CHAR_LV4", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        ps1.hand.push(test_inst("h_lv7", "T_CHAR_LV7", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+
+        let strongest = RandomAgent::with_difficulty("p1", CpuDifficulty::Strongest);
+        let mul_dec = serde_json::json!({
+            "kind": "mulligan",
+            "options": { "handCardIds": ["h_lv4", "h_lv7"] }
+        });
+        let ans = strongest.choose_action_with_engine(&engine, &mul_dec);
+        assert_eq!(ans["value"]["cardIds"], serde_json::json!(["h_lv7"]), "Strongest は Lv2 無しでも Lv4 単体キープし Lv7 のみ返すこと");
+    }
+
+    // 4) 赤対面での序盤P推理回避（Strongest は END_TURN、Hard は P推理 DEDUCE）
+    {
+        let mut engine = MatchEngine::new(catalog.clone());
+        engine.turn = 1;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.case = Some(test_inst("p1_case", "T_CASE_BLUE", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        ps1.case_phase = models::CasePhase::INTRO;
+        ps1.partner = Some(test_inst("p1_p", "T_PARTNER_BLUE", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+        engine.players.insert("p1".to_string(), ps1);
+
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        ps2.partner = Some(test_inst("p2_p_red", "T_PARTNER_RED", "p2", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+        engine.players.insert("p2".to_string(), ps2);
+
+        let dec = serde_json::json!({
+            "kind": "mainAction",
+            "options": {
+                "actions": [
+                    { "type": "DEDUCE", "actorIds": ["p1_p"] },
+                    { "type": "END_TURN" }
+                ]
+            }
+        });
+
+        let strongest = RandomAgent::with_difficulty("p1", CpuDifficulty::Strongest);
+        let hard = RandomAgent::with_difficulty("p1", CpuDifficulty::Hard);
+        assert_eq!(
+            strongest.choose_action_with_engine(&engine, &dec)["value"]["type"].as_str(),
+            Some("END_TURN"),
+            "Strongest は赤対面・事件編・証拠0枚時にP推理を控えること"
+        );
+        assert_eq!(
+            hard.choose_action_with_engine(&engine, &dec)["value"]["type"].as_str(),
+            Some("DEDUCE"),
+            "Hard は従来の先行P推理を行うこと"
+        );
+    }
+
+    // 5) 後攻3T解決編移行直後(FILE 7)での NH 禁止
+    {
+        let mut engine = MatchEngine::new(catalog.clone());
+        engine.turn = 6; // 後攻3ターン目: my_turn_index == 3
+        engine.turn_player_id = "p2".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        ps2.case_phase = models::CasePhase::RESOLUTION;
+        for i in 0..7 {
+            ps2.file.push(test_inst(&format!("f2_{}", i), "T_CHAR_LV4", "p2", models::Zone::FILE, models::CardOrientation::ACTIVE));
+        }
+        ps2.hand.push(test_inst("h2_lv6", "T_CHAR_LV6", "p2", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        engine.players.insert("p1".to_string(), engine::PlayerState::new("p1".to_string()));
+        engine.players.insert("p2".to_string(), ps2);
+
+        let dec = serde_json::json!({
+            "kind": "mainAction",
+            "options": {
+                "actions": [
+                    { "type": "HINT_TAKE" },
+                    { "type": "END_TURN" }
+                ]
+            }
+        });
+        let strongest = RandomAgent::with_difficulty("p2", CpuDifficulty::Strongest);
+        assert_eq!(
+            strongest.choose_action_with_engine(&engine, &dec)["value"]["type"].as_str(),
+            Some("END_TURN"),
+            "Strongest は後攻3T解決編移行直後(FILE 7)に次ターンFILE 5転落を防ぐためNHを使わないこと"
+        );
+    }
+
+    // 6) リーサル時のパートナー温存（解決編・必要証拠まであと1・場にアクティブLP1あり）
+    {
+        let mut engine = MatchEngine::new(catalog.clone());
+        engine.turn = 9;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.case_phase = models::CasePhase::RESOLUTION;
+        ps1.partner = Some(test_inst("p1_p", "T_PARTNER_BLUE", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+        for i in 0..6 {
+            ps1.evidence.push(test_inst(&format!("ev_{}", i), "T_CHAR_LV4", "p1", models::Zone::EVIDENCE, models::CardOrientation::ACTIVE));
+        }
+        for i in 0..7 {
+            ps1.file.push(test_inst(&format!("f_{}", i), "T_CHAR_LV4", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+        }
+        ps1.field.push(test_inst("c_field1", "T_CHAR_LV4", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+
+        let dec = serde_json::json!({
+            "kind": "mainAction",
+            "options": {
+                "actions": [
+                    { "type": "ASSIST" },
+                    { "type": "DEDUCE", "actorIds": ["p1_p", "c_field1"] },
+                    { "type": "END_TURN" }
+                ]
+            }
+        });
+        let strongest = RandomAgent::with_difficulty("p1", CpuDifficulty::Strongest);
+        let ans = strongest.choose_action_with_engine(&engine, &dec);
+        assert_eq!(ans["value"]["type"].as_str(), Some("DEDUCE"));
+        assert_eq!(
+            ans["value"]["actorId"].as_str(),
+            Some("c_field1"),
+            "リーサル達成時はパートナーを事件解決用に温存し場キャラで推理すること"
+        );
+    }
+
+    // 7) 最小コストカットインと勝っている側の温存
+    {
+        let mut engine = MatchEngine::new(catalog.clone());
+        engine.turn = 6;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.field.push(test_inst("att_5000", "T_CHAR_AP5000", "p1", models::Zone::FIELD, models::CardOrientation::SLEEP));
+        ps1.field.push(test_inst("att_7000", "T_CHAR_AP7000", "p1", models::Zone::FIELD, models::CardOrientation::SLEEP));
+        ps1.hand.push(test_inst("ci_3000", "T_CI_3000", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        ps1.hand.push(test_inst("ci_1000", "T_CI_1000", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        ps2.field.push(test_inst("def_6000", "T_CHAR_AP6000", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP));
+        ps2.field.push(test_inst("def_5000", "T_CHAR_AP5000", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP));
+
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        let strongest = RandomAgent::with_difficulty("p1", CpuDifficulty::Strongest);
+
+        // 劣勢(5000 vs 6000): 同値勝ちなため +1000 の最小カットインを選ぶ
+        engine.action_context = Some(serde_json::json!({
+            "attackerPlayerId": "p1",
+            "defenderPlayerId": "p2",
+            "actorId": "att_5000",
+            "targetId": "def_6000"
+        }));
+        let guard_lose = serde_json::json!({
+            "kind": "guard",
+            "options": {
+                "cutinCardIds": [
+                    { "instanceId": "ci_3000" },
+                    { "instanceId": "ci_1000" }
+                ],
+                "guardCardIds": []
+            }
+        });
+        assert_eq!(
+            strongest.choose_action_with_engine(&engine, &guard_lose)["value"]["cutinCardId"].as_str(),
+            Some("ci_1000"),
+            "勝敗が覆る最小ボーナス(+1000)のカットインを選ぶこと"
+        );
+
+        // 優勢(7000 vs 5000): 勝っている側からはカットインを切らない
+        engine.action_context = Some(serde_json::json!({
+            "attackerPlayerId": "p1",
+            "defenderPlayerId": "p2",
+            "actorId": "att_7000",
+            "targetId": "def_5000"
+        }));
+        assert_eq!(
+            strongest.choose_action_with_engine(&engine, &guard_lose)["value"]["guardCardId"],
+            serde_json::Value::Null,
+            "既に勝っている側からはカットインを切らずスキップすること"
+        );
+    }
+
+    // 8) mustGuard 強制ガード遵守 (Strongest & Hard)
+    {
+        let mut engine = MatchEngine::new(catalog.clone());
+        engine.turn = 5;
+        engine.turn_player_id = "p2".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.field.push(test_inst("g_weak", "T_CHAR_WEAK", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        ps1.field.push(test_inst("g_mid", "T_CHAR_AP5000", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        ps1.case = Some(test_inst("p1_case", "T_CASE_BLUE", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        ps2.field.push(test_inst("att_big", "T_CHAR_AP7000", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP));
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        engine.action_context = Some(serde_json::json!({
+            "attackerPlayerId": "p2",
+            "defenderPlayerId": "p1",
+            "actorId": "att_big",
+            "targetId": "p1_case"
+        }));
+        let guard_must = serde_json::json!({
+            "kind": "guard",
+            "options": {
+                "guardCardIds": ["g_mid", "g_weak"],
+                "cutinCardIds": [],
+                "mustGuard": true
+            }
+        });
+        for diff in [CpuDifficulty::Hard, CpuDifficulty::Strongest] {
+            let cpu = RandomAgent::with_difficulty("p1", diff);
+            assert_eq!(
+                cpu.choose_action_with_engine(&engine, &guard_must)["value"]["guardCardId"].as_str(),
+                Some("g_weak"),
+                "{:?} でも mustGuard 時は最小APブロッカーで必ずガードすること",
+                diff
+            );
+        }
+    }
+
+    // 9) evaluate_board_state (Tapered Evaluation): FILE 6維持と証拠優位が高評価になること
+    {
+        let mut engine = MatchEngine::new(catalog);
+        engine.turn = 8;
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.case_phase = models::CasePhase::RESOLUTION;
+        for i in 0..6 {
+            ps1.file.push(test_inst(&format!("f1_{}", i), "T_CHAR_LV4", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+        }
+        ps1.evidence.push(test_inst("e1_0", "T_CHAR_LV4", "p1", models::Zone::EVIDENCE, models::CardOrientation::ACTIVE));
+
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        ps2.case_phase = models::CasePhase::RESOLUTION;
+        for i in 0..6 {
+            ps2.file.push(test_inst(&format!("f2_{}", i), "T_CHAR_LV4", "p2", models::Zone::FILE, models::CardOrientation::ACTIVE));
+        }
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        let strongest = RandomAgent::with_difficulty("p1", CpuDifficulty::Strongest);
+        let score_f6 = strongest.evaluate_board_state(&engine, "p2");
+
+        // 自証拠を1つ増やすとスコアが明確に上昇すること
+        engine.players.get_mut("p1").unwrap().evidence.push(test_inst("e1_1", "T_CHAR_LV4", "p1", models::Zone::EVIDENCE, models::CardOrientation::ACTIVE));
+        let score_more_ev = strongest.evaluate_board_state(&engine, "p2");
+        assert!(score_more_ev > score_f6, "自証拠増加で評価値が上昇すること ({} > {})", score_more_ev, score_f6);
+
+        // 解決編で FILE 6 -> FILE 5 へ落ちるとペナルティで大幅低下すること
+        engine.players.get_mut("p1").unwrap().evidence.pop();
+        engine.players.get_mut("p1").unwrap().file.pop();
+        let score_f5 = strongest.evaluate_board_state(&engine, "p2");
+        assert!(score_f6 > score_f5 + 3000.0, "解決編でFILE6維持はFILE5転落より明確に高評価であること ({} vs {})", score_f6, score_f5);
+    }
+}
+
+
 
