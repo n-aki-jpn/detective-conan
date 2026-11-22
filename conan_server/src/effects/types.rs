@@ -483,6 +483,8 @@ pub struct DeckSearchStep {
     pub record_removed_levels: bool,
     #[serde(default)]
     pub post_clauses: Vec<String>,
+    #[serde(default)]
+    pub opponent_chooses: bool,
 }
 
 pub fn default_one_usize() -> usize {

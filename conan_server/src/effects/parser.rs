@@ -1498,6 +1498,7 @@ pub fn parse_deck_search_step(
     let remainder_to_remove = text.contains("残りをリムーブ");
     let shuffle_remainder = text.contains("シャッフル");
     let record_removed_levels = remainder_to_remove;
+    let opponent_chooses = text.contains("相手はその中から");
 
     DeckSearchStep {
         search_count,
@@ -1512,6 +1513,7 @@ pub fn parse_deck_search_step(
         shuffle_remainder,
         record_removed_levels,
         post_clauses,
+        opponent_chooses,
     }
 }
 

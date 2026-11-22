@@ -1077,5 +1077,54 @@ fn test_b11003_multi_declare_self_lv4_minus_and_b11057_b11017_full_scenario() {
         let obs = build_player_observation(&engine, "p1");
         assert_eq!(obs["pendingDecision"]["kind"].as_str(), Some("triggerOrder"));
     }
+
+    #[test]
+    fn test_b11073_on_enter_opponent_chooses_card_from_deck() {
+        let catalog = load_test_catalog();
+        let mut engine = MatchEngine::new(catalog);
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.partner = Some(test_inst("p1_p", "B01079", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+        ps1.case = Some(test_inst("p1_c", "PR115", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        ps1.field.push(test_inst("b11073", "B11073", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        // 山札の上2枚: B06089(黄キャラ・Lv.2), B09078(黄キャラ・Lv.4)
+        ps1.deck.push(test_inst("d2", "B09078", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        ps1.deck.push(test_inst("d1", "B06089", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        ps2.partner = Some(test_inst("p2_p", "B01079", "p2", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+        ps2.case = Some(test_inst("p2_c", "PR115", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        engine.resolve_deployed_characters(
+            "p1",
+            None,
+            &[("b11073".to_string(), "B11073".to_string(), models::CardOrientation::ACTIVE)],
+            "MAIN",
+        );
+
+        // 選択権は相手（p2）に渡ること
+        let dec = engine.pending_decision.as_ref().unwrap();
+        assert_eq!(dec["kind"], "deckSearch");
+        assert_eq!(dec["playerId"], "p2", "B11073のデッキサーチは相手(p2)が選ぶこと");
+
+        // 相手(p2)が d1 (B06089) を選ぶ -> 自分(p1)の手札に d1 が加わり、d2 がリムーブされること
+        let ds_id = dec["decisionId"].as_str().unwrap().to_string();
+        engine.submit_decision("p2", &serde_json::json!({
+            "decisionId": ds_id,
+            "revision": engine.revision,
+            "value": {"chosenCardIds": ["d1"]}
+        })).unwrap();
+
+        assert_eq!(engine.players["p1"].hand.len(), 1);
+        assert_eq!(engine.players["p1"].hand[0].instance_id, "d1");
+        assert_eq!(engine.players["p1"].remove.len(), 1);
+        assert_eq!(engine.players["p1"].remove[0].instance_id, "d2");
+    }
 }
 

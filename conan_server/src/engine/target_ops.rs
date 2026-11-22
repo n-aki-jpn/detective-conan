@@ -1329,13 +1329,19 @@ impl MatchEngine {
         } else {
             "残りをデッキ下へ"
         };
+        let chooser_id = if ds.opponent_chooses {
+            self.opponent_id_of(player_id)
+        } else {
+            player_id.to_string()
+        };
         let dec_id = self.generate_decision_id();
         self.pending_decision = Some(json!({
             "decisionId": dec_id,
             "revision": self.revision,
-            "playerId": player_id,
+            "playerId": chooser_id,
             "kind": "deckSearch",
             "options": {
+                "ownerId": player_id,
                 "actorId": actor_id,
                 "actorName": actor_name,
                 "sourceLevel": source_level,

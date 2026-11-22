@@ -1450,6 +1450,12 @@ impl MatchEngine {
             .get("options")
             .cloned()
             .unwrap_or_else(|| json!({}));
+        let owner_id = opts
+            .get("ownerId")
+            .and_then(|v| v.as_str())
+            .unwrap_or(player_id)
+            .to_string();
+        let player_id = owner_id.as_str();
 
         let actor_id = opts
             .get("actorId")
