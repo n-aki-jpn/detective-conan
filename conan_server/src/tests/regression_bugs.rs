@@ -5538,6 +5538,82 @@ fn test_b10101_declare_grants_contact_win_ability_without_immediate_deck_search(
     );
 }
 
+#[test]
+fn test_b06067_declare_discard_selects_police_and_grants_can_attack_active() {
+    let catalog = load_test_catalog();
+    let mut engine = MatchEngine::new(catalog);
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn = 6;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    let mut nakamori = test_inst("c_nakamori", "B06067", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+    nakamori.entered_turn = 6;
+    ps1.field.push(nakamori);
+    ps1.hand.push(test_inst("h_cost1", "B01001", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+    ps1.hand.push(test_inst("h_cost2", "B01005", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+
+    let mut ps2 = engine::PlayerState::new("p2".to_string());
+    ps2.field.push(test_inst("p2_active", "B01001", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), ps2);
+    engine.prompt_main_action("p1");
+
+    // 1) B06067 の【宣言】を発動
+    let obs1 = build_player_observation(&engine, "p1");
+    let dec1 = obs1["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec1,
+        "revision": engine.revision,
+        "value": { "type": "DECLARE", "actorId": "c_nakamori" }
+    })).unwrap();
+
+    // 2) コストの手札1枚リムーブを選択
+    let obs2 = build_player_observation(&engine, "p1");
+    assert_eq!(obs2["pendingDecision"]["kind"].as_str(), Some("targetSelect"));
+    assert_eq!(obs2["pendingDecision"]["options"]["effectType"].as_str(), Some("DISCARD_HAND"));
+    let dec2 = obs2["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec2,
+        "revision": engine.revision,
+        "value": { "targetId": "h_cost1" }
+    })).unwrap();
+
+    // 3) 警察キャラを選ぶフェーズ (GIVE_CAN_ATTACK_ACTIVE) が開くこと
+    let obs3 = build_player_observation(&engine, "p1");
+    assert_eq!(
+        obs3["pendingDecision"]["kind"].as_str(),
+        Some("targetSelect"),
+        "手札コスト支払い後に警察キャラを選ぶtargetSelectが開くこと"
+    );
+    assert_eq!(obs3["pendingDecision"]["options"]["effectType"].as_str(), Some("GIVE_CAN_ATTACK_ACTIVE"));
+    let dec3 = obs3["pendingDecision"]["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec3,
+        "revision": engine.revision,
+        "value": { "targetId": "c_nakamori" }
+    })).unwrap();
+
+    assert!(
+        engine.players["p1"].field[0].can_attack_active,
+        "選ばれた警察キャラに can_attack_active が付与されること"
+    );
+
+    // 4) mainAction で相手のアクティブ状態のキャラ (p2_active) にアクションできること
+    let obs4 = build_player_observation(&engine, "p1");
+    let actions = obs4["pendingDecision"]["options"]["actions"].as_array().unwrap();
+    let act_entry = actions.iter().find(|a| a["type"].as_str() == Some("ACTION")).unwrap();
+    let targets = act_entry["actorTargetMap"]["c_nakamori"].as_array().unwrap();
+    assert!(
+        targets.iter().any(|t| t.as_str() == Some("p2_active")),
+        "相手のアクティブ状態のキャラにアクションできること: {:?}",
+        targets
+    );
+}
+
+
 
 
 

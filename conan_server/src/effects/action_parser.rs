@@ -319,6 +319,9 @@ pub fn parse_target_action(text: &str) -> Option<TargetAction> {
     if text.contains("手札に移す") || text.contains("手札に移し") {
         return Some(TargetAction::BounceToHand);
     }
+    if text.contains("アクティブ状態のキャラを指定してアクションできる") {
+        return Some(TargetAction::GiveCanAttackActive);
+    }
     if let (Some(a), Some(b)) = (text.find('「'), text.rfind('」')) {
         if b > a && text[b..].contains("を与える") {
             let granted = text[a + '「'.len_utf8()..b].to_string();
