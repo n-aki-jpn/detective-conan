@@ -514,7 +514,7 @@ impl MatchEngine {
         self.handle_guard_answer(player_id, val);
     }
 
-    pub(super) fn proceed_to_action_resolution(&mut self, guard_id: Option<&str>) {
+    pub(crate) fn proceed_to_action_resolution(&mut self, guard_id: Option<&str>) {
         if self.is_contact_aborted() {
             let att_pid = self
                 .action_context
@@ -654,11 +654,6 @@ impl MatchEngine {
             if let (Some(a_def_id), Some(d_def_id)) = (actor_def_id, def_def_id) {
                 let actor_name = self.card_name_by_def(&a_def_id);
                 let def_name = self.card_name_by_def(&d_def_id);
-                if !self.contact_ap_buffs.is_empty() {
-                    let buffs = format!("{:?}", self.contact_ap_buffs);
-                    self.debug_log(format!("[DEBUG][CONTACT_END] contact_ap_buffs expired: {}", buffs));
-                }
-                self.contact_ap_buffs.clear();
 
                 if actor_ap >= def_ap {
                     if let Some((rem_def, removed_sets)) = self.move_field_char_to_remove(&defender_pid, &def_cid, true, false) {

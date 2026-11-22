@@ -5613,6 +5613,55 @@ fn test_b06067_declare_discard_selects_police_and_grants_can_attack_active() {
     );
 }
 
+#[test]
+fn test_b10037_triggers_when_ally_reaches_10000_ap_via_cutin_in_contact() {
+    let catalog = load_test_catalog();
+    let mut engine = MatchEngine::new(catalog);
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn = 8;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    let mut b10037 = test_inst("c_b10037", "B10037", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+    b10037.entered_turn = 0;
+    let mut attacker = test_inst("c_ally", "B01001", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+    attacker.entered_turn = 0;
+    // B01001 (AP8000 等) がカットインで +2000 以上を受けて AP10000 以上になる状況を再現
+    attacker.temp_ap_bonus = 0;
+    ps1.field = vec![b10037, attacker];
+    ps1.hand.push(test_inst("h_cutin", "B01002", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+
+    let mut ps2 = engine::PlayerState::new("p2".to_string());
+    ps2.field.push(test_inst("p2_def", "B01005", "p2", models::Zone::FIELD, models::CardOrientation::SLEEP));
+    for i in 0..3 {
+        ps2.evidence.push(test_inst(&format!("p2_ev{}", i), "B01005", "p2", models::Zone::EVIDENCE, models::CardOrientation::ACTIVE));
+    }
+
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), ps2);
+    engine.contact_ap_buffs.insert("c_ally".to_string(), 3000);
+    engine.action_context = Some(serde_json::json!({
+        "attackerPlayerId": "p1",
+        "defenderPlayerId": "p2",
+        "actorId": "c_ally",
+        "targetId": "p2_def"
+    }));
+
+    // proceed_to_action_resolution(None) を呼ぶと、バトル決着時は contact_ap_buffs を維持したまま trigger_on_contact_win が走り B10037 が発動すること
+    engine.proceed_to_action_resolution(None);
+
+    assert!(
+        engine.pending_decision.is_some(),
+        "カットイン込みでAP10000以上になった味方のコンタクト勝利でB10037の上の効果が発動すること"
+    );
+    assert!(
+        engine.contact_ap_buffs.is_empty(),
+        "コンタクト終了後には contact_ap_buffs がクリアされていること"
+    );
+}
+
+
 
 
 
