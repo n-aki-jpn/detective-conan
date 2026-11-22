@@ -714,6 +714,7 @@ pub fn parse_effect_steps(
                         if !pre_ops.is_empty() {
                             if plan.deck_search.is_none() && plan.target_step.is_none() && plan.follow_up_target.is_none() {
                                 plan.immediate_before.extend(pre_ops);
+                                target_sent = target_sent[hidx..].trim();
                             } else if let Some(ds) = plan.deck_search.as_mut() {
                                 if plan.target_step.is_none() {
                                     ds.post_ops.extend(pre_ops);

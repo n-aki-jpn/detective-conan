@@ -1794,4 +1794,36 @@ fn test_b06084_on_enter_reveals_opponent_hand_then_removes_lv9_or_less() {
     assert_eq!(engine.players["p2"].field.len(), 0, "相手のPR096がリムーブされること");
 }
 
+#[test]
+fn test_b05102_still_draws_and_deploys_when_opponent_field_empty() {
+    let catalog = load_test_catalog();
+    let mut engine = MatchEngine::new(catalog);
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    ps1.partner = Some(test_inst("p1_p", "B01079", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps1.case = Some(test_inst("p1_c", "PR115", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    for i in 0..2 {
+        ps1.file.push(test_inst(&format!("f{}", i), "B06089", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+    }
+    ps1.hand.push(test_inst("ev", "B05102", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+    ps1.hand.push(test_inst("ch_lv2", "B06089", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+    ps1.deck.push(test_inst("d1", "B06089", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    ps1.deck.push(test_inst("d2", "B06089", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+    let mut ps2 = engine::PlayerState::new("p2".to_string());
+    ps2.partner = Some(test_inst("p2_p", "B01060", "p2", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps2.case = Some(test_inst("p2_c", "B01078", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), ps2);
+
+    let desc = engine.catalog.get("B05102").unwrap().description.clone();
+    engine.execute_declare_clause("p1", "ev", "B05102", false, None, models::CardOrientation::ACTIVE, &desc);
+
+    assert_eq!(engine.players["p1"].hand.len(), 3, "対象不在でも後続の1枚ドローが実行されること");
+}
+
 

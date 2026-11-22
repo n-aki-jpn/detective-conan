@@ -1917,6 +1917,52 @@ impl MatchEngine {
             if ts.then_abort_if_skipped {
                 return false;
             }
+            let mut skipped_follow_ops = ts.follow_up.clone();
+            skipped_follow_ops.extend(plan.post_target_ops.clone());
+            if !skipped_follow_ops.is_empty() {
+                if self.execute_immediate_ops_with_continuation(
+                    player_id,
+                    actor_id,
+                    actor_name,
+                    &skipped_follow_ops,
+                    None,
+                    plan.follow_up_target.as_deref(),
+                    None,
+                    after_target_plan.as_ref(),
+                    resume_context,
+                    None,
+                ) {
+                    return true;
+                }
+            } else if let Some(ref ft) = plan.follow_up_target {
+                if self.prompt_target_step_with_plan(
+                    player_id,
+                    actor_id,
+                    actor_name,
+                    source_level,
+                    ft,
+                    None,
+                    after_target_plan.as_ref(),
+                    resume_context,
+                    None,
+                ) {
+                    return true;
+                }
+            }
+            if !plan.extra_clauses.is_empty() {
+                self.enqueue_mode_clauses(
+                    player_id,
+                    actor_id,
+                    actor_name,
+                    source_level,
+                    &plan.extra_clauses,
+                    &[],
+                    resume_context,
+                );
+                if self.drain_pending_clause_queue() {
+                    return true;
+                }
+            }
         }
 
         if (has_deferred && !has_opt_cost_gate) || self.pending_clause_queue.len() > queue_len_before {
