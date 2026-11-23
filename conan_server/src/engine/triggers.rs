@@ -63,6 +63,17 @@ impl MatchEngine {
                 self.log(format!("⚠️ [{}] の登場時効果: コスト不足のため発動できませんでした", card_name));
                 continue;
             }
+            if self.try_open_clause_mode_select(
+                player_id,
+                actor_id,
+                &card_name,
+                Some(def.level),
+                def.card_type,
+                clause,
+                resume_context,
+            ) {
+                return true;
+            }
             let resolved_clause = resolve_state_branch(clause, ori);
             let plan = parse_effect_steps(&resolved_clause, None, def.card_type);
             let src_lv = Some(def.level);

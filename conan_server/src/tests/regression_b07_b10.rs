@@ -1294,12 +1294,14 @@ fn test_b08023_on_enter_mode_select() {
     engine.players.insert("p1".to_string(), ps1);
     engine.players.insert("p2".to_string(), ps2);
 
-    engine.resolve_deployed_characters(
+    assert!(engine.resolve_character_enter_field_with_source(
         "p1",
+        "c_b08023",
+        "B08023",
+        models::CardOrientation::ACTIVE,
         None,
-        &[("c_b08023".to_string(), "B08023".to_string(), models::CardOrientation::ACTIVE)],
         "MAIN",
-    );
+    ));
 
     let dec1 = engine.pending_decision.as_ref().unwrap();
     assert_eq!(dec1["kind"], "modeSelect", "B08023登場時にmodeSelectが開くこと");
