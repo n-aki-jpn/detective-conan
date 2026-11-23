@@ -286,7 +286,9 @@ impl MatchEngine {
                 if check_clause_conditions(clause, &ctx).is_err() {
                     return false;
                 }
-                if single_clause_legacy_used || !self.can_use_clause_this_turn(actor_id, clause) {
+                if (single_clause_legacy_used && clause_turn_limit(clause).is_none())
+                    || !self.can_use_clause_this_turn(actor_id, clause)
+                {
                     return false;
                 }
                 let cost = parse_clause_cost(clause);
@@ -862,7 +864,9 @@ impl MatchEngine {
         // 実行可能な宣言句をすべて収集（複数ある場合はプレイヤーに選択させる）
         let mut usable_clauses: Vec<String> = Vec::new();
         for cl in &cond_ok_clauses {
-            if single_clause_legacy_used || !self.can_use_clause_this_turn(actor_id, cl) {
+            if (single_clause_legacy_used && clause_turn_limit(cl).is_none())
+                || !self.can_use_clause_this_turn(actor_id, cl)
+            {
                 continue;
             }
             let cost = parse_clause_cost(cl);

@@ -1209,5 +1209,112 @@ fn test_b11003_multi_declare_self_lv4_minus_and_b11057_b11017_full_scenario() {
         let d2 = revealed.iter().find(|c| c["instanceId"] == "d2").unwrap();
         assert_eq!(d2["selectable"], true, "B11026は伊織無我として扱われるため選択可能であること");
     }
+
+    #[test]
+    fn test_b11019_declare_turn2_limit() {
+        let catalog = load_test_catalog();
+        let mut engine = engine::MatchEngine::new(catalog);
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+        engine.turn_player_id = "p1".to_string();
+        engine.phase = models::MatchPhase::MAIN;
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.partner = Some(test_inst(
+            "p1_partner",
+            "B01031",
+            "p1",
+            models::Zone::PARTNER,
+            models::CardOrientation::ACTIVE,
+        ));
+        ps1.field.push(test_inst(
+            "b11019",
+            "B11019",
+            "p1",
+            models::Zone::FIELD,
+            models::CardOrientation::ACTIVE,
+        ));
+        ps1.deck.push(test_inst("d1", "B01001", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        ps1.deck.push(test_inst("d2", "B01001", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        ps1.deck.push(test_inst("d3", "B01001", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        for i in 1..=3 {
+            let mut ch = test_inst(
+                &format!("opp_{}", i),
+                "B01001",
+                "p2",
+                models::Zone::FIELD,
+                models::CardOrientation::ACTIVE,
+            );
+            let mut sc = test_inst(
+                &format!("opp_sc_{}", i),
+                "B01001",
+                "p2",
+                models::Zone::FIELD,
+                models::CardOrientation::ACTIVE,
+            );
+            sc.face_up = false;
+            ch.set_cards.push(sc);
+            ps2.field.push(ch);
+        }
+
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        // 1回目: 宣言可能であること
+        engine.prompt_main_action("p1");
+        let actors1 = engine.pending_decision.as_ref().unwrap()["options"]["declareActors"]
+            .as_array()
+            .unwrap()
+            .clone();
+        assert!(
+            actors1.iter().any(|a| a["actorId"] == "b11019"),
+            "1回目: B11019が宣言可能であること"
+        );
+        engine
+            .submit_decision(
+                "p1",
+                &serde_json::json!({"type": "DECLARE", "actorId": "b11019"}),
+            )
+            .unwrap();
+        engine
+            .submit_decision(
+                "p1",
+                &serde_json::json!({"selectedIds": ["opp_1"]}),
+            )
+            .unwrap();
+
+        // 2回目: 【ターン2】なので同じターンに2回目も宣言可能であること
+        let actors2 = engine.pending_decision.as_ref().unwrap()["options"]["declareActors"]
+            .as_array()
+            .unwrap()
+            .clone();
+        assert!(
+            actors2.iter().any(|a| a["actorId"] == "b11019"),
+            "2回目: 【ターン2】のためB11019が再び宣言可能であること"
+        );
+        engine
+            .submit_decision(
+                "p1",
+                &serde_json::json!({"type": "DECLARE", "actorId": "b11019"}),
+            )
+            .unwrap();
+        engine
+            .submit_decision(
+                "p1",
+                &serde_json::json!({"selectedIds": ["opp_2"]}),
+            )
+            .unwrap();
+
+        // 3回目: 上限2回に達したため宣言不可であること
+        let actors3 = engine.pending_decision.as_ref().unwrap()["options"]["declareActors"]
+            .as_array()
+            .unwrap()
+            .clone();
+        assert!(
+            !actors3.iter().any(|a| a["actorId"] == "b11019"),
+            "3回目: 【ターン2】上限に達しているためB11019は宣言不可であること"
+        );
+    }
 }
 
