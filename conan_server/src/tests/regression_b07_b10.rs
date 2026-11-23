@@ -1343,4 +1343,108 @@ fn test_pr136_contact_remove_can_set_card_on_opponent_char() {
     );
 }
 
+#[test]
+fn test_b08023_does_not_passively_buff_iori_muga_ap() {
+    let catalog = load_test_catalog();
+
+    // 1. extract_clauses(TriggerKind::Passive) が B08023 や B10061 の箇条書き行を誤抽出しないこと
+    {
+        let b08023_def = catalog.get("B08023").unwrap();
+        let passive_b08023 = crate::effects::extract_clauses(
+            &b08023_def.description,
+            crate::effects::TriggerKind::Passive,
+            b08023_def.card_type,
+        );
+        assert!(
+            passive_b08023.is_empty(),
+            "B08023からPassive句が誤抽出されないこと: {:?}",
+            passive_b08023
+        );
+
+        let b10061_def = catalog.get("B10061").unwrap();
+        let passive_b10061 = crate::effects::extract_clauses(
+            &b10061_def.description,
+            crate::effects::TriggerKind::Passive,
+            b10061_def.card_type,
+        );
+        assert!(
+            !passive_b10061.iter().any(|l| l.trim_start().starts_with('・')),
+            "B10061の箇条書き行がPassive句に含まれないこと: {:?}",
+            passive_b10061
+        );
+    }
+
+    // 2. B08023 が場にいるだけの状態では伊織無我のAPが常に+2000されないこと
+    let mut engine = MatchEngine::new(catalog);
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn = 6;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    ps1.field.push(test_inst("c_iori", "PR136", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+    ps1.field.push(test_inst("c_b08023", "B08023", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+    ps1.deck.push(test_inst("p1_d1", "B11009", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    ps1.deck.push(test_inst("p1_d2", "B11009", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+    let mut ps2 = engine::PlayerState::new("p2".to_string());
+    for i in 1..=5 {
+        ps2.deck.push(test_inst(&format!("p2_d{}", i), "B11009", "p2", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    }
+
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), ps2);
+
+    let iori_before = engine.players["p1"].field.iter().find(|c| c.instance_id == "c_iori").unwrap();
+    assert_eq!(
+        engine.get_effective_ap("p1", iori_before),
+        6000,
+        "B08023が場にいるだけではPR136(素AP6000)に+2000されないこと"
+    );
+
+    // 3. B08023の登場時効果でモード0(伊織無我に裏向きセット＋ターン終了時までAP+2000)を選んだ場合のみ8000になり、ターン終了後に6000へ戻ること
+    assert!(engine.resolve_character_enter_field_with_source(
+        "p1",
+        "c_b08023",
+        "B08023",
+        models::CardOrientation::ACTIVE,
+        None,
+        "MAIN",
+    ));
+    let dec1 = engine.pending_decision.as_ref().unwrap();
+    assert_eq!(dec1["kind"], "modeSelect");
+    let id1 = dec1["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": id1,
+        "revision": engine.revision,
+        "value": {"modeIndex": 0}
+    })).unwrap();
+
+    let dec2 = engine.pending_decision.as_ref().unwrap();
+    assert_eq!(dec2["kind"], "targetSelect");
+    let id2 = dec2["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": id2,
+        "revision": engine.revision,
+        "value": {"targetIds": ["c_iori"]}
+    })).unwrap();
+
+    let iori_after_mode0 = engine.players["p1"].field.iter().find(|c| c.instance_id == "c_iori").unwrap();
+    assert_eq!(iori_after_mode0.set_cards.len(), 1, "伊織無我に裏向きカードが1枚セットされること");
+    assert_eq!(
+        engine.get_effective_ap("p1", iori_after_mode0),
+        8000,
+        "モード0選択後はターン終了時までAP+2000で8000になること"
+    );
+
+    // 次のターン開始（ターン終了リセット）後、APが6000に戻ること
+    engine.start_turn(7, "p2");
+    let iori_next_turn = engine.players["p1"].field.iter().find(|c| c.instance_id == "c_iori").unwrap();
+    assert_eq!(
+        engine.get_effective_ap("p1", iori_next_turn),
+        6000,
+        "ターン終了リセット後にAPが元の6000に戻ること"
+    );
+}
+
 

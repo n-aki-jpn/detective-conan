@@ -61,6 +61,9 @@ pub fn extract_clauses(description: &str, trigger: TriggerKind, card_type: CardT
 }
 
 pub fn line_matches_trigger(line: &str, trigger: TriggerKind, card_type: CardType) -> bool {
+    if line.trim_start().starts_with('・') {
+        return false;
+    }
     let clean = strip_parens(line);
     let unquoted = strip_quotes(&clean);
     match trigger {
@@ -190,6 +193,8 @@ pub fn line_matches_trigger(line: &str, trigger: TriggerKind, card_type: CardTyp
                 && !clean.contains("ターン終了時、")
                 && !clean.contains("自分のターン終了時、")
                 && !clean.contains("相手のターン終了時、")
+                && !clean.contains("アクション終了時、")
+                && !clean.contains("メインフェイズ開始時、")
         }
     }
 }

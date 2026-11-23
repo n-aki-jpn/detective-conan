@@ -102,7 +102,7 @@ pub fn evaluate_passive_rush_and_swift(
 
     for raw_line in def.description.lines() {
         let trimmed = raw_line.trim();
-        if trimmed.is_empty() {
+        if trimmed.is_empty() || trimmed.starts_with('・') {
             continue;
         }
         let clean = strip_parens(trimmed);
@@ -622,7 +622,13 @@ pub fn compute_passive_ap_for_target(clause: &str, pctx: &PassiveEvalContext) ->
         return 0;
     }
     let clean = strip_parens(clause);
-    if clean.contains("元の能力を無効") || clean.contains("選ばれない") || clean.contains("ミスリード") {
+    if clean.trim_start().starts_with('・')
+        || clean.contains("元の能力を無効")
+        || clean.contains("選ばれない")
+        || clean.contains("ミスリード")
+        || clean.contains("ターン終了時まで")
+        || clean.contains("選び")
+    {
         return 0;
     }
 
@@ -709,7 +715,12 @@ pub fn compute_passive_lp_bonus(clause: &str, pctx: &PassiveEvalContext) -> i32 
         return 0;
     }
     let clean = strip_parens(clause);
-    if clean.contains("元の能力を無効") || clean.contains("ミスリード") {
+    if clean.trim_start().starts_with('・')
+        || clean.contains("元の能力を無効")
+        || clean.contains("ミスリード")
+        || clean.contains("ターン終了時まで")
+        || clean.contains("選び")
+    {
         return 0;
     }
     let delta = if let Some(b) = parse_signed_lp(&clean, true) {
