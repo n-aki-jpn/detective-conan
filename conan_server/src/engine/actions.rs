@@ -292,7 +292,20 @@ impl MatchEngine {
                     return false;
                 }
                 let cost = parse_clause_cost(clause);
-                self.can_pay_clause_cost(ps, actor_id, &cost)
+                if !self.can_pay_clause_cost(ps, actor_id, &cost) {
+                    return false;
+                }
+                let plan = parse_effect_steps(clause, Some(def.level), def.card_type);
+                if plan.immediate_before.is_empty() && plan.deck_search.is_none() {
+                    if let Some(ref ts) = plan.target_step {
+                        if (!ts.filter.up_to || !plan.extra_clauses.is_empty())
+                            && self.build_filtered_candidates(player_id, Some(actor_id), &ts.filter).is_empty()
+                        {
+                            return false;
+                        }
+                    }
+                }
+                true
             })
         };
 

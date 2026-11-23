@@ -1316,5 +1316,54 @@ fn test_b11003_multi_declare_self_lv4_minus_and_b11057_b11017_full_scenario() {
             "3回目: 【ターン2】上限に達しているためB11019は宣言不可であること"
         );
     }
+
+    #[test]
+    fn test_b11019_cannot_declare_when_no_valid_target() {
+        let catalog = load_test_catalog();
+        let mut engine = engine::MatchEngine::new(catalog);
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+        engine.turn_player_id = "p1".to_string();
+        engine.phase = models::MatchPhase::MAIN;
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.partner = Some(test_inst(
+            "p1_partner",
+            "B01031",
+            "p1",
+            models::Zone::PARTNER,
+            models::CardOrientation::ACTIVE,
+        ));
+        ps1.field.push(test_inst(
+            "b11019",
+            "B11019",
+            "p1",
+            models::Zone::FIELD,
+            models::CardOrientation::ACTIVE,
+        ));
+        ps1.deck.push(test_inst("d1", "B01001", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        // 裏向きセットカードを持たないキャラのみ
+        ps2.field.push(test_inst(
+            "opp_plain",
+            "B01001",
+            "p2",
+            models::Zone::FIELD,
+            models::CardOrientation::ACTIVE,
+        ));
+
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        engine.prompt_main_action("p1");
+        let actors = engine.pending_decision.as_ref().unwrap()["options"]["declareActors"]
+            .as_array()
+            .unwrap()
+            .clone();
+        assert!(
+            !actors.iter().any(|a| a["actorId"] == "b11019"),
+            "対象（裏向きセットカード持ちキャラ）がいない場合はB11019が宣言不可であること"
+        );
+    }
 }
 
