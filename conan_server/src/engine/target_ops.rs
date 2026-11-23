@@ -1172,7 +1172,11 @@ impl MatchEngine {
             };
             for c in cards_iter {
                 if filter.target_prev_chosen {
-                    if self.last_chosen_instance_id.as_deref() != Some(c.instance_id.as_str()) {
+                    let matched_last = self.last_chosen_instance_id.as_deref() == Some(c.instance_id.as_str())
+                        || (filter.zone == TargetZone::Field
+                            && !ps.field.iter().any(|fc| Some(fc.instance_id.as_str()) == self.last_chosen_instance_id.as_deref())
+                            && self.last_deployed_instance_id.as_deref() == Some(c.instance_id.as_str()));
+                    if !matched_last {
                         continue;
                     }
                 }

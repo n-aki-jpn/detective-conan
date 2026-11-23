@@ -1148,3 +1148,72 @@ fn test_b07081_on_enter_recover_event_only_discards_if_hand_at_least_6() {
     );
 }
 
+#[test]
+fn test_b08029_grants_can_attack_active_to_deployed_char_even_after_recover() {
+    let catalog = load_test_catalog();
+    let mut engine = MatchEngine::new(catalog);
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    ps1.partner = Some(test_inst("p1_p", "PR220", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps1.case = Some(test_inst("p1_c", "B08030", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    ps1.remove.push(test_inst("rem_iori", "B11020", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE));
+    ps1.remove.push(test_inst("rem_momiji", "D02011", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE));
+
+    let mut ps2 = engine::PlayerState::new("p2".to_string());
+    ps2.partner = Some(test_inst("p2_p", "B03001", "p2", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps2.case = Some(test_inst("p2_c", "D08026", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    ps2.field.push(test_inst("opp_active", "B01016", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), ps2);
+
+    let desc = engine.catalog.get("B08029").unwrap().description.clone();
+    engine.execute_declare_clause("p1", "ev_b08029", "B08029", false, None, models::CardOrientation::ACTIVE, &desc);
+
+    // 1. リムーブから伊織無我を登場させる
+    let dec1 = engine.pending_decision.as_ref().unwrap();
+    let id1 = dec1["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": id1,
+        "revision": engine.revision,
+        "value": {"targetIds": ["rem_iori"]}
+    })).unwrap();
+
+    // 2. リムーブから大岡紅葉を手札に加える
+    let dec2 = engine.pending_decision.as_ref().unwrap();
+    let id2 = dec2["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": id2,
+        "revision": engine.revision,
+        "value": {"targetIds": ["rem_momiji"]}
+    })).unwrap();
+
+    // 3. モード選択で「アクティブ状態のキャラを指定してアクションできる」を選ぶ
+    let dec3 = engine.pending_decision.as_ref().unwrap();
+    assert_eq!(dec3["kind"], "modeSelect");
+    let id3 = dec3["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": id3,
+        "revision": engine.revision,
+        "value": {"modeIndex": 1}
+    })).unwrap();
+
+    if let Some(dec4) = engine.pending_decision.as_ref() {
+        if dec4["kind"] == "targetSelect" {
+            let id4 = dec4["decisionId"].as_str().unwrap().to_string();
+            engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": id4,
+                "revision": engine.revision,
+                "value": {"targetIds": ["rem_iori"]}
+            })).unwrap();
+        }
+    }
+
+    // 伊織無我(rem_iori)に can_attack_active が付与されていること
+    let iori = engine.players["p1"].field.iter().find(|c| c.instance_id == "rem_iori").unwrap();
+    assert!(iori.can_attack_active, "登場させた伊織無我にアクティブ指定アクション権が付与されること logs={:?}", engine.logs);
+}
+

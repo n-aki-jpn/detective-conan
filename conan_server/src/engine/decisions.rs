@@ -1055,6 +1055,7 @@ impl MatchEngine {
                             CardOrientation::ACTIVE
                         };
                         deployed_list.push((iid.to_string(), did.to_string(), ori));
+                        self.last_deployed_instance_id = Some(iid.to_string());
                     }
                 }
             }
@@ -1370,6 +1371,9 @@ impl MatchEngine {
     ) -> bool {
         if deployed_list.is_empty() {
             return false;
+        }
+        if let Some((last_id, _, _)) = deployed_list.last() {
+            self.last_deployed_instance_id = Some(last_id.clone());
         }
         // 全登場キャラを先に場入場準備（MR整理 + pending_ally_play 登録）し、後から順番にOnPlay・ウォッチャーを発火させる
         for (dep_inst, dep_def, dep_ori) in deployed_list {
