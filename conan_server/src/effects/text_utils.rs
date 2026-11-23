@@ -348,9 +348,26 @@ fn raw_name_matches_query(candidate_name: &str, query: &str, query_tokens: &[Str
 
 pub fn has_name_match(def: &CardDefinition, query: &str) -> bool {
     let query_tokens = extract_distinct_card_names(query);
-    def.names
+    if def.names
         .iter()
         .any(|n| raw_name_matches_query(n, query, &query_tokens))
+    {
+        return true;
+    }
+    for line in def.description.lines() {
+        if line.contains("すべてのエリアで") && line.contains("としても扱う") {
+            if let Some(start) = line.find("〚カード名［") {
+                let rest = &line[start + "〚カード名［".len()..];
+                if let Some(end) = rest.find("］〛") {
+                    let alias = &rest[..end];
+                    if raw_name_matches_query(alias, query, &query_tokens) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    false
 }
 
 pub fn has_trait_match(def: &CardDefinition, query: &str) -> bool {

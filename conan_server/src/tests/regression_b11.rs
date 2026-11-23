@@ -1174,5 +1174,40 @@ fn test_b11003_multi_declare_self_lv4_minus_and_b11057_b11017_full_scenario() {
         assert_eq!(engine.players["p2"].field.len(), 1, "opp_set がリムーブされること");
         assert_eq!(engine.players["p2"].field[0].instance_id, "opp_no_set");
     }
+
+    #[test]
+    fn test_b11026_treated_as_iori_muga_in_all_areas_including_deck_search() {
+        let catalog = load_test_catalog();
+        let mut engine = MatchEngine::new(catalog);
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.case_phase = models::CasePhase::INTRO;
+        ps1.partner = Some(test_inst("p1_p", "PR220", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+        ps1.case = Some(test_inst("p1_c", "B08030", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        ps1.field.push(test_inst("b11026", "B11026", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        // 山札の上3枚: B04026(イベント), B11026(和田進一=伊織無我), B02018(服部平次)
+        ps1.deck.push(test_inst("d3", "B04026", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        ps1.deck.push(test_inst("d2", "B11026", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        ps1.deck.push(test_inst("d1", "B02018", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), engine::PlayerState::new("p2".to_string()));
+
+        engine.resolve_deployed_characters(
+            "p1",
+            None,
+            &[("b11026".to_string(), "B11026".to_string(), models::CardOrientation::ACTIVE)],
+            "MAIN",
+        );
+
+        let dec = engine.pending_decision.as_ref().unwrap();
+        assert_eq!(dec["kind"], "deckSearch");
+        let revealed = dec["options"]["revealedCards"].as_array().unwrap();
+        let d2 = revealed.iter().find(|c| c["instanceId"] == "d2").unwrap();
+        assert_eq!(d2["selectable"], true, "B11026は伊織無我として扱われるため選択可能であること");
+    }
 }
 
