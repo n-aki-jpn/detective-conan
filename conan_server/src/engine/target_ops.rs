@@ -1184,6 +1184,9 @@ impl MatchEngine {
                 if is_opp && filter.zone == TargetZone::Field && self.is_protected_from_opp_target(&oid, c) {
                     continue;
                 }
+                if filter.has_face_down_set_card && !c.set_cards.iter().any(|sc| !sc.face_up) {
+                    continue;
+                }
                 if filter.require_in_contact {
                     if filter.zone != TargetZone::Field || !self.is_char_in_current_contact(&oid, &c.instance_id) {
                         continue;

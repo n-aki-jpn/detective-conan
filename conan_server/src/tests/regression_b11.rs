@@ -1126,5 +1126,53 @@ fn test_b11003_multi_declare_self_lv4_minus_and_b11057_b11017_full_scenario() {
         assert_eq!(engine.players["p1"].remove.len(), 1);
         assert_eq!(engine.players["p1"].remove[0].instance_id, "d2");
     }
+
+    #[test]
+    fn test_b11019_declare_removes_opponent_char_with_face_down_set_card() {
+        let catalog = load_test_catalog();
+        let mut engine = MatchEngine::new(catalog);
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.partner = Some(test_inst("p1_p", "PR220", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+        ps1.case = Some(test_inst("p1_c", "B08030", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        ps1.field.push(test_inst("b11019", "B11019", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        ps1.deck.push(test_inst("p1_d1", "B11026", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        ps2.partner = Some(test_inst("p2_p", "B03001", "p2", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+        ps2.case = Some(test_inst("p2_c", "D08026", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        let mut opp_with_set = test_inst("opp_set", "B11008", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+        let mut sc = test_inst("sc1", "B11017", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+        sc.face_up = false;
+        opp_with_set.set_cards.push(sc);
+        ps2.field.push(opp_with_set);
+        ps2.field.push(test_inst("opp_no_set", "B11007", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        let desc = engine.catalog.get("B11019").unwrap().description.clone();
+        let declare_clause = desc.lines().nth(1).unwrap();
+        engine.execute_declare_clause("p1", "b11019", "B11019", false, None, models::CardOrientation::ACTIVE, declare_clause);
+
+        let dec = engine.pending_decision.as_ref().unwrap();
+        assert_eq!(dec["kind"], "targetSelect");
+        let cands = dec["options"]["candidates"].as_array().unwrap();
+        assert_eq!(cands.len(), 1, "裏向きセットカードを持つ opp_set のみが候補になること");
+        assert_eq!(cands[0]["instanceId"], "opp_set");
+
+        let did = dec["decisionId"].as_str().unwrap().to_string();
+        engine.submit_decision("p1", &serde_json::json!({
+            "decisionId": did,
+            "revision": engine.revision,
+            "value": {"targetIds": ["opp_set"]}
+        })).unwrap();
+
+        assert_eq!(engine.players["p2"].field.len(), 1, "opp_set がリムーブされること");
+        assert_eq!(engine.players["p2"].field[0].instance_id, "opp_no_set");
+    }
 }
 

@@ -295,6 +295,8 @@ pub struct TargetFilter {
     #[serde(default)]
     pub face_down_only: bool,
     #[serde(default)]
+    pub has_face_down_set_card: bool,
+    #[serde(default)]
     pub count_from_self_trait: Option<String>,
     #[serde(default)]
     pub max_lp_from_self_max: bool,
@@ -331,6 +333,7 @@ impl Default for TargetFilter {
             any_card_type: false,
             face_up_only: false,
             face_down_only: false,
+            has_face_down_set_card: false,
             count_from_self_trait: None,
             max_lp_from_self_max: false,
             require_in_contact: false,

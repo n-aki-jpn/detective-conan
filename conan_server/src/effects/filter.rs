@@ -99,7 +99,8 @@ pub fn parse_target_filter(
         phrase.contains("【カットイン】と【ヒラメキ】以外の元の能力を持たない")
             || phrase.contains("元の能力を持たない");
     let face_up_only = phrase.contains("表向きの");
-    let face_down_only = phrase.contains("裏向きの") || phrase.contains("裏向きで");
+    let has_face_down_set_card = phrase.contains("裏向きのカードがセットされている");
+    let face_down_only = !has_face_down_set_card && (phrase.contains("裏向きの") || phrase.contains("裏向きで"));
 
     let card_type_filter = if phrase.contains("イベント") && !phrase.contains("キャラ") {
         Some(CardType::EVENT)
@@ -155,6 +156,7 @@ pub fn parse_target_filter(
         any_card_type,
         face_up_only,
         face_down_only,
+        has_face_down_set_card,
         count_from_self_trait,
         max_lp_from_self_max: false,
         require_in_contact,
