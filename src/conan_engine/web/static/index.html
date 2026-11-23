@@ -2011,8 +2011,10 @@
                 style="font-size:0.65rem; background:#1e293b; color:var(--accent); border:1px solid #475569; padding:1px 6px; border-radius:10px;">0件</span>
             </div>
             <div style="display:flex; align-items:center; gap:6px;">
-              <button class="btn btn-secondary" onclick="event.stopPropagation(); scrollLogToBottom();"
-                style="font-size:0.65rem; padding:2px 8px; min-height:22px;">⬇ 最新</button>
+              <button id="log-order-btn" class="btn btn-secondary" onclick="event.stopPropagation(); toggleLogOrder();"
+                style="font-size:0.65rem; padding:2px 8px; min-height:22px;">🔃 新着順</button>
+              <button id="log-jump-latest-btn" class="btn btn-secondary" onclick="event.stopPropagation(); scrollLogToBottom();"
+                style="font-size:0.65rem; padding:2px 8px; min-height:22px;">⬆ 最新</button>
               <span id="log-toggle-icon" style="font-size:0.75rem; color:var(--text-muted);">▲ 閉じる</span>
             </div>
           </div>
@@ -3619,15 +3621,39 @@
       }
     }
 
+    let logOrderNewestFirst = localStorage.getItem('conan_log_newest_first') !== 'false';
+
+    function updateLogOrderButtons() {
+      const orderBtn = document.getElementById('log-order-btn');
+      const jumpBtn = document.getElementById('log-jump-latest-btn');
+      if (orderBtn) {
+        orderBtn.innerText = logOrderNewestFirst ? '🔃 新着順' : '🔃 古い順';
+      }
+      if (jumpBtn) {
+        jumpBtn.innerText = logOrderNewestFirst ? '⬆ 最新' : '⬇ 最新';
+      }
+    }
+
+    function toggleLogOrder() {
+      logOrderNewestFirst = !logOrderNewestFirst;
+      localStorage.setItem('conan_log_newest_first', String(logOrderNewestFirst));
+      updateLogOrderButtons();
+      lastLogCount = -1;
+      if (lastObs && Array.isArray(lastObs.logs)) {
+        renderLogs(lastObs.logs);
+      }
+    }
+
     function scrollLogToBottom() {
       const listEl = document.getElementById('battle-log-list');
       if (listEl) {
-        listEl.scrollTop = listEl.scrollHeight;
+        listEl.scrollTop = logOrderNewestFirst ? 0 : listEl.scrollHeight;
       }
     }
 
     function renderLogs(logs) {
       if (!logs || !Array.isArray(logs)) return;
+      updateLogOrderButtons();
       const countBadge = document.getElementById('log-count-badge');
       const latestSummary = document.getElementById('log-latest-summary');
       const listEl = document.getElementById('battle-log-list');
@@ -3642,7 +3668,8 @@
       lastLogCount = logs.length;
 
       listEl.innerHTML = '';
-      logs.forEach(msg => {
+      const orderedLogs = logOrderNewestFirst ? [...logs].reverse() : logs;
+      orderedLogs.forEach(msg => {
         if (msg.includes('━━━━━━')) return;
         const div = document.createElement('div');
         div.className = 'log-item';
@@ -3665,7 +3692,7 @@
         listEl.appendChild(div);
       });
 
-      listEl.scrollTop = listEl.scrollHeight;
+      listEl.scrollTop = logOrderNewestFirst ? 0 : listEl.scrollHeight;
     }
 
     function getCardLabel(cardId, cardsList) {
