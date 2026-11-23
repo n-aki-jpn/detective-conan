@@ -168,7 +168,6 @@ impl TargetAction {
                 | TargetAction::PlayFromHand
                 | TargetAction::DiscardHand
                 | TargetAction::SetThisEvent
-                | TargetAction::SetDeckTopFaceDown(_)
                 | TargetAction::GiveBullet
                 | TargetAction::GiveCanAttackActive
                 | TargetAction::ReviveSplitGonin

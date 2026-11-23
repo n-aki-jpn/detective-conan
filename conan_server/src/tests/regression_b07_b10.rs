@@ -1326,4 +1326,19 @@ fn test_b08023_on_enter_mode_select() {
     assert_eq!(opp_c.orientation, models::CardOrientation::SLEEP, "相手のキャラがスリープすること");
 }
 
+#[test]
+fn test_pr136_contact_remove_can_set_card_on_opponent_char() {
+    let plan = crate::effects::parse_effect_steps(
+        "キャラを1枚まで選び、持ち主のデッキのカードを上から1枚裏向きでセットする。",
+        None,
+        models::CardType::CHARACTER,
+    );
+    let ts = plan.target_step.expect("PR136のTargetStepが解析されること");
+    assert_eq!(
+        ts.filter.owner,
+        crate::effects::OwnerScope::Both,
+        "PR136のセット対象は自分・相手の両方を選べること"
+    );
+}
+
 

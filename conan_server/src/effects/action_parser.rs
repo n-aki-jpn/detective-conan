@@ -143,6 +143,13 @@ pub fn parse_target_step(
         action.is_beneficial(),
         dynamic_level,
     );
+    if matches!(action, TargetAction::SetDeckTopFaceDown(_))
+        && !target_phrase.contains("自分の")
+        && !target_phrase.contains("相手の")
+        && !target_phrase.starts_with("このキャラ")
+    {
+        filter.owner = OwnerScope::Both;
+    }
     if sentence.contains("アクション中のキャラ") {
         filter.acting_only = true;
     }
