@@ -1214,6 +1214,64 @@ fn test_b08029_grants_can_attack_active_to_deployed_char_even_after_recover() {
 
     // 伊織無我(rem_iori)に can_attack_active が付与されていること
     let iori = engine.players["p1"].field.iter().find(|c| c.instance_id == "rem_iori").unwrap();
-    assert!(iori.can_attack_active, "登場させた伊織無我にアクティブ指定アクション権が付与されること logs={:?}", engine.logs);
+    assert!(iori.can_attack_active, "登場させた伊織無我にアクティブ指定アクション権が付与されること");
+}
+
+#[test]
+fn test_b08029_grants_rush_char_to_deployed_char_even_after_skipped_recover() {
+    let catalog = load_test_catalog();
+    let mut engine = MatchEngine::new(catalog);
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    ps1.partner = Some(test_inst("p1_p", "PR220", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps1.case = Some(test_inst("p1_c", "B08030", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    ps1.remove.push(test_inst("rem_iori", "B09026", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE));
+
+    let mut ps2 = engine::PlayerState::new("p2".to_string());
+    ps2.partner = Some(test_inst("p2_p", "B03001", "p2", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps2.case = Some(test_inst("p2_c", "D08026", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), ps2);
+
+    let desc = engine.catalog.get("B08029").unwrap().description.clone();
+    engine.execute_declare_clause("p1", "ev_b08029", "B08029", false, None, models::CardOrientation::ACTIVE, &desc);
+
+    // 1. リムーブから伊織無我(B09026)を登場させる（大岡紅葉はリムーブにないのでスキップされる）
+    let dec1 = engine.pending_decision.as_ref().unwrap();
+    let id1 = dec1["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": id1,
+        "revision": engine.revision,
+        "value": {"targetIds": ["rem_iori"]}
+    })).unwrap();
+
+    // 2. モード選択で「突撃［キャラ］を与える」(modeIndex: 0)を選ぶ
+    let dec2 = engine.pending_decision.as_ref().unwrap();
+    assert_eq!(dec2["kind"], "modeSelect");
+    let id2 = dec2["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": id2,
+        "revision": engine.revision,
+        "value": {"modeIndex": 0}
+    })).unwrap();
+
+    if let Some(dec3) = engine.pending_decision.as_ref() {
+        if dec3["kind"] == "targetSelect" {
+            let id3 = dec3["decisionId"].as_str().unwrap().to_string();
+            engine.submit_decision("p1", &serde_json::json!({
+                "decisionId": id3,
+                "revision": engine.revision,
+                "value": {"targetIds": ["rem_iori"]}
+            })).unwrap();
+        }
+    }
+
+    let iori = engine.players["p1"].field.iter().find(|c| c.instance_id == "rem_iori").unwrap();
+    assert!(iori.has_rush, "登場させた伊織無我に突撃が付与されること");
+    assert_eq!(iori.rush_target.as_deref(), Some("CHAR"), "突撃［キャラ］であること");
 }
 
