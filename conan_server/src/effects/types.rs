@@ -199,6 +199,7 @@ pub enum TargetBonus {
     BulletOnCaseAttackDiscardThisTurn,
     GrantContactForceAttackThisTurn,
     SetDeckTopFaceDown(usize),
+    Sleep,
     SetThisEvent,
     ChoiceRushOrAttackActive,
     BonusCopyOtherCharName,

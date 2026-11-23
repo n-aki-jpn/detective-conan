@@ -163,6 +163,7 @@ pub fn parse_target_step(
         (TargetAction::GiveBullet, TargetBonus::GiveBullet) => false,
         (TargetAction::GiveCanAttackActive, TargetBonus::GiveCanAttackActive) => false,
         (TargetAction::SetDeckTopFaceDown(n), TargetBonus::SetDeckTopFaceDown(bn)) => n != bn,
+        (TargetAction::Sleep, TargetBonus::Sleep) => false,
         (TargetAction::GrantContactForceAttack, TargetBonus::GrantContactForceAttackThisTurn) => false,
         (TargetAction::GrantBulletOnCaseAttackDiscard, TargetBonus::BulletOnCaseAttackDiscardThisTurn) => false,
         _ => true,
@@ -281,9 +282,12 @@ pub fn extract_bonuses_from_action(text: &str) -> Vec<TargetBonus> {
     if text.contains("相手の現場にいるキャラを1枚まで選び、このキャラとのコンタクトを発生させる") {
         out.push(TargetBonus::GrantContactForceAttackThisTurn);
     }
-    if text.contains("デッキのカードを上から") && text.contains("枚裏向きで") && text.contains("セットする") {
+    if text.contains("デッキのカードを上から") && text.contains("枚裏向きで") && (text.contains("セットする") || text.contains("セットし")) {
         let n = extract_count_around(text, "上から", "枚裏向き").max(1);
         out.push(TargetBonus::SetDeckTopFaceDown(n));
+    }
+    if text.contains("スリープさせる") {
+        out.push(TargetBonus::Sleep);
     }
     out
 }
@@ -335,7 +339,7 @@ pub fn parse_target_action(text: &str) -> Option<TargetAction> {
         return Some(TargetAction::RecoverToHand);
     }
     if text.contains("裏向きで")
-        && text.contains("セットする")
+        && (text.contains("セットする") || text.contains("セットし"))
         && !text.contains("AP＋")
         && !text.contains("このキャラにセットする")
     {

@@ -1087,6 +1087,12 @@ impl MatchEngine {
                         self.apply_single_target_action(player_id, actor_id, actor_name, "SET_DECK_TOP_FACE_DOWN", "FIELD", tid, 0, &fake_opts, &mut dummy);
                     }
                 }
+                TargetBonus::Sleep => {
+                    for tid in selected_ids {
+                        let mut dummy = vec![];
+                        self.apply_single_target_action(player_id, actor_id, actor_name, "SLEEP", "FIELD", tid, 0, &json!({}), &mut dummy);
+                    }
+                }
                 TargetBonus::SetThisEvent => {
                     if let Some(tid) = selected_ids.first() {
                         let mut dummy = vec![];

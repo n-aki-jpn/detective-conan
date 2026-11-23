@@ -1275,3 +1275,55 @@ fn test_b08029_grants_rush_char_to_deployed_char_even_after_skipped_recover() {
     assert_eq!(iori.rush_target.as_deref(), Some("CHAR"), "突撃［キャラ］であること");
 }
 
+#[test]
+fn test_b08023_on_enter_mode_select() {
+    let catalog = load_test_catalog();
+    let mut engine = MatchEngine::new(catalog);
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn = 6;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    ps1.field.push(test_inst("c_b08023", "B08023", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+
+    let mut ps2 = engine::PlayerState::new("p2".to_string());
+    ps2.field.push(test_inst("opp_c", "B11009", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+    ps2.deck.push(test_inst("opp_d1", "B11009", "p2", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), ps2);
+
+    engine.resolve_deployed_characters(
+        "p1",
+        None,
+        &[("c_b08023".to_string(), "B08023".to_string(), models::CardOrientation::ACTIVE)],
+        "MAIN",
+    );
+
+    let dec1 = engine.pending_decision.as_ref().unwrap();
+    assert_eq!(dec1["kind"], "modeSelect", "B08023登場時にmodeSelectが開くこと");
+    assert_eq!(dec1["options"]["modes"].as_array().unwrap().len(), 3);
+    let id1 = dec1["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": id1,
+        "revision": engine.revision,
+        "value": {"modeIndex": 2}
+    })).unwrap();
+
+    let dec2 = engine.pending_decision.as_ref().unwrap();
+    assert_eq!(dec2["kind"], "targetSelect");
+    let id2 = dec2["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": id2,
+        "revision": engine.revision,
+        "value": {"targetIds": ["opp_c"]}
+    })).unwrap();
+
+    let opp_c = &engine.players["p2"].field[0];
+    assert_eq!(opp_c.set_cards.len(), 1, "相手のキャラに1枚裏向きでセットされること");
+    assert!(!opp_c.set_cards[0].face_up);
+    assert_eq!(opp_c.orientation, models::CardOrientation::SLEEP, "相手のキャラがスリープすること");
+}
+
+

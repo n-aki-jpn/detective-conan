@@ -44,6 +44,51 @@ impl MatchEngine {
                 self.log(format!("⚠️ [{}] の追加効果条件未達: {}", task.actor_name, reason));
                 continue;
             }
+            if task.clause.contains("以下から1つ選んで行う") {
+                let def_id_opt = self.players.get(&task.player_id).and_then(|ps| {
+                    ps.field
+                        .iter()
+                        .chain(ps.hand.iter())
+                        .chain(ps.remove.iter())
+                        .chain(ps.evidence.iter())
+                        .chain(ps.partner.iter())
+                        .chain(ps.r#case.iter())
+                        .find(|c| c.instance_id == task.actor_id)
+                        .map(|c| c.definition_id.clone())
+                });
+                if let Some(def_id) = def_id_opt {
+                    if let Some(def) = self.catalog.get(&def_id).cloned() {
+                        let modes: Vec<String> = def
+                            .description
+                            .lines()
+                            .map(|l| l.trim())
+                            .skip_while(|l| !l.contains("以下から1つ選んで行う"))
+                            .skip(1)
+                            .take_while(|l| l.starts_with('・'))
+                            .map(|l| l.trim_start_matches('・').trim().to_string())
+                            .collect();
+                        if !modes.is_empty() {
+                            let dec_id = self.generate_decision_id();
+                            self.pending_decision = Some(json!({
+                                "decisionId": dec_id,
+                                "revision": self.revision,
+                                "playerId": task.player_id,
+                                "kind": "modeSelect",
+                                "options": {
+                                    "actorId": task.actor_id,
+                                    "actorName": task.actor_name,
+                                    "sourceLevel": task.source_level,
+                                    "cardType": format!("{:?}", task.card_type),
+                                    "modes": modes,
+                                    "resumeContext": task.resume_context,
+                                    "title": format!("[{}] の効果を選択してください", task.actor_name)
+                                }
+                            }));
+                            return true;
+                        }
+                    }
+                }
+            }
             let resolved = resolve_state_branch(&task.clause, ori);
             let plan = parse_effect_steps(&resolved, None, task.card_type);
             if self.execute_clause_plan(
