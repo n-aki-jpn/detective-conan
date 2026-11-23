@@ -1876,4 +1876,68 @@ fn test_b01081_can_choose_deck_top_or_bottom() {
     assert_eq!(engine.players["p2"].deck.last().unwrap().instance_id, "opp_lv7", "デッキの上に移動すること");
 }
 
+#[test]
+fn test_b05029_declare_requires_2_set_cards_removal() {
+    let catalog = load_test_catalog();
+    let mut engine = MatchEngine::new(catalog);
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn = 6;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    ps1.partner = Some(test_inst("p1_partner", "B01031", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    // スリープ状態にして2つ目の【パートナー緑】【宣言】【ターン1】のみ発動可能にする
+    let mut b05029 = test_inst("c_b05029", "B05029", "p1", models::Zone::FIELD, models::CardOrientation::SLEEP);
+    let mut sc1 = test_inst("sc_self", "B11009", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+    sc1.face_up = false;
+    b05029.set_cards.push(sc1);
+    ps1.field.push(b05029);
+
+    let mut ps2 = engine::PlayerState::new("p2".to_string());
+    let mut opp = test_inst("opp_lv4", "B11009", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+    let mut sc2 = test_inst("sc_opp", "B11009", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE);
+    sc2.face_up = false;
+    opp.set_cards.push(sc2);
+    ps2.field.push(opp);
+
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), ps2);
+
+    engine.prompt_main_action("p1");
+    let dec0 = engine.pending_decision.as_ref().unwrap()["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec0,
+        "revision": engine.revision,
+        "value": {"type": "DECLARE", "actorId": "c_b05029"}
+    })).unwrap();
+
+    // 1. まず裏向きセットカードを2枚選ぶ targetSelect が開くこと
+    let dec1 = engine.pending_decision.as_ref().unwrap();
+    assert_eq!(dec1["kind"], "targetSelect", "先にセットカード選択が開くこと: logs={:?}", engine.logs);
+    let id1 = dec1["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": id1,
+        "revision": engine.revision,
+        "value": {"targetIds": ["sc_self", "sc_opp"]}
+    })).unwrap();
+
+    // セットカードが両方リムーブされていること
+    assert_eq!(engine.players["p1"].field[0].set_cards.len(), 0);
+    assert_eq!(engine.players["p2"].field[0].set_cards.len(), 0);
+
+    // 2. 次にレベル7以下のキャラを選ぶ targetSelect が開くこと
+    let dec2 = engine.pending_decision.as_ref().unwrap();
+    assert_eq!(dec2["kind"], "targetSelect", "セットカード2枚リムーブ後にキャラ選択が開くこと");
+    let id2 = dec2["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": id2,
+        "revision": engine.revision,
+        "value": {"targetIds": ["opp_lv4"]}
+    })).unwrap();
+
+    assert_eq!(engine.players["p2"].field.len(), 0, "レベル7以下のキャラがリムーブされること");
+}
+
+
 

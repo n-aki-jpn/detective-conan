@@ -1000,7 +1000,7 @@ pub fn try_parse_leading_optional_cost_clause(
         return None;
     }
     let seg = opt_prefix.trim();
-    if seg.contains("相手") {
+    if seg.contains("相手は") || seg.contains("相手が") {
         return None;
     }
 
