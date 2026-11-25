@@ -41,3 +41,9 @@ scratch/
 scripts/test*.py
 scripts/test*.json
 data/custom_decks/
+
+# ユーザー認証・ユーザーデッキ（個人情報を含むためコミットしない）
+data/dummy/users.json
+data/dummy/sessions.json
+data/dummy/user_decks/
+server_test.log

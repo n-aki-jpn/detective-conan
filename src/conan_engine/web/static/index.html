@@ -1771,12 +1771,36 @@
         style="padding:4px 8px; font-size:0.75rem; min-height:28px;" title="現在の盤面・ログをコピー">🐛 盤面コピー</button>
       <button class="btn btn-secondary" onclick="resetMatch()"
         style="padding:4px 8px; font-size:0.75rem; min-height:28px;">リセット</button>
+      <span id="auth-nickname-badge"
+        style="display:none; padding:4px 8px; font-size:0.75rem; color:#7dd3fc; border:1px solid rgba(56,189,248,0.4); border-radius:6px; min-height:28px; align-items:center; white-space:nowrap;"></span>
+      <button id="btn-logout" class="btn btn-secondary" onclick="logout()"
+        style="display:none; padding:4px 8px; font-size:0.75rem; min-height:28px;">ログアウト</button>
     </div>
   </nav>
   <audio id="battle-bgm" src="/audio/battle.mp3" loop preload="auto"></audio>
   <audio id="deck-bgm" src="/audio/deck.mp3" loop preload="auto"></audio>
   <audio id="win-bgm" src="/audio/win.mp3" loop preload="auto"></audio>
   <audio id="lose-bgm" src="/audio/lose.mp3" loop preload="auto"></audio>
+
+  <!-- Login Overlay -->
+  <div id="login-overlay"
+    style="display:none; position:fixed; inset:0; z-index:10000; background:rgba(2,6,23,0.94); align-items:center; justify-content:center;">
+    <div
+      style="background:var(--panel-bg); border:1px solid var(--border-color); border-radius:12px; padding:24px; width:min(360px, 92vw); display:flex; flex-direction:column; gap:12px;">
+      <div style="font-size:1rem; font-weight:800; color:#e2e8f0;">🔐 ログイン / ユーザー登録</div>
+      <div style="font-size:0.75rem; color:#94a3b8; line-height:1.6;">
+        ニックネームを入力してください。同じニックネームで再度ログインすると、サーバーに保存済みのデッキを引き継げます。
+      </div>
+      <input id="login-nickname" type="text" maxlength="16" placeholder="ニックネーム（2〜16文字）"
+        style="background:#0f172a; border:1px solid var(--border-color); border-radius:6px; padding:8px 10px; color:#e2e8f0; font-size:0.85rem; width:100%; box-sizing:border-box;"
+        onkeydown="if(event.key==='Enter'){doAuth('login');}">
+      <div style="display:flex; gap:8px;">
+        <button class="btn" onclick="doAuth('login')" style="flex:1;">ログイン</button>
+        <button class="btn btn-secondary" onclick="doAuth('register')" style="flex:1;">新規登録</button>
+      </div>
+      <div id="login-error" style="display:none; font-size:0.75rem; color:#f87171;"></div>
+    </div>
+  </div>
 
   <!-- Room Matching Modal -->
   <div id="room-modal" class="card-modal-backdrop" onclick="closeRoomModal()">
@@ -2403,6 +2427,170 @@
       localStorage.setItem(STORAGE_KEY_ACTIVE, id);
     }
 
+    // ========== 認証（ニックネーム + Bearerトークン） ==========
+    const STORAGE_KEY_TOKEN = 'conan_auth_token';
+    const STORAGE_KEY_NICKNAME = 'conan_auth_nickname';
+    const STORAGE_KEY_MIGRATED = 'conan_deck_migrated_v1';
+    let authToken = localStorage.getItem(STORAGE_KEY_TOKEN) || '';
+    let authNickname = localStorage.getItem(STORAGE_KEY_NICKNAME) || '';
+    let appStarted = false;
+
+    // 認証トークンを付与するfetchラッパー。401時はログイン画面を再表示する
+    async function api(url, options = {}) {
+      const opts = { ...options };
+      opts.headers = { ...(options.headers || {}) };
+      if (authToken) opts.headers['Authorization'] = 'Bearer ' + authToken;
+      const res = await fetch(url, opts);
+      if (res.status === 401) handleUnauthorized();
+      return res;
+    }
+
+    function handleUnauthorized() {
+      authToken = '';
+      localStorage.removeItem(STORAGE_KEY_TOKEN);
+      showLoginScreen('セッションの有効期限が切れました。再度ログインしてください。');
+    }
+
+    function showLoginScreen(msg = '') {
+      const ov = document.getElementById('login-overlay');
+      if (ov) ov.style.display = 'flex';
+      const err = document.getElementById('login-error');
+      if (err) {
+        err.style.display = msg ? 'block' : 'none';
+        err.innerText = msg;
+      }
+      const nick = document.getElementById('login-nickname');
+      if (nick && !nick.value) nick.value = authNickname || '';
+    }
+
+    function hideLoginScreen() {
+      const ov = document.getElementById('login-overlay');
+      if (ov) ov.style.display = 'none';
+    }
+
+    function updateAuthUi() {
+      const badge = document.getElementById('auth-nickname-badge');
+      const btn = document.getElementById('btn-logout');
+      if (badge) {
+        if (authNickname) {
+          badge.innerText = '👤 ' + authNickname;
+          badge.style.display = 'inline-flex';
+        } else {
+          badge.style.display = 'none';
+        }
+      }
+      if (btn) btn.style.display = authNickname ? '' : 'none';
+    }
+
+    async function doAuth(mode) {
+      const input = document.getElementById('login-nickname');
+      const nickname = (input ? input.value : '').trim();
+      if (nickname.length < 2 || nickname.length > 16) {
+        const err = document.getElementById('login-error');
+        if (err) {
+          err.style.display = 'block';
+          err.innerText = 'ニックネームは2〜16文字で入力してください';
+        }
+        return;
+      }
+      try {
+        const res = await fetch('/api/' + mode, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nickname })
+        });
+        const data = await res.json();
+        if (res.ok && data.token) {
+          authToken = data.token;
+          authNickname = (data.user && data.user.nickname) || nickname;
+          localStorage.setItem(STORAGE_KEY_TOKEN, authToken);
+          localStorage.setItem(STORAGE_KEY_NICKNAME, authNickname);
+          await migrateLocalDecksIfNeeded();
+          updateAuthUi();
+          hideLoginScreen();
+          startApp();
+        } else {
+          const err = document.getElementById('login-error');
+          if (err) {
+            err.style.display = 'block';
+            err.innerText = data.error || '認証に失敗しました';
+          }
+        }
+      } catch (e) {
+        const err = document.getElementById('login-error');
+        if (err) {
+          err.style.display = 'block';
+          err.innerText = '通信エラー: ' + e.message;
+        }
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem(STORAGE_KEY_TOKEN);
+      localStorage.removeItem(STORAGE_KEY_NICKNAME);
+      location.reload();
+    }
+
+    // 初回ログイン時のみ、localStorageのデッキをサーバーへ移行（冪等）
+    async function migrateLocalDecksIfNeeded() {
+      if (localStorage.getItem(STORAGE_KEY_MIGRATED)) return;
+      const decks = getStoredDecks().filter(d =>
+        d && d.deckId && !d.deckId.startsWith('preset_') && !d.deckId.startsWith('user_preset_'));
+      try {
+        if (decks.length > 0) {
+          await api('/api/decks/migrate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ decks })
+          });
+        }
+        localStorage.setItem(STORAGE_KEY_MIGRATED, '1');
+      } catch (e) {
+        console.error('デッキ移行に失敗しました:', e);
+      }
+    }
+
+    // 認証完了後にアプリ本体（ポーリング・自動参加など）を起動する
+    function startApp() {
+      if (appStarted) return;
+      appStarted = true;
+      ensureDeckReady();
+      setInterval(fetchState, 1000);
+      fetchState();
+      loadBattleDecks();
+      // URLの ?join=XXXX による自動参加処理
+      if (urlParams.has('join')) {
+        const joinCode = urlParams.get('join').trim();
+        if (joinCode) {
+          setTimeout(() => {
+            if (confirm(`部屋「${joinCode}」に対戦相手（P2）として参加しますか？`)) {
+              joinExistingRoom(joinCode);
+            }
+          }, 500);
+        }
+      }
+    }
+
+    async function initAuth() {
+      updateAuthUi();
+      if (authToken) {
+        try {
+          const res = await fetch('/api/me', { headers: { 'Authorization': 'Bearer ' + authToken } });
+          if (res.ok) {
+            const data = await res.json();
+            authNickname = (data.user && data.user.nickname) || authNickname;
+            localStorage.setItem(STORAGE_KEY_NICKNAME, authNickname);
+            updateAuthUi();
+            startApp();
+            return;
+          }
+        } catch (e) { /* 通信失敗時はログイン画面表示へ進む */ }
+        authToken = '';
+        localStorage.removeItem(STORAGE_KEY_TOKEN);
+      }
+      showLoginScreen();
+    }
+
     // Check URL parameters for roomId & player & join
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.has('room')) {
@@ -2478,7 +2666,7 @@
     async function createNewRoom() {
       await ensureDeckReady();
       try {
-        const res = await fetch('/api/rooms/create', {
+        const res = await api('/api/rooms/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ is_cpu: false, deck: currentDeckDef })
@@ -2515,7 +2703,7 @@
         return;
       }
       try {
-        const res = await fetch('/api/rooms/join', {
+        const res = await api('/api/rooms/join', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ roomId: roomId, deck: currentDeckDef })
@@ -2594,7 +2782,7 @@
     // ========== BATTLE SYSTEM ==========
     async function fetchState() {
       try {
-        const res = await fetch(`/api/state?player_id=${currentViewingPlayer}&room_id=${currentRoomId}`);
+        const res = await api(`/api/state?player_id=${currentViewingPlayer}&room_id=${currentRoomId}`);
         if (!res.ok) {
           if (res.status === 404 && currentRoomId !== 'default') {
             currentRoomId = 'default';
@@ -2733,7 +2921,7 @@
     async function toggleCpu(isCpu) {
       const diffEl = document.getElementById('cpu-difficulty-select');
       const difficulty = diffEl ? diffEl.value : 'strongest';
-      await fetch('/api/set_cpu', {
+      await api('/api/set_cpu', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isCpu: isCpu, roomId: currentRoomId, difficulty })
@@ -2745,7 +2933,7 @@
       const toggleEl = document.getElementById('cpu-toggle');
       const isCpu = toggleEl ? toggleEl.checked : true;
       if (!isCpu) return;
-      await fetch('/api/set_cpu', {
+      await api('/api/set_cpu', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isCpu: true, roomId: currentRoomId, difficulty })
@@ -2783,8 +2971,8 @@
     async function loadBattleDecks(preferredP1Id = null) {
       try {
         const [decksRes, activeRes] = await Promise.all([
-          fetch('/api/decks'),
-          fetch('/api/deck').catch(() => null),
+          api('/api/decks'),
+          api('/api/deck').catch(() => null),
         ]);
         if (!decksRes.ok) return;
         const raw = await decksRes.json();
@@ -2895,7 +3083,7 @@
         payload.p2DeckId = p2Local ? undefined : (p2DeckId || undefined);
         payload.p2Deck = p2Local || undefined;
       }
-      await fetch('/api/reset', {
+      await api('/api/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -2912,7 +3100,7 @@
 
     async function submitDecision(value) {
       if (!lastObs || !lastObs.pendingDecision) return;
-      await fetch('/api/decision', {
+      await api('/api/decision', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -5066,10 +5254,30 @@
     async function loadDeckBuilderData() {
       try {
         if (catalogData.length === 0) {
-          const catRes = await fetch('/api/catalog');
+          const catRes = await api('/api/catalog');
           const catJson = await catRes.json();
           catalogData = catJson.cards || [];
         }
+
+        // サーバー側のユーザーデッキをlocalStorageへ復元（新規デバイスでのログイン引き継ぎ）
+        try {
+          const listRes = await api('/api/decks');
+          const listData = await listRes.json();
+          const serverMetas = Array.isArray(listData) ? listData : (listData.decks || []);
+          const localDecks = getStoredDecks();
+          const localIds = new Set(localDecks.map(d => d.deckId));
+          const missing = serverMetas.filter(m => !m.isPreset && m.deckId && !localIds.has(m.deckId));
+          for (const meta of missing) {
+            try {
+              const r = await api(`/api/decks/${encodeURIComponent(meta.fileId || meta.deckId)}`);
+              if (r.ok) {
+                const dObj = await r.json();
+                if (dObj && dObj.deckId) localDecks.push(dObj);
+              }
+            } catch (_) {}
+          }
+          if (missing.length > 0) saveStoredDecks(localDecks);
+        } catch (_) {}
 
         let decks = getStoredDecks().filter(d => !(d.deckId === 'starter_blue' && d.deckName === 'あき'));
         if (decks.length === 0) {
@@ -5082,7 +5290,7 @@
             const loadedPresets = [];
             for (const meta of presetMetas) {
               try {
-                const r = await fetch(`/api/decks/${encodeURIComponent(meta.fileId || meta.deckId)}`);
+                const r = await api(`/api/decks/${encodeURIComponent(meta.fileId || meta.deckId)}`);
                 if (r.ok) {
                   const dObj = await r.json();
                   dObj.deckId = `user_${meta.deckId}`;
@@ -5093,7 +5301,7 @@
             if (loadedPresets.length > 0) {
               decks = loadedPresets;
             } else {
-              const deckRes = await fetch('/api/deck');
+              const deckRes = await api('/api/deck');
               const defaultDeck = await deckRes.json();
               defaultDeck.deckId = "starter_blue";
               defaultDeck.deckName = "スターターデッキ（青）";
@@ -5226,6 +5434,8 @@
       setActiveStoredDeckId(remaining[0].deckId);
       onSelectSavedDeck(remaining[0].deckId);
       renderSavedDecksDropdown(remaining);
+      // サーバー側からも削除（プリセット由来のIDはサーバーに存在しないため失敗しても無視）
+      api(`/api/decks/${encodeURIComponent(deckId)}`, { method: 'DELETE' }).catch(() => {});
     }
 
     let builderViewMode = 'deck'; // 'deck' (投入中カード一覧) or 'catalog' (全カード)
@@ -5914,7 +6124,7 @@
       if (typeof loadBattleDecks === 'function') loadBattleDecks();
       // 2. サーバー側メモリの対戦盤面に反映
       try {
-        const res = await fetch('/api/save_deck', {
+        const res = await api('/api/save_deck', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(currentDeckDef)
@@ -6159,7 +6369,7 @@
       };
 
       try {
-        const res = await fetch('/api/deck/publish', {
+        const res = await api('/api/deck/publish', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -6197,7 +6407,7 @@
       }
 
       try {
-        const res = await fetch('/api/deck/import_official', {
+        const res = await api('/api/deck/import_official', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ code })
@@ -6228,10 +6438,7 @@
       }
     }
 
-    // 初期化と起動
-    ensureDeckReady();
-    setInterval(fetchState, 1000);
-    fetchState();
+    // 初期化と起動（認証完了後、startApp() 経由で実行される）
 
     // ========== BGM CONTROL ==========
     const bgmAudio = document.getElementById('battle-bgm');
@@ -6341,23 +6548,13 @@
     }
 
     updateBgmUi();
-    loadBattleDecks();
     // 初回のユーザー操作（クリック・タップ）で自動的にBGM再生を開始
     document.addEventListener('pointerdown', function onFirstInteract() {
       syncBgm();
     });
 
-        // URLの ?join=XXXX による自動参加処理
-        if (urlParams.has('join')) {
-          const joinCode = urlParams.get('join').trim();
-          if (joinCode) {
-            setTimeout(() => {
-              if (confirm(`部屋「${joinCode}」に対戦相手（P2）として参加しますか？`)) {
-                joinExistingRoom(joinCode);
-              }
-            }, 500);
-          }
-        }
+    // 認証確認後、アプリ本体を起動する
+    initAuth();
   </script>
   <div id="evidence-remove-toast" aria-live="polite">
     <img id="evidence-remove-toast-img" src="" alt="" style="display:none;" />

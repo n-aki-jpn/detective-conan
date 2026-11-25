@@ -467,9 +467,11 @@ impl MatchRoom {
 pub struct MatchManager {
     pub deck_path: PathBuf,
     pub decks_dir: PathBuf,
+    pub user_decks_dir: PathBuf,
     pub catalog: CardCatalog,
     pub deck_def: DeckDefinition,
     pub rooms: HashMap<String, MatchRoom>,
+    pub user_manager: crate::user::UserManager,
 }
 
 pub fn sanitize_deck(
@@ -521,20 +523,27 @@ impl MatchManager {
         let catalog_path = PathBuf::from("data/dummy/cards.json");
         let deck_path = PathBuf::from("data/dummy/deck.json");
         let decks_dir = PathBuf::from("data/dummy/decks");
+        let user_decks_dir = PathBuf::from("data/dummy/user_decks");
 
         if !decks_dir.exists() {
             let _ = std::fs::create_dir_all(&decks_dir);
         }
+        if !user_decks_dir.exists() {
+            let _ = std::fs::create_dir_all(&user_decks_dir);
+        }
 
         let catalog = CardCatalog::load_from_json(&catalog_path)?;
         let deck_def = Self::load_deck(&deck_path)?;
+        let user_manager = crate::user::UserManager::new(Path::new("data/dummy"));
 
         let mut mgr = MatchManager {
             deck_path,
             decks_dir,
+            user_decks_dir,
             catalog: catalog.clone(),
             deck_def: deck_def.clone(),
             rooms: HashMap::new(),
+            user_manager,
         };
 
         // Create initial default local room
@@ -629,6 +638,233 @@ impl MatchManager {
         );
         self.rooms.insert(room_id.clone(), room);
         room_id
+    }
+
+    // ─── ユーザー単位のデッキ管理 ────────────────────────────────────────────────
+
+    fn user_decks_dir_for(&self, user_id: &str) -> PathBuf {
+        let safe_id: String = user_id
+            .chars()
+            .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
+            .collect();
+        self.user_decks_dir
+            .join(if safe_id.is_empty() { "unknown" } else { &safe_id })
+    }
+
+    fn deck_meta_from_value(val: &Value, file_stem: &str, is_preset: bool) -> Value {
+        let deck_name = val
+            .get("deckName")
+            .and_then(|v| v.as_str())
+            .unwrap_or(file_stem)
+            .to_string();
+        let partner_id = val
+            .get("partnerId")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let case_id = val
+            .get("caseId")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let total_cards: i64 = val
+            .get("mainDeck")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|item| item.get("count").and_then(|c| c.as_i64()))
+                    .sum()
+            })
+            .unwrap_or(0);
+        json!({
+            "fileId": file_stem,
+            "deckId": val.get("deckId").and_then(|v| v.as_str()).unwrap_or(file_stem),
+            "deckName": deck_name,
+            "partnerId": partner_id,
+            "caseId": case_id,
+            "totalCards": total_cards,
+            "isPreset": is_preset,
+        })
+    }
+
+    /// ユーザーが利用可能なデッキ一覧（共有プリセット + 自分のデッキ）。
+    pub fn list_user_decks(&self, user_id: &str) -> Vec<Value> {
+        let mut list = Vec::new();
+        // 共有プリセット（data/dummy/decks 配下）
+        if let Ok(entries) = std::fs::read_dir(&self.decks_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                    if let Ok(content) = std::fs::read_to_string(&path) {
+                        if let Ok(val) = serde_json::from_str::<Value>(&content) {
+                            let file_stem = path
+                                .file_stem()
+                                .and_then(|s| s.to_str())
+                                .unwrap_or("")
+                                .to_string();
+                            let is_preset = file_stem.starts_with("preset_");
+                            let mut meta = Self::deck_meta_from_value(&val, &file_stem, is_preset);
+                            let deck_id = meta
+                                .get("deckId")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string();
+                            meta["isActive"] =
+                                json!(self.deck_def.deck_id.as_deref() == Some(deck_id.as_str()));
+                            list.push(meta);
+                        }
+                    }
+                }
+            }
+        }
+        // ユーザー自身のデッキ（data/dummy/user_decks/{user_id} 配下）
+        let dir = self.user_decks_dir_for(user_id);
+        if let Ok(entries) = std::fs::read_dir(&dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                    if let Ok(content) = std::fs::read_to_string(&path) {
+                        if let Ok(val) = serde_json::from_str::<Value>(&content) {
+                            let file_stem = path
+                                .file_stem()
+                                .and_then(|s| s.to_str())
+                                .unwrap_or("")
+                                .to_string();
+                            let mut meta = Self::deck_meta_from_value(&val, &file_stem, false);
+                            let deck_id = meta
+                                .get("deckId")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string();
+                            meta["isActive"] =
+                                json!(self.deck_def.deck_id.as_deref() == Some(deck_id.as_str()));
+                            list.push(meta);
+                        }
+                    }
+                }
+            }
+        }
+        list
+    }
+
+    /// ユーザーのデッキを保存。ファイル名はdeckIdをサニタイズして使用。
+    pub fn save_user_deck(&mut self, user_id: &str, deck: &DeckDefinition) -> Result<String, String> {
+        let dir = self.user_decks_dir_for(user_id);
+        if let Err(e) = std::fs::create_dir_all(&dir) {
+            return Err(format!("デッキディレクトリの作成に失敗しました: {}", e));
+        }
+        let deck_id = deck
+            .deck_id
+            .clone()
+            .unwrap_or_else(|| format!("deck_{}", std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis())
+                .unwrap_or(0)));
+        let safe_id: String = deck_id
+            .chars()
+            .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
+            .collect();
+        if safe_id.is_empty() || safe_id.starts_with("preset_") {
+            return Err("無効なデッキIDです".to_string());
+        }
+        let path = dir.join(format!("{}.json", safe_id));
+        let content = serde_json::to_string_pretty(deck)
+            .map_err(|e| format!("デッキのシリアライズに失敗しました: {}", e))?;
+        std::fs::write(&path, content).map_err(|e| format!("デッキファイルの書き込みに失敗しました: {}", e))?;
+        // デフォルトルーム（ソロ）のアクティブデッキも同期
+        self.deck_def = deck.clone();
+        Ok(deck_id)
+    }
+
+    /// IDからデッキを読み込み（共有プリセット優先、次にユーザーディレクトリ）。
+    pub fn get_user_deck(&self, user_id: &str, deck_id: &str) -> Option<DeckDefinition> {
+        if let Some(deck) = load_deck_from_dir(&self.decks_dir, deck_id) {
+            return Some(deck);
+        }
+        let dir = self.user_decks_dir_for(user_id);
+        load_deck_from_dir(&dir, deck_id)
+    }
+
+    /// ユーザーのデッキを削除。共有プリセット（preset_ 接頭辞）は削除不可。
+    pub fn delete_user_deck(&mut self, user_id: &str, deck_id: &str) -> Result<(), String> {
+        let safe_id: String = deck_id
+            .chars()
+            .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
+            .collect();
+        if safe_id.starts_with("preset_") {
+            return Err("共有プリセットデッキは削除できません".to_string());
+        }
+        let dir = self.user_decks_dir_for(user_id);
+        let path = dir.join(format!("{}.json", safe_id));
+        if path.exists() {
+            std::fs::remove_file(&path)
+                .map_err(|e| format!("デッキファイルの削除に失敗しました: {}", e))?;
+            return Ok(());
+        }
+        // fileIdが一致しない場合、deckIdフィールドで検索して削除
+        if let Ok(entries) = std::fs::read_dir(&dir) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p.extension().and_then(|s| s.to_str()) == Some("json") {
+                    if let Ok(content) = std::fs::read_to_string(&p) {
+                        if let Ok(deck) = serde_json::from_str::<DeckDefinition>(&content) {
+                            if deck.deck_id.as_deref() == Some(deck_id) {
+                                std::fs::remove_file(&p)
+                                    .map_err(|e| format!("デッキファイルの削除に失敗しました: {}", e))?;
+                                return Ok(());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Err("デッキが見つかりません".to_string())
+    }
+
+    /// クライアント（localStorage）のデッキをユーザーディレクトリへ移行。
+    /// 冪等：既存のdeckIdはスキップ。戻り値は (imported, skipped)。
+    pub fn migrate_user_decks(&mut self, user_id: &str, decks: Vec<DeckDefinition>) -> (usize, usize) {
+        let dir = self.user_decks_dir_for(user_id);
+        let _ = std::fs::create_dir_all(&dir);
+        let mut imported = 0usize;
+        let mut skipped = 0usize;
+        for deck in decks {
+            let deck_id = match deck.deck_id.as_deref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+                Some(id) => id.to_string(),
+                None => {
+                    skipped += 1;
+                    continue;
+                }
+            };
+            if deck_id.starts_with("preset_") || deck_id.starts_with("user_preset_") {
+                skipped += 1;
+                continue;
+            }
+            let safe_id: String = deck_id
+                .chars()
+                .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
+                .collect();
+            if safe_id.is_empty() {
+                skipped += 1;
+                continue;
+            }
+            let path = dir.join(format!("{}.json", safe_id));
+            if path.exists() {
+                skipped += 1;
+                continue;
+            }
+            match serde_json::to_string_pretty(&deck) {
+                Ok(content) => {
+                    if std::fs::write(&path, content).is_ok() {
+                        imported += 1;
+                    } else {
+                        skipped += 1;
+                    }
+                }
+                Err(_) => skipped += 1,
+            }
+        }
+        (imported, skipped)
     }
 }
 

@@ -1,10 +1,10 @@
 use crate::agent::{self, RandomAgent};
 use crate::models::DeckDefinition;
 use crate::observation::build_player_observation;
-use crate::room::{load_deck_from_dir, sanitize_deck, MatchRoom, SharedState};
+use crate::room::{sanitize_deck, MatchRoom, SharedState};
 use axum::{
-    extract::{Path as AxumPath, Query, State},
-    http::StatusCode,
+    extract::{FromRequestParts, Path as AxumPath, Query, State},
+    http::{request::Parts, StatusCode},
     response::IntoResponse,
     Json,
 };
@@ -77,10 +77,110 @@ pub struct StatusOk {
     pub status: &'static str,
 }
 
+// ─── 認証（Bearer トークン）抽出器 ──────────────────────────────────────────────
+
+/// `Authorization: Bearer <token>` ヘッダーからユーザーを解決する抽出器。
+#[derive(Clone)]
+pub struct AuthUser(pub crate::models::User);
+
+#[axum::async_trait]
+impl FromRequestParts<SharedState> for AuthUser {
+    type Rejection = (StatusCode, Json<Value>);
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &SharedState,
+    ) -> Result<Self, Self::Rejection> {
+        let token = parts
+            .headers
+            .get(axum::http::header::AUTHORIZATION)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.strip_prefix("Bearer "));
+        let token = match token {
+            Some(t) => t,
+            None => {
+                return Err((
+                    StatusCode::UNAUTHORIZED,
+                    Json(json!({"error": "未ログインです。ログインしてください。"})),
+                ))
+            }
+        };
+        let mut mgr = state.lock().unwrap();
+        match mgr.user_manager.resolve_token(token) {
+            Some(user) => Ok(AuthUser(user)),
+            None => Err((
+                StatusCode::UNAUTHORIZED,
+                Json(json!({"error": "セッションの有効期限が切れました。再度ログインしてください。"})),
+            )),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct AuthRequest {
+    pub nickname: String,
+}
+
+#[derive(Deserialize)]
+pub struct MigrateDecksRequest {
+    pub decks: Vec<DeckDefinition>,
+}
+
 // ─── Handlers ─────────────────────────────────────────────────────────────────
+
+pub async fn handle_register(
+    State(state): State<SharedState>,
+    Json(body): Json<AuthRequest>,
+) -> impl IntoResponse {
+    let mut mgr = state.lock().unwrap();
+    match mgr.user_manager.register(&body.nickname) {
+        Ok((user, session)) => Json(json!({
+            "status": "ok",
+            "user": {"id": user.id, "nickname": user.nickname},
+            "token": session.token,
+        }))
+        .into_response(),
+        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"error": e}))).into_response(),
+    }
+}
+
+pub async fn handle_login(
+    State(state): State<SharedState>,
+    Json(body): Json<AuthRequest>,
+) -> impl IntoResponse {
+    let mut mgr = state.lock().unwrap();
+    match mgr.user_manager.login(&body.nickname) {
+        Ok((user, session)) => Json(json!({
+            "status": "ok",
+            "user": {"id": user.id, "nickname": user.nickname},
+            "token": session.token,
+        }))
+        .into_response(),
+        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"error": e}))).into_response(),
+    }
+}
+
+pub async fn handle_me(user: AuthUser) -> impl IntoResponse {
+    Json(json!({
+        "status": "ok",
+        "user": {"id": user.0.id, "nickname": user.0.nickname},
+    }))
+    .into_response()
+}
+
+pub async fn handle_migrate_decks(
+    State(state): State<SharedState>,
+    user: AuthUser,
+    Json(body): Json<MigrateDecksRequest>,
+) -> impl IntoResponse {
+    let mut mgr = state.lock().unwrap();
+    let (imported, skipped) = mgr.migrate_user_decks(&user.0.id, body.decks);
+    Json(json!({"status": "ok", "imported": imported, "skipped": skipped})).into_response()
+}
 
 pub async fn handle_state(
     State(state): State<SharedState>,
+    _user: AuthUser,
     Query(params): Query<StateQuery>,
 ) -> impl IntoResponse {
     let mut mgr = state.lock().unwrap();
@@ -181,6 +281,7 @@ pub async fn handle_get_logs(
 
 pub async fn handle_create_room(
     State(state): State<SharedState>,
+    _user: AuthUser,
     Json(body): Json<CreateRoomRequest>,
 ) -> impl IntoResponse {
     let mut mgr = state.lock().unwrap();
@@ -195,6 +296,7 @@ pub async fn handle_create_room(
 
 pub async fn handle_join_room(
     State(state): State<SharedState>,
+    _user: AuthUser,
     Json(body): Json<JoinRoomRequest>,
 ) -> impl IntoResponse {
     let mut mgr = state.lock().unwrap();
@@ -241,7 +343,10 @@ pub async fn handle_catalog(State(state): State<SharedState>) -> impl IntoRespon
     Json(resp).into_response()
 }
 
-pub async fn handle_deck(State(state): State<SharedState>) -> impl IntoResponse {
+pub async fn handle_deck(
+    State(state): State<SharedState>,
+    _user: AuthUser,
+) -> impl IntoResponse {
     let mgr = state.lock().unwrap();
     match std::fs::read_to_string(&mgr.deck_path) {
         Ok(content) => {
@@ -256,46 +361,30 @@ pub async fn handle_deck(State(state): State<SharedState>) -> impl IntoResponse 
     }
 }
 
-pub async fn handle_list_decks(State(state): State<SharedState>) -> impl IntoResponse {
+pub async fn handle_list_decks(
+    State(state): State<SharedState>,
+    user: AuthUser,
+) -> impl IntoResponse {
     let mgr = state.lock().unwrap();
-    let list = mgr.list_decks();
+    let list = mgr.list_user_decks(&user.0.id);
     Json(json!({ "decks": list })).into_response()
 }
 
 pub async fn handle_get_deck_by_id(
     State(state): State<SharedState>,
+    user: AuthUser,
     AxumPath(deck_id): AxumPath<String>,
 ) -> impl IntoResponse {
     let mgr = state.lock().unwrap();
-    let safe_id: String = deck_id
-        .chars()
-        .map(|c| {
-            if c.is_alphanumeric() || c == '-' || c == '_' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect();
-    let target = mgr.decks_dir.join(format!("{}.json", safe_id));
-    if let Ok(content) = std::fs::read_to_string(target) {
-        if let Ok(val) = serde_json::from_str::<Value>(&content) {
-            return Json(val).into_response();
-        }
-    }
-    if let Ok(entries) = std::fs::read_dir(&mgr.decks_dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                if let Ok(content) = std::fs::read_to_string(&path) {
-                    if let Ok(val) = serde_json::from_str::<Value>(&content) {
-                        if val.get("deckId").and_then(|v| v.as_str()) == Some(deck_id.as_str()) {
-                            return Json(val).into_response();
-                        }
-                    }
-                }
-            }
-        }
+    if let Some(deck) = mgr.get_user_deck(&user.0.id, &deck_id) {
+        return match serde_json::to_value(&deck) {
+            Ok(val) => Json(val).into_response(),
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response(),
+        };
     }
     (
         StatusCode::NOT_FOUND,
@@ -306,75 +395,53 @@ pub async fn handle_get_deck_by_id(
 
 pub async fn handle_delete_deck_by_id(
     State(state): State<SharedState>,
+    user: AuthUser,
     AxumPath(deck_id): AxumPath<String>,
 ) -> impl IntoResponse {
-    let mgr = state.lock().unwrap();
-    let safe_id: String = deck_id
-        .chars()
-        .map(|c| {
-            if c.is_alphanumeric() || c == '-' || c == '_' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect();
-    if safe_id.starts_with("preset_") {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(json!({"error": "プリセットデッキは削除できません"})),
-        )
-            .into_response();
+    let mut mgr = state.lock().unwrap();
+    match mgr.delete_user_deck(&user.0.id, &deck_id) {
+        Ok(()) => Json(StatusOk { status: "ok" }).into_response(),
+        Err(e) if e.contains("プリセット") => {
+            (StatusCode::FORBIDDEN, Json(json!({"error": e}))).into_response()
+        }
+        Err(e) if e.contains("見つかりません") => {
+            (StatusCode::NOT_FOUND, Json(json!({"error": e}))).into_response()
+        }
+        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"error": e}))).into_response(),
     }
-    let target = mgr.decks_dir.join(format!("{}.json", safe_id));
-    if target.exists() {
-        let _ = std::fs::remove_file(target);
-        return Json(StatusOk { status: "ok" }).into_response();
-    }
-    (
-        StatusCode::NOT_FOUND,
-        Json(json!({"error": "Deck not found"})),
-    )
-        .into_response()
 }
 
 pub async fn handle_select_deck(
     State(state): State<SharedState>,
+    user: AuthUser,
     AxumPath(deck_id): AxumPath<String>,
 ) -> impl IntoResponse {
     let mut mgr = state.lock().unwrap();
-    let safe_id: String = deck_id
-        .chars()
-        .map(|c| {
-            if c.is_alphanumeric() || c == '-' || c == '_' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect();
-    let target = mgr.decks_dir.join(format!("{}.json", safe_id));
-    if let Ok(content) = std::fs::read_to_string(&target) {
-        if let Ok(deck_def) = serde_json::from_str::<DeckDefinition>(&content) {
-            let _ = std::fs::write(&mgr.deck_path, &content);
-            mgr.deck_def = deck_def.clone();
-            let catalog = mgr.catalog.clone();
-            if let Some(default_room) = mgr.rooms.get_mut("default") {
-                default_room.p1_deck = deck_def;
-                default_room.reset_match(&catalog);
-            }
-            return Json(StatusOk { status: "ok" }).into_response();
+    let deck_def = match mgr.get_user_deck(&user.0.id, &deck_id) {
+        Some(d) => d,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"error": "Failed to load deck"})),
+            )
+                .into_response();
         }
+    };
+    if let Ok(content) = serde_json::to_string_pretty(&deck_def) {
+        let _ = std::fs::write(&mgr.deck_path, content);
     }
-    (
-        StatusCode::BAD_REQUEST,
-        Json(json!({"error": "Failed to load deck"})),
-    )
-        .into_response()
+    mgr.deck_def = deck_def.clone();
+    let catalog = mgr.catalog.clone();
+    if let Some(default_room) = mgr.rooms.get_mut("default") {
+        default_room.p1_deck = deck_def;
+        default_room.reset_match(&catalog);
+    }
+    Json(StatusOk { status: "ok" }).into_response()
 }
 
 pub async fn handle_reset(
     State(state): State<SharedState>,
+    user: AuthUser,
     Json(body): Json<Option<ResetRequest>>,
 ) -> impl IntoResponse {
     let mut mgr = state.lock().unwrap();
@@ -393,13 +460,13 @@ pub async fn handle_reset(
         p1_deck_id
             .as_deref()
             .filter(|s| !s.is_empty())
-            .and_then(|id| load_deck_from_dir(&mgr.decks_dir, id))
+            .and_then(|id| mgr.get_user_deck(&user.0.id, id))
     });
     let p2_loaded = p2_deck_body.or_else(|| {
         p2_deck_id
             .as_deref()
             .filter(|s| !s.is_empty())
-            .and_then(|id| load_deck_from_dir(&mgr.decks_dir, id))
+            .and_then(|id| mgr.get_user_deck(&user.0.id, id))
     });
 
     let catalog = mgr.catalog.clone();
@@ -423,6 +490,7 @@ pub async fn handle_reset(
 
 pub async fn handle_set_cpu(
     State(state): State<SharedState>,
+    _user: AuthUser,
     Json(body): Json<SetCpuRequest>,
 ) -> impl IntoResponse {
     let mut mgr = state.lock().unwrap();
@@ -453,6 +521,7 @@ pub async fn handle_set_cpu(
 
 pub async fn handle_save_deck(
     State(state): State<SharedState>,
+    user: AuthUser,
     Json(body): Json<DeckDefinition>,
 ) -> impl IntoResponse {
     let mgr_read = state.lock().unwrap();
@@ -512,7 +581,7 @@ pub async fn handle_save_deck(
 
     let mut mgr = state.lock().unwrap();
     let deck_clone = body.clone();
-    if let Err(e) = mgr.save_deck(body) {
+    if let Err(e) = mgr.save_user_deck(&user.0.id, &body) {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": e}))).into_response();
     }
     let catalog = mgr.catalog.clone();
@@ -525,6 +594,7 @@ pub async fn handle_save_deck(
 
 pub async fn handle_decision(
     State(state): State<SharedState>,
+    _user: AuthUser,
     Json(body): Json<DecisionRequest>,
 ) -> impl IntoResponse {
     let mut mgr = state.lock().unwrap();

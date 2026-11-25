@@ -1,3 +1,4 @@
+use crate::handlers::AuthUser;
 use crate::models::DeckCardItem;
 use crate::room::SharedState;
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
@@ -137,6 +138,8 @@ pub fn parse_official_deck_html(html: &str) -> Result<serde_json::Value, String>
 }
 
 pub async fn handle_import_official_deck(
+    State(_state): State<SharedState>,
+    _user: AuthUser,
     Json(body): Json<ImportOfficialDeckRequest>,
 ) -> impl IntoResponse {
     let code = body.code.trim();
@@ -251,6 +254,7 @@ pub async fn handle_import_official_deck(
 
 pub async fn handle_publish_deck(
     State(state): State<SharedState>,
+    _user: AuthUser,
     Json(body): Json<PublishDeckRequest>,
 ) -> impl IntoResponse {
     let (partner_ids, incident_ids, other_ids, color_code) = {

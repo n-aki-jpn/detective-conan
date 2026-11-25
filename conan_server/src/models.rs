@@ -185,3 +185,20 @@ pub struct DeckDefinition {
     pub case_id: String,
     pub main_deck: Vec<DeckCardItem>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct User {
+    pub id: String,
+    pub nickname: String,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Session {
+    pub token: String,
+    pub user_id: String,
+    pub created_at: i64,
+    pub expires_at: i64,
+}

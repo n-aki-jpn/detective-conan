@@ -16,13 +16,15 @@ mod models;
 mod observation;
 mod official_deck;
 mod room;
+mod user;
 #[cfg(test)]
 mod tests;
 
 use handlers::{
     handle_catalog, handle_create_room, handle_decision, handle_deck, handle_delete_deck_by_id,
-    handle_get_deck_by_id, handle_get_logs, handle_join_room, handle_list_decks, handle_reset,
-    handle_save_deck, handle_select_deck, handle_set_cpu, handle_state,
+    handle_get_deck_by_id, handle_get_logs, handle_join_room, handle_list_decks, handle_login,
+    handle_me, handle_migrate_decks, handle_register, handle_reset, handle_save_deck,
+    handle_select_deck, handle_set_cpu, handle_state,
 };
 use official_deck::{handle_import_official_deck, handle_publish_deck};
 use room::{MatchManager, SharedState};
@@ -126,11 +128,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let static_dir = PathBuf::from("src/conan_engine/web/static");
 
     let app = Router::new()
+        .route("/api/register", post(handle_register))
+        .route("/api/login", post(handle_login))
+        .route("/api/me", get(handle_me))
         .route("/api/state", get(handle_state))
         .route("/api/logs", get(handle_get_logs))
         .route("/api/catalog", get(handle_catalog))
         .route("/api/deck", get(handle_deck))
         .route("/api/decks", get(handle_list_decks))
+        .route("/api/decks/migrate", post(handle_migrate_decks))
         .route("/api/decks/:id", get(handle_get_deck_by_id))
         .route("/api/decks/:id", delete(handle_delete_deck_by_id))
         .route("/api/decks/:id/select", post(handle_select_deck))
