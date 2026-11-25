@@ -27,7 +27,8 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
 
     let router = Router::new();
 
-    router
+    let res = router
+        .get("/favicon.ico", |_req, _ctx| Response::empty().map(|r| r.with_status(204)))
         .get("/api/health", |_req, _ctx| {
             Response::from_json(&serde_json::json!({
                 "status": "ok",
@@ -113,5 +114,13 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
             worker_images::get_image(&key, ctx.env).await
         })
         .run(req, env)
-        .await
+        .await;
+
+    match res {
+        Ok(r) => Ok(r),
+        Err(e) => Response::from_json(&serde_json::json!({
+            "error": format!("Worker internal error: {}", e)
+        }))
+        .map(|r| r.with_status(500)),
+    }
 }
