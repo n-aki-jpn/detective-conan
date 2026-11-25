@@ -168,6 +168,12 @@ pub struct MatchEngine {
 }
 
 /// UNIX秒のタイムスタンプ（リプレイイベント記録用）
+#[cfg(target_arch = "wasm32")]
+pub fn now_ts() -> u64 {
+    worker::Date::now().as_millis() / 1000
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 pub fn now_ts() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
