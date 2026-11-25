@@ -4,8 +4,9 @@ use worker::*;
 
 #[derive(Deserialize)]
 struct AuthReq {
-    username: String,
-    password: String,
+    nickname: Option<String>,
+    username: Option<String>,
+    password: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -75,9 +76,10 @@ pub async fn register(mut req: Request, env: Env) -> Result<Response> {
         Ok(b) => b,
         Err(_) => return json_err("リクエスト形式が不正です", 400),
     };
-    let username = body.username.trim();
-    if username.len() < 2 || body.password.len() < 4 {
-        return json_err("ユーザー名は2文字以上、パスワードは4文字以上で入力してください", 400);
+    let raw_name = body.nickname.or(body.username).unwrap_or_default();
+    let username = raw_name.trim();
+    if username.len() < 2 || username.len() > 16 {
+        return json_err("ニックネームは2〜16文字で入力してください", 400);
     }
 
     let db = env.d1("DB")?;
@@ -87,11 +89,11 @@ pub async fn register(mut req: Request, env: Env) -> Result<Response> {
         .first::<UserRow>(None)
         .await?;
     if check.is_some() {
-        return json_err("このユーザー名は既に使用されています", 409);
+        return json_err("このニックネームは既に使用されています", 409);
     }
 
     let user_id = format!("u_{}", gen_token());
-    let pw_hash = simple_hash(&body.password);
+    let pw_hash = simple_hash(body.password.as_deref().unwrap_or(""));
     db.prepare("INSERT INTO users (id, username, password_hash) VALUES (?1, ?2, ?3)")
         .bind(&[user_id.as_str().into(), username.into(), pw_hash.as_str().into()])?
         .run()
@@ -105,7 +107,7 @@ pub async fn register(mut req: Request, env: Env) -> Result<Response> {
 
     Response::from_json(&json!({
         "token": token,
-        "user": { "id": user_id, "username": username }
+        "user": { "id": user_id, "nickname": username, "username": username }
     }))
 }
 
@@ -114,7 +116,8 @@ pub async fn login(mut req: Request, env: Env) -> Result<Response> {
         Ok(b) => b,
         Err(_) => return json_err("リクエスト形式が不正です", 400),
     };
-    let username = body.username.trim();
+    let raw_name = body.nickname.or(body.username).unwrap_or_default();
+    let username = raw_name.trim();
     let db = env.d1("DB")?;
     let user = db
         .prepare("SELECT id, username, password_hash FROM users WHERE username = ?1 LIMIT 1")
@@ -123,10 +126,12 @@ pub async fn login(mut req: Request, env: Env) -> Result<Response> {
         .await?;
 
     let Some(u) = user else {
-        return json_err("ユーザー名またはパスワードが正しくありません", 401);
+        return json_err("ニックネームが見つかりません", 401);
     };
-    if u.password_hash != simple_hash(&body.password) {
-        return json_err("ユーザー名またはパスワードが正しくありません", 401);
+    if let Some(pw) = body.password.as_deref() {
+        if u.password_hash != simple_hash(pw) {
+            return json_err("パスワードが正しくありません", 401);
+        }
     }
 
     let token = gen_token();
@@ -137,14 +142,14 @@ pub async fn login(mut req: Request, env: Env) -> Result<Response> {
 
     Response::from_json(&json!({
         "token": token,
-        "user": { "id": u.id, "username": u.username }
+        "user": { "id": u.id, "nickname": u.username, "username": u.username }
     }))
 }
 
 pub async fn me(req: Request, env: Env) -> Result<Response> {
     match resolve_user_id(&req, &env).await {
         Some((user_id, username)) => Response::from_json(&json!({
-            "user": { "id": user_id, "username": username }
+            "user": { "id": user_id, "nickname": username, "username": username }
         })),
         None => json_err("未ログインです", 401),
     }
