@@ -91,6 +91,49 @@ async fn save_room(room_id: &str, rec: &RoomStateRecord, env: &Env) -> Result<()
     Ok(())
 }
 
+fn build_cpu_decision(pd: &Value) -> Value {
+    let decision_id = pd.get("decisionId").and_then(|v| v.as_str()).unwrap_or("");
+    let revision = pd.get("revision").and_then(|v| v.as_u64()).unwrap_or(0);
+    let decision_type = pd.get("type").and_then(|v| v.as_str()).unwrap_or("");
+
+    let mut val = json!({});
+    if let Some(opts) = pd.get("options").and_then(|v| v.as_array()) {
+        if let Some(first) = opts.first() {
+            val = first.clone();
+        }
+    } else if decision_type == "MULLIGAN" {
+        val = json!({ "discardIds": [] });
+    }
+    json!({
+        "decisionId": decision_id,
+        "revision": revision,
+        "value": val
+    })
+}
+
+fn run_cpu_turns(engine: &mut MatchEngine, rec: &mut RoomStateRecord) -> bool {
+    if !rec.is_cpu {
+        return false;
+    }
+    let mut changed = false;
+    for _ in 0..30 {
+        let Some(pd) = engine.pending_decision.clone() else {
+            break;
+        };
+        if pd.get("playerId").and_then(|v| v.as_str()) != Some("player2") {
+            break;
+        }
+        let dec = build_cpu_decision(&pd);
+        if engine.submit_decision("player2", &dec).is_ok() {
+            rec.decisions.push(("player2".to_string(), dec));
+            changed = true;
+        } else {
+            break;
+        }
+    }
+    changed
+}
+
 fn state_response(engine: &MatchEngine, player_id: &str, room_id: &str, rec: &RoomStateRecord) -> Result<Response> {
     let mut obs = build_player_observation(engine, player_id);
     if let Some(obj) = obs.as_object_mut() {
@@ -127,11 +170,14 @@ pub async fn get_state(req: Request, env: Env, catalog_json: &str) -> Result<Res
         }
     }
 
-    let rec = load_or_create_room(&room_id, &env).await?;
-    let engine = match build_engine(catalog_json, &rec) {
+    let mut rec = load_or_create_room(&room_id, &env).await?;
+    let mut engine = match build_engine(catalog_json, &rec) {
         Ok(e) => e,
         Err(e) => return json_err(&format!("エンジン初期化エラー: {}", e), 500),
     };
+    if run_cpu_turns(&mut engine, &mut rec) {
+        save_room(&room_id, &rec, &env).await?;
+    }
     state_response(&engine, &player_id, &room_id, &rec)
 }
 
@@ -156,10 +202,11 @@ pub async fn submit_decision(mut req: Request, env: Env, catalog_json: &str) -> 
     let mut rec = load_or_create_room(&room_id, &env).await?;
     rec.decisions.push((player_id.clone(), body));
 
-    let engine = match build_engine(catalog_json, &rec) {
+    let mut engine = match build_engine(catalog_json, &rec) {
         Ok(e) => e,
         Err(e) => return json_err(&format!("エンジンエラー: {}", e), 500),
     };
+    run_cpu_turns(&mut engine, &mut rec);
     save_room(&room_id, &rec, &env).await?;
     state_response(&engine, &player_id, &room_id, &rec)
 }
