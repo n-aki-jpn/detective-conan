@@ -113,7 +113,7 @@ fn build_cpu_decision(pd: &Value) -> Value {
     let revision = pd.get("revision").and_then(|v| v.as_u64()).unwrap_or(0);
     let decision_type = pd.get("type").and_then(|v| v.as_str()).unwrap_or("");
 
-    let mut val = json!({});
+    let mut val = json!({ "type": "END_TURN" });
     if let Some(opts) = pd.get("options").and_then(|v| v.as_array()) {
         if let Some(first) = opts.first() {
             val = first.clone();
@@ -121,9 +121,7 @@ fn build_cpu_decision(pd: &Value) -> Value {
     } else if decision_type == "MULLIGAN" {
         val = json!({ "discardIds": [] });
     } else if decision_type == "MAIN_ACTION" {
-        val = json!({ "type": "PASS" });
-    } else {
-        val = json!({ "type": "PASS" });
+        val = json!({ "type": "END_TURN" });
     }
     json!({
         "decisionId": decision_id,
@@ -149,7 +147,21 @@ fn run_cpu_turns(engine: &mut MatchEngine, rec: &mut RoomStateRecord) -> bool {
             rec.decisions.push(("player2".to_string(), dec));
             changed = true;
         } else {
-            break;
+            // フォールバック: 必ず END_TURN を試みて手番を進める
+            let decision_id = pd.get("decisionId").and_then(|v| v.as_str()).unwrap_or("");
+            let revision = pd.get("revision").and_then(|v| v.as_u64()).unwrap_or(0);
+            let fallback = json!({
+                "decisionId": decision_id,
+                "revision": revision,
+                "value": { "type": "END_TURN" }
+            });
+            engine.logs.push("⚠️ CPU思考フォールバック: ターン終了(END_TURN)を実行しました".to_string());
+            if engine.submit_decision("player2", &fallback).is_ok() {
+                rec.decisions.push(("player2".to_string(), fallback));
+                changed = true;
+            } else {
+                break;
+            }
         }
     }
     changed
