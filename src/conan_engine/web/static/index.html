@@ -1757,31 +1757,31 @@
   <!-- Top Navigation Bar -->
   <nav class="nav-bar">
     <div class="nav-tabs">
-      <button id="tab-battle" class="nav-tab-btn active" onclick="switchTab('battle')">⚔️ 対戦</button>
-      <button id="tab-deck" class="nav-tab-btn" onclick="switchTab('deck')">🃏 デッキ構築</button>
+      <button type="button" id="tab-battle" class="nav-tab-btn active" onclick="switchTab('battle')">⚔️ 対戦</button>
+      <button type="button" id="tab-deck" class="nav-tab-btn" onclick="switchTab('deck')">🃏 デッキ構築</button>
     </div>
     <div class="nav-actions">
-      <button id="bgm-toggle-btn" class="btn btn-secondary" onclick="toggleBgm()"
+      <button type="button" id="bgm-toggle-btn" class="btn btn-secondary" onclick="toggleBgm()"
         style="padding:4px 8px; font-size:0.75rem; min-height:28px;" title="対戦BGMのON/OFF">🔊 BGM</button>
       <input id="bgm-volume-slider" type="range" min="0" max="1" step="0.05" value="0.35"
         oninput="setBgmVolume(this.value)" style="width:54px; accent-color:#38bdf8; cursor:pointer;" title="BGM音量">
-      <button class="btn btn-secondary" onclick="showRoomModal()"
+      <button type="button" class="btn btn-secondary" onclick="showRoomModal()"
         style="padding:4px 8px; font-size:0.75rem; min-height:28px;">📶 対戦ルーム</button>
-      <button id="btn-copy-board" class="btn btn-secondary" onclick="copyBoardState()"
+      <button type="button" id="btn-copy-board" class="btn btn-secondary" onclick="copyBoardState()"
         style="padding:4px 8px; font-size:0.75rem; min-height:28px;" title="現在の盤面・ログをコピー">🐛 盤面コピー</button>
-      <button class="btn btn-secondary" onclick="resetMatch()"
+      <button type="button" class="btn btn-secondary" onclick="resetMatch()"
         style="padding:4px 8px; font-size:0.75rem; min-height:28px;">リセット</button>
-      <button id="btn-rewind" class="btn btn-secondary" onclick="requestRewind()"
+      <button type="button" id="btn-rewind" class="btn btn-secondary" onclick="requestRewind()"
         style="display:none; padding:4px 8px; font-size:0.75rem; min-height:28px;" title="直前の自分の1手を巻き戻す（相手の合意が必要）">↩ 巻き戻す</button>
       <span id="rewind-req"
         style="display:none; padding:4px 8px; font-size:0.75rem; color:#fbbf24; border:1px solid rgba(251,191,36,0.4); border-radius:6px; min-height:28px; align-items:center; white-space:nowrap;"></span>
-      <button id="btn-rewind-accept" class="btn" onclick="acceptRewind()"
+      <button type="button" id="btn-rewind-accept" class="btn" onclick="acceptRewind()"
         style="display:none; padding:4px 8px; font-size:0.75rem; min-height:28px;">✓ 巻き戻し合意</button>
-      <button id="btn-rewind-reject" class="btn btn-secondary" onclick="rejectRewind()"
+      <button type="button" id="btn-rewind-reject" class="btn btn-secondary" onclick="rejectRewind()"
         style="display:none; padding:4px 8px; font-size:0.75rem; min-height:28px;">✕ 拒否</button>
       <span id="auth-nickname-badge"
         style="display:none; padding:4px 8px; font-size:0.75rem; color:#7dd3fc; border:1px solid rgba(56,189,248,0.4); border-radius:6px; min-height:28px; align-items:center; white-space:nowrap;"></span>
-      <button id="btn-logout" class="btn btn-secondary" onclick="logout()"
+      <button type="button" id="btn-logout" class="btn btn-secondary" onclick="logout()"
         style="display:none; padding:4px 8px; font-size:0.75rem; min-height:28px;">ログアウト</button>
     </div>
   </nav>
@@ -1803,8 +1803,8 @@
         style="background:#0f172a; border:1px solid var(--border-color); border-radius:6px; padding:8px 10px; color:#e2e8f0; font-size:0.85rem; width:100%; box-sizing:border-box;"
         onkeydown="if(event.key==='Enter'){doAuth('login');}">
       <div style="display:flex; gap:8px;">
-        <button class="btn" onclick="doAuth('login')" style="flex:1;">ログイン</button>
-        <button class="btn btn-secondary" onclick="doAuth('register')" style="flex:1;">新規登録</button>
+        <button type="button" class="btn" onclick="doAuth('login')" style="flex:1;">ログイン</button>
+        <button type="button" class="btn btn-secondary" onclick="doAuth('register')" style="flex:1;">新規登録</button>
       </div>
       <div id="login-error" style="display:none; font-size:0.75rem; color:#f87171;"></div>
     </div>
@@ -1815,13 +1815,13 @@
     <div class="card-modal-content" onclick="event.stopPropagation()">
       <div class="modal-header">
         <span class="modal-title">📶 オンライン対戦ルーム</span>
-        <button class="qty-btn" onclick="closeRoomModal()">✕</button>
+        <button type="button" class="qty-btn" onclick="closeRoomModal()">✕</button>
       </div>
       <div class="modal-body" style="font-size:0.8rem; display:flex; flex-direction:column; gap:12px;">
         <!-- Create Room -->
         <div style="display:flex; flex-direction:column; gap:6px;">
           <span style="font-weight:bold; color:var(--text);">1. 新しい部屋を作成 (ホスト側)</span>
-          <button class="btn btn-success" onclick="createNewRoom()" style="width:100%;">
+          <button type="button" class="btn btn-success" onclick="createNewRoom()" style="width:100%;">
             🆕 ルームを作成する (4桁コード)
           </button>
           <div id="room-created-info"
@@ -1833,7 +1833,7 @@
             <div style="font-size:0.72rem; color:var(--text-muted); margin-top:4px;">相手用参加URL:</div>
             <input type="text" id="room-join-url-input" readonly
               style="width:100%; background:#1e293b; color:white; border:1px solid var(--border-color); padding:4px 6px; border-radius:4px; font-size:0.72rem; margin-top:2px;">
-            <button class="btn btn-secondary" onclick="copyJoinUrl()"
+            <button type="button" class="btn btn-secondary" onclick="copyJoinUrl()"
               style="width:100%; margin-top:6px; font-size:0.75rem; min-height:28px;">
               📋 参加URLをコピー
             </button>
@@ -1847,7 +1847,7 @@
           <div style="display:flex; gap:6px;">
             <input type="text" id="join-room-input" placeholder="4桁の部屋番号 (例: 1234)"
               style="flex:1; background:#0f172a; color:white; border:1px solid var(--border-color); padding:8px; border-radius:6px; font-size:0.85rem; text-align:center;">
-            <button class="btn" onclick="joinExistingRoom()" style="padding:8px 14px;">入室</button>
+            <button type="button" class="btn" onclick="joinExistingRoom()" style="padding:8px 14px;">入室</button>
           </div>
         </div>
 
@@ -1859,7 +1859,7 @@
 
         <!-- Local reset -->
         <div style="border-top:1px solid rgba(255,255,255,0.1); padding-top:8px;">
-          <button class="btn btn-secondary" onclick="returnToDefaultRoom()"
+          <button type="button" class="btn btn-secondary" onclick="returnToDefaultRoom()"
             style="width:100%; font-size:0.75rem; min-height:30px;">
             🏠 既定のローカル/CPU部屋に戻る
           </button>
@@ -1887,7 +1887,7 @@
               <option value="hard">つよい</option>
               <option value="strongest" selected>最強</option>
             </select>
-            <button id="btn-toggle-deck-bar" class="btn btn-secondary" onclick="toggleBattleDeckBar()"
+            <button type="button" id="btn-toggle-deck-bar" class="btn btn-secondary" onclick="toggleBattleDeckBar()"
               style="padding:3px 8px; font-size:0.72rem; min-height:24px;">⚙️ デッキ設定</button>
           </div>
           <select id="player-select" onchange="switchView(this.value)"
@@ -1915,7 +1915,7 @@
               <option value="">(現在の使用中デッキ)</option>
             </select>
           </label>
-          <button id="btn-apply-battle-decks" class="btn btn-secondary" onclick="resetMatch()"
+          <button type="button" id="btn-apply-battle-decks" class="btn btn-secondary" onclick="resetMatch()"
             style="padding:4px 10px; font-size:0.75rem; min-height:26px; white-space:nowrap;">🔄 このデッキで対戦</button>
         </div>
 
@@ -2013,7 +2013,7 @@
               <span style="white-space:nowrap; flex-shrink:0;">🃏 手札 (<span id="dock-hand-count">0</span>)</span>
               <span style="font-size:0.65rem; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">タップ操作 / 長押し・右クリック詳細</span>
             </div>
-            <button id="btn-peek-decision" class="btn btn-secondary mobile-only-btn" onclick="toggleDecisionOverlay(true)"
+            <button type="button" id="btn-peek-decision" class="btn btn-secondary mobile-only-btn" onclick="toggleDecisionOverlay(true)"
               style="display:none; padding:2px 8px; font-size:0.7rem; min-height:24px; white-space:nowrap; flex-shrink:0;">📋 選択パネル</button>
           </div>
           <div id="me-hand" class="mobile-hand-scroll"></div>
@@ -2026,7 +2026,7 @@
         <div id="decision-box" class="decision-banner" style="display:none;">
           <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
             <div id="decision-title" class="decision-title">⚡ 行動選択</div>
-            <button id="btn-hide-decision-mobile" class="btn btn-secondary mobile-only-btn" onclick="toggleDecisionOverlay(false)"
+            <button type="button" id="btn-hide-decision-mobile" class="btn btn-secondary mobile-only-btn" onclick="toggleDecisionOverlay(false)"
               style="display:none; padding:2px 8px; font-size:0.7rem; min-height:24px; flex-shrink:0;">👀 盤面を見る</button>
           </div>
           <div id="decision-desc" class="decision-desc"></div>
@@ -2043,9 +2043,9 @@
                 style="font-size:0.65rem; background:#1e293b; color:var(--accent); border:1px solid #475569; padding:1px 6px; border-radius:10px;">0件</span>
             </div>
             <div style="display:flex; align-items:center; gap:6px;">
-              <button id="log-order-btn" class="btn btn-secondary" onclick="event.stopPropagation(); toggleLogOrder();"
+              <button type="button" id="log-order-btn" class="btn btn-secondary" onclick="event.stopPropagation(); toggleLogOrder();"
                 style="font-size:0.65rem; padding:2px 8px; min-height:22px;">🔃 新着順</button>
-              <button id="log-jump-latest-btn" class="btn btn-secondary" onclick="event.stopPropagation(); scrollLogToBottom();"
+              <button type="button" id="log-jump-latest-btn" class="btn btn-secondary" onclick="event.stopPropagation(); scrollLogToBottom();"
                 style="font-size:0.65rem; padding:2px 8px; min-height:22px;">⬆ 最新</button>
               <span id="log-toggle-icon" style="font-size:0.75rem; color:var(--text-muted);">▲ 閉じる</span>
             </div>
@@ -2065,13 +2065,13 @@
         style="background:#0f172a; border:1px solid var(--border-color); border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:8px;">
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <span style="font-size:0.85rem; font-weight:bold; color:var(--accent);">📂 保存済みデッキ一覧 (ブラウザ保存)</span>
-          <button class="btn btn-secondary" onclick="createNewDeckPrompt()"
+          <button type="button" class="btn btn-secondary" onclick="createNewDeckPrompt()"
             style="padding:4px 10px; font-size:0.75rem; min-height:28px;">＋ 新規デッキ作成</button>
         </div>
         <div style="display:flex; gap:6px; align-items:center;">
           <select id="saved-decks-select" onchange="onSelectSavedDeck(this.value)"
             style="flex:1; background:#1e293b; color:white; border:1px solid #475569; padding:6px 8px; border-radius:6px; font-size:0.8rem;"></select>
-          <button class="btn btn-danger" onclick="deleteCurrentDeckSlot()"
+          <button type="button" class="btn btn-danger" onclick="deleteCurrentDeckSlot()"
             style="padding:4px 8px; font-size:0.75rem; min-height:28px;" title="このデッキを削除">🗑 削除</button>
         </div>
       </div>
@@ -2091,12 +2091,12 @@
         <div class="fixed-select-row">
           <div class="fixed-select-box">
             <label style="color:var(--text-muted); font-weight:bold;">パートナー (1枚)</label>
-            <button id="btn-toggle-partner-picker" class="btn btn-secondary" onclick="toggleFixedCardPicker('partner')"
+            <button type="button" id="btn-toggle-partner-picker" class="btn btn-secondary" onclick="toggleFixedCardPicker('partner')"
               style="width:100%; padding:6px 10px; font-size:0.78rem; min-height:32px;">🃏 カード一覧から選ぶ</button>
           </div>
           <div class="fixed-select-box">
             <label style="color:var(--text-muted); font-weight:bold;">事件カード (1枚)</label>
-            <button id="btn-toggle-case-picker" class="btn btn-secondary" onclick="toggleFixedCardPicker('case')"
+            <button type="button" id="btn-toggle-case-picker" class="btn btn-secondary" onclick="toggleFixedCardPicker('case')"
               style="width:100%; padding:6px 10px; font-size:0.78rem; min-height:32px;">🃏 カード一覧から選ぶ</button>
           </div>
         </div>
@@ -2117,7 +2117,7 @@
                 oninput="renderFixedCardPicker()"
                 style="flex:1; min-width:0; background:#1e293b; color:white; border:1px solid #475569; border-radius:4px; padding:3px 6px; font-size:0.72rem;">
             </div>
-            <button class="btn btn-secondary" onclick="closeFixedCardPicker()"
+            <button type="button" class="btn btn-secondary" onclick="closeFixedCardPicker()"
               style="padding:2px 8px; font-size:0.72rem; min-height:24px;">✕ 閉じる</button>
           </div>
           <div id="fixed-picker-colors" style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:8px;"></div>
@@ -2131,22 +2131,22 @@
         </div>
 
         <div style="display:flex; gap:6px; margin-top:2px; flex-wrap:wrap;">
-          <button class="btn btn-success" onclick="saveAndApplyDeck()" style="flex:1; min-width:120px;">
+          <button type="button" class="btn btn-success" onclick="saveAndApplyDeck()" style="flex:1; min-width:120px;">
             💾 デッキ保存
           </button>
-          <button class="btn btn-secondary" onclick="openDeckShareModal('export')" style="flex:1; min-width:110px; border-color:#22c55e; color:#86efac;"
+          <button type="button" class="btn btn-secondary" onclick="openDeckShareModal('export')" style="flex:1; min-width:110px; border-color:#22c55e; color:#86efac;"
             title="LINEやメッセージで送れる共有コードを作成">
             📤 共有/書出
           </button>
-          <button class="btn btn-secondary" onclick="openDeckShareModal('import')" style="flex:1; min-width:110px; border-color:#38bdf8; color:#7dd3fc;"
+          <button type="button" class="btn btn-secondary" onclick="openDeckShareModal('import')" style="flex:1; min-width:110px; border-color:#38bdf8; color:#7dd3fc;"
             title="共有コードやメッセージからデッキを読み込む">
             📥 読込/ｲﾝﾎﾟｰﾄ
           </button>
-          <button id="btn-publish-deck" class="btn" onclick="publishOfficialDeck()" style="background:#0284c7; flex:1; min-width:120px;"
+          <button type="button" id="btn-publish-deck" class="btn" onclick="publishOfficialDeck()" style="background:#0284c7; flex:1; min-width:120px;"
             title="タカラトミー公式デッキレシピコードを発行">
             🌐 公式コード発行
           </button>
-          <button id="btn-import-official-deck" class="btn" onclick="importOfficialDeck()" style="background:#0369a1; flex:1; min-width:120px;"
+          <button type="button" id="btn-import-official-deck" class="btn" onclick="importOfficialDeck()" style="background:#0369a1; flex:1; min-width:120px;"
             title="タカラトミー公式デッキコード（9桁）からデッキリストを作成">
             🌐 公式コード読込
           </button>
@@ -2156,14 +2156,14 @@
       <!-- Non-sticky View Selector & Quick Save (visible when scrolled to top) -->
       <div style="background:var(--panel-bg); border:1px solid var(--border-color); border-radius:8px; padding:6px 10px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
         <div style="display:flex; gap:6px; flex:1; min-width:220px;">
-          <button id="btn-view-deck" class="view-toggle-btn active" onclick="switchBuilderView('deck')">
+          <button type="button" id="btn-view-deck" class="view-toggle-btn active" onclick="switchBuilderView('deck')">
             📋 投入カード一覧 (<span id="summary-unique-types">0</span>種 <span id="summary-total-cards">0</span>枚)
           </button>
-          <button id="btn-view-catalog" class="view-toggle-btn" onclick="switchBuilderView('catalog')">
+          <button type="button" id="btn-view-catalog" class="view-toggle-btn" onclick="switchBuilderView('catalog')">
             🔍 全カードから探す (2,466枚)
           </button>
         </div>
-        <button class="btn btn-success" onclick="saveAndApplyDeck()"
+        <button type="button" class="btn btn-success" onclick="saveAndApplyDeck()"
           style="padding:4px 12px; font-size:0.74rem; min-height:28px; white-space:nowrap;">
           💾 保存
         </button>
@@ -2181,25 +2181,25 @@
           <div class="catalog-search-bar" style="margin-bottom:0; flex:1; min-width:180px;">
             <input type="text" id="catalog-search-input" placeholder="🔍 カード名・効果・番号で絞り込み..."
               oninput="onSearchInput(this.value)">
-            <button class="btn btn-secondary" onclick="clearSearch()"
+            <button type="button" class="btn btn-secondary" onclick="clearSearch()"
               style="padding:4px 10px; font-size:0.75rem; flex-shrink:0;">クリア</button>
           </div>
         </div>
 
         <!-- Color & Type Filter Pills -->
         <div class="color-filter-bar" style="align-items:center;">
-          <button class="color-pill active" data-color="" onclick="setColorFilter('')">すべて</button>
-          <button class="color-pill" data-color="青" style="border-color:#0284c7;"
+          <button type="button" class="color-pill active" data-color="" onclick="setColorFilter('')">すべて</button>
+          <button type="button" class="color-pill" data-color="青" style="border-color:#0284c7;"
             onclick="setColorFilter('青')">青</button>
-          <button class="color-pill" data-color="緑" style="border-color:#16a34a;"
+          <button type="button" class="color-pill" data-color="緑" style="border-color:#16a34a;"
             onclick="setColorFilter('緑')">緑</button>
-          <button class="color-pill" data-color="白" style="border-color:#94a3b8;"
+          <button type="button" class="color-pill" data-color="白" style="border-color:#94a3b8;"
             onclick="setColorFilter('白')">白</button>
-          <button class="color-pill" data-color="赤" style="border-color:#dc2626;"
+          <button type="button" class="color-pill" data-color="赤" style="border-color:#dc2626;"
             onclick="setColorFilter('赤')">赤</button>
-          <button class="color-pill" data-color="黄" style="border-color:#ca8a04;"
+          <button type="button" class="color-pill" data-color="黄" style="border-color:#ca8a04;"
             onclick="setColorFilter('黄')">黄</button>
-          <button class="color-pill" data-color="黒" style="border-color:#64748b;"
+          <button type="button" class="color-pill" data-color="黒" style="border-color:#64748b;"
             onclick="setColorFilter('黒')">黒</button>
           <span style="width:1px; height:16px; background:rgba(255,255,255,0.18); margin:0 4px;"></span>
           <button class="level-pill type-pill active" data-type="" onclick="setTypeFilter('')">全種別</button>
@@ -2210,24 +2210,24 @@
         <!-- Level Filter & Per-Level Deck Count Pills -->
         <div class="level-filter-bar" id="level-filter-bar">
           <span style="font-size:0.7rem; color:var(--text-muted); margin-right:2px;">Lv:</span>
-          <button class="level-pill active" data-level="" onclick="setLevelFilter('')">すべて</button>
-          <button class="level-pill" data-level="1" onclick="setLevelFilter('1')">Lv.1 <span class="lv-cnt"
+          <button type="button" class="level-pill active" data-level="" onclick="setLevelFilter('')">すべて</button>
+          <button type="button" class="level-pill" data-level="1" onclick="setLevelFilter('1')">Lv.1 <span class="lv-cnt"
               id="lv-cnt-1">(0)</span></button>
-          <button class="level-pill" data-level="2" onclick="setLevelFilter('2')">Lv.2 <span class="lv-cnt"
+          <button type="button" class="level-pill" data-level="2" onclick="setLevelFilter('2')">Lv.2 <span class="lv-cnt"
               id="lv-cnt-2">(0)</span></button>
-          <button class="level-pill" data-level="3" onclick="setLevelFilter('3')">Lv.3 <span class="lv-cnt"
+          <button type="button" class="level-pill" data-level="3" onclick="setLevelFilter('3')">Lv.3 <span class="lv-cnt"
               id="lv-cnt-3">(0)</span></button>
-          <button class="level-pill" data-level="4" onclick="setLevelFilter('4')">Lv.4 <span class="lv-cnt"
+          <button type="button" class="level-pill" data-level="4" onclick="setLevelFilter('4')">Lv.4 <span class="lv-cnt"
               id="lv-cnt-4">(0)</span></button>
-          <button class="level-pill" data-level="5" onclick="setLevelFilter('5')">Lv.5 <span class="lv-cnt"
+          <button type="button" class="level-pill" data-level="5" onclick="setLevelFilter('5')">Lv.5 <span class="lv-cnt"
               id="lv-cnt-5">(0)</span></button>
-          <button class="level-pill" data-level="6" onclick="setLevelFilter('6')">Lv.6 <span class="lv-cnt"
+          <button type="button" class="level-pill" data-level="6" onclick="setLevelFilter('6')">Lv.6 <span class="lv-cnt"
               id="lv-cnt-6">(0)</span></button>
-          <button class="level-pill" data-level="7" onclick="setLevelFilter('7')">Lv.7 <span class="lv-cnt"
+          <button type="button" class="level-pill" data-level="7" onclick="setLevelFilter('7')">Lv.7 <span class="lv-cnt"
               id="lv-cnt-7">(0)</span></button>
-          <button class="level-pill" data-level="8" onclick="setLevelFilter('8')">Lv.8 <span class="lv-cnt"
+          <button type="button" class="level-pill" data-level="8" onclick="setLevelFilter('8')">Lv.8 <span class="lv-cnt"
               id="lv-cnt-8">(0)</span></button>
-          <button class="level-pill" data-level="9+" onclick="setLevelFilter('9+')">Lv.9+ <span class="lv-cnt"
+          <button type="button" class="level-pill" data-level="9+" onclick="setLevelFilter('9+')">Lv.9+ <span class="lv-cnt"
               id="lv-cnt-9+">(0)</span></button>
         </div>
       </div>
@@ -2241,7 +2241,7 @@
     <div class="card-modal-content" style="max-width:360px;" onclick="event.stopPropagation()">
       <div class="modal-header">
         <span class="modal-title" style="color:var(--accent);">🌐 公式デッキコード</span>
-        <button class="qty-btn" onclick="closePublishModal()">✕</button>
+        <button type="button" class="qty-btn" onclick="closePublishModal()">✕</button>
       </div>
       <div class="modal-body" style="font-size:0.8rem; display:flex; flex-direction:column; gap:10px; max-height:none;">
         <div
@@ -2250,7 +2250,7 @@
           <div id="publish-code-text"
             style="font-size:1.8rem; font-weight:bold; color:#38bdf8; letter-spacing:2px; font-family:monospace; user-select:all;">
             -</div>
-          <button class="btn btn-secondary" onclick="copyPublishCode()"
+          <button type="button" class="btn btn-secondary" onclick="copyPublishCode()"
             style="margin-top:8px; width:100%; min-height:30px; font-size:0.78rem;">
             📋 デッキコードをコピー
           </button>
@@ -2261,7 +2261,7 @@
           <div style="font-size:0.72rem; color:var(--text-muted);">公式デッキレシピURL:</div>
           <a id="publish-url-link" href="#" target="_blank" rel="noopener noreferrer"
             style="color:#38bdf8; font-size:0.72rem; word-break:break-all; text-decoration:underline;">-</a>
-          <button class="btn btn-secondary" onclick="copyPublishUrl()"
+          <button type="button" class="btn btn-secondary" onclick="copyPublishUrl()"
             style="font-size:0.75rem; min-height:28px; padding:3px 8px;">
             🔗 レシピURLをコピー
           </button>
@@ -2272,7 +2272,7 @@
         </div>
       </div>
       <div class="modal-footer" style="justify-content:flex-end;">
-        <button class="btn btn-secondary" onclick="closePublishModal()"
+        <button type="button" class="btn btn-secondary" onclick="closePublishModal()"
           style="padding:5px 16px; font-size:0.8rem; min-height:30px;">閉じる</button>
       </div>
     </div>
@@ -2283,14 +2283,14 @@
     <div class="card-modal-content" style="max-width:520px; width:92%;" onclick="event.stopPropagation()">
       <div class="modal-header">
         <span id="zone-modal-title" class="modal-title" style="color:var(--accent);">エリア確認</span>
-        <button class="qty-btn" onclick="closeZoneModal()">✕</button>
+        <button type="button" class="qty-btn" onclick="closeZoneModal()">✕</button>
       </div>
       <div id="zone-modal-subtitle" style="font-size:0.75rem; color:var(--text-muted); margin-bottom:8px;"></div>
       <div id="zone-modal-grid"
         style="display:grid; grid-template-columns:repeat(auto-fill, minmax(110px, 1fr)); gap:8px; max-height:58vh; overflow-y:auto; padding:2px;">
       </div>
       <div class="modal-footer" style="justify-content:flex-end; margin-top:10px;">
-        <button class="btn btn-secondary" onclick="closeZoneModal()"
+        <button type="button" class="btn btn-secondary" onclick="closeZoneModal()"
           style="padding:5px 14px; font-size:0.8rem; min-height:30px;">閉じる</button>
       </div>
     </div>
@@ -2301,11 +2301,11 @@
     <div class="card-modal-content" style="max-width:480px; width:92%;" onclick="event.stopPropagation()">
       <div class="modal-header">
         <span class="modal-title" style="color:#38bdf8;">📤 デッキ共有（エクスポート / インポート）</span>
-        <button class="qty-btn" onclick="closeDeckShareModal()">✕</button>
+        <button type="button" class="qty-btn" onclick="closeDeckShareModal()">✕</button>
       </div>
       <div style="display:flex; gap:6px; margin-bottom:10px;">
-        <button id="tab-share-export" class="view-toggle-btn active" onclick="switchShareModalMode('export')" style="flex:1;">📤 エクスポート（送る）</button>
-        <button id="tab-share-import" class="view-toggle-btn" onclick="switchShareModalMode('import')" style="flex:1;">📥 インポート（受け取る）</button>
+        <button type="button" id="tab-share-export" class="view-toggle-btn active" onclick="switchShareModalMode('export')" style="flex:1;">📤 エクスポート（送る）</button>
+        <button type="button" id="tab-share-import" class="view-toggle-btn" onclick="switchShareModalMode('import')" style="flex:1;">📥 インポート（受け取る）</button>
       </div>
 
       <div id="share-export-pane" style="display:flex; flex-direction:column; gap:8px;">
@@ -2315,7 +2315,7 @@
         <textarea id="share-export-text" readonly rows="5"
           style="width:100%; background:#0f172a; color:#e2e8f0; border:1px solid var(--border-color); border-radius:6px; padding:8px; font-size:0.75rem; font-family:monospace; resize:vertical;"></textarea>
         <div style="display:flex; gap:6px; flex-wrap:wrap;">
-          <button class="btn btn-success" onclick="copyShareText()" style="flex:1;">📋 コピーする</button>
+          <button type="button" class="btn btn-success" onclick="copyShareText()" style="flex:1;">📋 コピーする</button>
           <a id="share-line-link" href="#" target="_blank" rel="noopener noreferrer" class="btn"
             style="flex:1; background:#06c755; color:white; text-decoration:none; display:flex; align-items:center; justify-content:center; font-weight:bold;">
             💬 LINEで送る
@@ -2329,11 +2329,11 @@
         </div>
         <textarea id="share-import-text" rows="5" placeholder="例:&#10;【名探偵コナンTCG デッキ共有】&#10;デッキ名: 探偵団&#10;CONAN1:..."
           style="width:100%; background:#0f172a; color:#f8fafc; border:1px solid var(--border-color); border-radius:6px; padding:8px; font-size:0.75rem; font-family:monospace; resize:vertical;"></textarea>
-        <button class="btn" onclick="importSharedDeck()" style="background:#0284c7; width:100%;">📥 デッキを取り込む</button>
+        <button type="button" class="btn" onclick="importSharedDeck()" style="background:#0284c7; width:100%;">📥 デッキを取り込む</button>
       </div>
 
       <div class="modal-footer" style="justify-content:flex-end; margin-top:10px;">
-        <button class="btn btn-secondary" onclick="closeDeckShareModal()" style="padding:5px 14px; font-size:0.8rem; min-height:30px;">閉じる</button>
+        <button type="button" class="btn btn-secondary" onclick="closeDeckShareModal()" style="padding:5px 14px; font-size:0.8rem; min-height:30px;">閉じる</button>
       </div>
     </div>
   </div>
@@ -2354,7 +2354,7 @@
       <div id="modal-card-desc" class="modal-body"></div>
       <div class="modal-footer">
         <span id="modal-card-id" style="font-size:0.75rem; color:var(--text-muted);">B01001</span>
-        <button class="btn btn-secondary" onclick="closeCardModal()"
+        <button type="button" class="btn btn-secondary" onclick="closeCardModal()"
           style="padding:5px 12px; font-size:0.8rem; min-height:30px;">閉じる</button>
       </div>
     </div>
@@ -2372,8 +2372,8 @@
       </div>
       <div id="action-menu-buttons"></div>
       <div class="modal-footer" style="margin-top:16px; justify-content:space-between; gap:10px;">
-        <button id="action-menu-detail-btn" class="btn btn-secondary action-menu-footer-btn">🔍 詳細を見る</button>
-        <button class="btn btn-secondary action-menu-footer-btn" onclick="closeCardActionMenu()">閉じる</button>
+        <button type="button" id="action-menu-detail-btn" class="btn btn-secondary action-menu-footer-btn">🔍 詳細を見る</button>
+        <button type="button" class="btn btn-secondary action-menu-footer-btn" onclick="closeCardActionMenu()">閉じる</button>
       </div>
     </div>
   </div>
@@ -4455,7 +4455,7 @@
           const joinUrl = `${window.location.origin}/?join=${obs.roomId}`;
           document.getElementById('decision-desc').innerHTML = `部屋番号: <b style="color:var(--accent); font-size:1.1rem;">${obs.roomId}</b><br><span style="font-size:0.72rem; color:var(--text-muted);">相手端末でこの番号を入力するか、参加URLを開いてもらってください。</span>`;
           decActs.innerHTML = `
-            <button class="btn btn-secondary" style="font-size:0.75rem; padding:4px 10px;" onclick="navigator.clipboard.writeText('${joinUrl}').then(()=>alert('参加URLをコピーしました！'))">📋 参加URLをコピー</button>
+            <button type="button" class="btn btn-secondary" style="font-size:0.75rem; padding:4px 10px;" onclick="navigator.clipboard.writeText('${joinUrl}').then(()=>alert('参加URLをコピーしました！'))">📋 参加URLをコピー</button>
           `;
           setDockCommand('⏳ 待機中', '#475569', `部屋番号: ${obs.roomId} の相手待ち`, null);
           syncDecisionOverlayVisibility();
@@ -4570,7 +4570,7 @@
         const joinUrl = `${window.location.origin}/?join=${obs.roomId}`;
         document.getElementById('decision-desc').innerHTML = `部屋番号: <b style="color:var(--accent); font-size:1.1rem;">${obs.roomId}</b><br><span style="font-size:0.72rem; color:var(--text-muted);">相手端末でこの番号を入力するか、参加URLを開いてもらってください。</span>`;
         decActs.innerHTML = `
-          <button class="btn btn-secondary" style="font-size:0.75rem; padding:4px 10px;" onclick="navigator.clipboard.writeText('${joinUrl}').then(()=>alert('参加URLをコピーしました！'))">📋 参加URLをコピー</button>
+          <button type="button" class="btn btn-secondary" style="font-size:0.75rem; padding:4px 10px;" onclick="navigator.clipboard.writeText('${joinUrl}').then(()=>alert('参加URLをコピーしました！'))">📋 参加URLをコピー</button>
         `;
         setDockCommand('⏳ 待機中', '#475569', `部屋番号: ${obs.roomId} の相手待ち`, (wrap) => {
           const b = document.createElement('button');
@@ -6070,7 +6070,7 @@
             <div style="font-size:1.5rem; margin-bottom:6px;">🃏</div>
             <b>デッキにカードがまだ投入されていません</b>
             <div style="font-size:0.75rem; color:var(--text-muted); margin-top:4px; margin-bottom:12px;">上部の「全カードから探す」を押してカードを追加してください。</div>
-            <button class="btn btn-secondary" onclick="switchBuilderView('catalog')" style="padding:6px 14px; font-size:0.8rem;">🔍 全カードカタログを開く</button>
+            <button type="button" class="btn btn-secondary" onclick="switchBuilderView('catalog')" style="padding:6px 14px; font-size:0.8rem;">🔍 全カードカタログを開く</button>
           `;
         } else {
           emptyMsg.innerHTML = `
@@ -6101,8 +6101,8 @@
             ${totalPages > 1 ? `｜ <b style="color:#38bdf8;">${builderPage + 1} / ${totalPages} ページ</b>` : ''}
           </span>
           <div style="display:flex; gap:6px; align-items:center;">
-            <button class="deck-page-btn" ${!hasPrev ? 'disabled' : ''}>◀ 前のページ</button>
-            <button class="deck-page-btn ${hasNext ? 'has-next' : ''}" ${!hasNext ? 'disabled' : ''}>${hasNext ? `次のページ (${builderPage + 2}/${totalPages}) ▶` : '最終ページ'}</button>
+            <button type="button" class="deck-page-btn" ${!hasPrev ? 'disabled' : ''}>◀ 前のページ</button>
+            <button type="button" class="deck-page-btn ${hasNext ? 'has-next' : ''}" ${!hasNext ? 'disabled' : ''}>${hasNext ? `次のページ (${builderPage + 2}/${totalPages}) ▶` : '最終ページ'}</button>
           </div>
         `;
         const [prevBtn, nextBtn] = bar.querySelectorAll('button');
@@ -6156,10 +6156,10 @@
             </div>
           </div>
           <div class="card-qty-controller">
-            <button class="qty-btn" onclick="changeCardQty('${c.definitionId}', -1)">−</button>
+            <button type="button" class="qty-btn" onclick="changeCardQty('${c.definitionId}', -1)">−</button>
             <span class="qty-num" id="qty-${c.definitionId}">${qty}</span>
-            <button class="qty-btn" onclick="changeCardQty('${c.definitionId}', 1)">＋</button>
-            ${qty > 0 ? `<button class="qty-btn" style="background:#7f1d1d; color:#fca5a5; font-size:0.75rem; width:22px; margin-left:2px;" onclick="removeCardEntirely('${c.definitionId}')" title="デッキから外す">✕</button>` : ''}
+            <button type="button" class="qty-btn" onclick="changeCardQty('${c.definitionId}', 1)">＋</button>
+            ${qty > 0 ? `<button type="button" class="qty-btn" style="background:#7f1d1d; color:#fca5a5; font-size:0.75rem; width:22px; margin-left:2px;" onclick="removeCardEntirely('${c.definitionId}')" title="デッキから外す">✕</button>` : ''}
           </div>
         `;
         item.querySelector('.card-click-area').addEventListener('click', () => showCardModal(c));

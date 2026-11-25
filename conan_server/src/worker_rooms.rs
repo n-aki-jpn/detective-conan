@@ -51,7 +51,7 @@ fn build_engine(catalog_json: &str, state: &RoomStateRecord) -> std::result::Res
         .as_deref()
         .and_then(|s| serde_json::from_str(s).ok())
         .unwrap_or(default_deck);
-    let mut engine = MatchEngine::new(catalog);
+    let mut engine = MatchEngine::new_with_seed(catalog, state.seed);
     engine.add_player("player1", &p1_deck);
     engine.add_player("player2", &p2_deck);
     engine.start_match();
@@ -120,6 +120,10 @@ fn build_cpu_decision(pd: &Value) -> Value {
         }
     } else if decision_type == "MULLIGAN" {
         val = json!({ "discardIds": [] });
+    } else if decision_type == "MAIN_ACTION" {
+        val = json!({ "type": "PASS" });
+    } else {
+        val = json!({ "type": "PASS" });
     }
     json!({
         "decisionId": decision_id,

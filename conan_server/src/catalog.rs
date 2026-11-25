@@ -13,6 +13,14 @@ pub struct CardCatalog {
 }
 
 impl CardCatalog {
+    pub fn empty() -> Self {
+        Self {
+            catalog_version: "empty".to_string(),
+            definitions: HashMap::new(),
+            raw_json: Value::Null,
+        }
+    }
+
     pub fn load_from_json<P: AsRef<Path>>(file_path: P) -> Result<Self, Box<dyn std::error::Error>> {
         let file = File::open(file_path)?;
         let reader = BufReader::new(file);
