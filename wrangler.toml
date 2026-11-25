@@ -5,6 +5,11 @@ compatibility_date = "2024-11-01"
 [build]
 command = "cd conan_server && worker-build --release"
 
+# Static Assets 設定 (HTML/フロントエンド配信用)
+[assets]
+directory = "./src/conan_engine/web/static"
+binding = "ASSETS"
+
 # D1 データベース バインディング
 [[d1_databases]]
 binding = "DB"

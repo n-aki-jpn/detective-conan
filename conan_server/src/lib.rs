@@ -21,9 +21,6 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
     let router = Router::new();
 
     router
-        .get("/", |_req, _ctx| {
-            Response::ok("Conan TCG Worker is running! Endpoints: GET /api/health, GET /api/catalog, POST /api/images/upload, GET /api/images, GET /api/images/:key")
-        })
         .get("/api/health", |_req, _ctx| {
             Response::from_json(&serde_json::json!({
                 "status": "ok",
@@ -44,6 +41,11 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         })
         .get_async("/api/images/:key", |_req, ctx| async move {
             let key = ctx.param("key").cloned().unwrap_or_default();
+            worker_images::get_image(&key, ctx.env).await
+        })
+        .get_async("/card-images/:filename", |_req, ctx| async move {
+            let filename = ctx.param("filename").cloned().unwrap_or_default();
+            let key = format!("cards/{}", filename);
             worker_images::get_image(&key, ctx.env).await
         })
         .run(req, env)
