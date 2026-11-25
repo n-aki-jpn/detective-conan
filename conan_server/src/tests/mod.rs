@@ -10,6 +10,7 @@ mod basic_and_cpu;
 mod cards_and_combat;
 mod catalog_audit;
 mod fuzz_matches;
+mod http_integration;
 mod regression_b01_b06;
 mod regression_b07_b10;
 mod regression_b11;

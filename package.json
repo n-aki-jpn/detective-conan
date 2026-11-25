@@ -1,0 +1,14 @@
+{
+  "name": "detective-conan-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "名探偵コナンTCG フロントエンドE2Eテスト（Playwright）",
+  "scripts": {
+    "e2e:install": "playwright install chromium",
+    "e2e": "playwright test",
+    "e2e:headed": "playwright test --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.1"
+  }
+}

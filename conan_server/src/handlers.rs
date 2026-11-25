@@ -6,6 +6,7 @@ use axum::{
     extract::{ConnectInfo, FromRequestParts, Path as AxumPath, Query, State},
     http::{request::Parts, StatusCode},
     response::IntoResponse,
+    routing::{delete, get, post},
     Json,
 };
 use serde::{Deserialize, Serialize};
@@ -134,7 +135,8 @@ pub struct MigrateDecksRequest {
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
 /// X-Forwarded-For があれば最上位IP、無ければ ConnectInfo のピアアドレスを返す。
-fn client_ip(parts: &Parts, peer: std::net::SocketAddr) -> String {
+/// ConnectInfo が無い場合（テストの oneshot 呼び出し等）は "unknown"。
+fn client_ip(parts: &Parts, peer: Option<std::net::SocketAddr>) -> String {
     if let Some(fwd) = parts
         .headers
         .get("x-forwarded-for")
@@ -146,7 +148,8 @@ fn client_ip(parts: &Parts, peer: std::net::SocketAddr) -> String {
             }
         }
     }
-    peer.ip().to_string()
+    peer.map(|p| p.ip().to_string())
+        .unwrap_or_else(|| "unknown".to_string())
 }
 
 /// レート制限に掛かった場合の 429 レスポンス
@@ -160,11 +163,11 @@ fn rate_limited() -> axum::response::Response {
 
 pub async fn handle_register(
     State(state): State<SharedState>,
-    ConnectInfo(peer): ConnectInfo<std::net::SocketAddr>,
+    peer: Option<ConnectInfo<std::net::SocketAddr>>,
     parts: Parts,
     Json(body): Json<AuthRequest>,
 ) -> impl IntoResponse {
-    let ip = client_ip(&parts, peer);
+    let ip = client_ip(&parts, peer.map(|c| c.0));
     {
         let mut mgr = state.lock().unwrap();
         if !mgr.rate_limiter.check(&format!("register:{}", ip)) {
@@ -185,11 +188,11 @@ pub async fn handle_register(
 
 pub async fn handle_login(
     State(state): State<SharedState>,
-    ConnectInfo(peer): ConnectInfo<std::net::SocketAddr>,
+    peer: Option<ConnectInfo<std::net::SocketAddr>>,
     parts: Parts,
     Json(body): Json<AuthRequest>,
 ) -> impl IntoResponse {
-    let ip = client_ip(&parts, peer);
+    let ip = client_ip(&parts, peer.map(|c| c.0));
     {
         let mut mgr = state.lock().unwrap();
         if !mgr.rate_limiter.check(&format!("login:{}", ip)) {
@@ -704,4 +707,38 @@ pub async fn handle_decision(
         )
             .into_response()
     }
+}
+
+/// API ルーターを構築する（静的ファイルのフォールバックは付与しない）。
+/// main.rs と統合テストの両方から再利用される。
+pub fn build_api_router(state: SharedState) -> axum::Router {
+    axum::Router::new()
+        .route("/health", get(handle_health))
+        .route("/api/health", get(handle_health))
+        .route("/api/register", post(handle_register))
+        .route("/api/login", post(handle_login))
+        .route("/api/me", get(handle_me))
+        .route("/api/state", get(handle_state))
+        .route("/api/logs", get(handle_get_logs))
+        .route("/api/replays", get(handle_list_replays))
+        .route("/api/replays/:id", get(handle_get_replay))
+        .route("/api/catalog", get(handle_catalog))
+        .route("/api/deck", get(handle_deck))
+        .route("/api/decks", get(handle_list_decks))
+        .route("/api/decks/migrate", post(handle_migrate_decks))
+        .route("/api/decks/:id", get(handle_get_deck_by_id))
+        .route("/api/decks/:id", delete(handle_delete_deck_by_id))
+        .route("/api/decks/:id/select", post(handle_select_deck))
+        .route("/api/rooms/create", post(handle_create_room))
+        .route("/api/rooms/join", post(handle_join_room))
+        .route("/api/reset", post(handle_reset))
+        .route("/api/set_cpu", post(handle_set_cpu))
+        .route("/api/save_deck", post(handle_save_deck))
+        .route("/api/deck/publish", post(crate::official_deck::handle_publish_deck))
+        .route(
+            "/api/deck/import_official",
+            post(crate::official_deck::handle_import_official_deck),
+        )
+        .route("/api/decision", post(handle_decision))
+        .with_state(state)
 }

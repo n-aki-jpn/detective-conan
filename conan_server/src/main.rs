@@ -1,7 +1,3 @@
-use axum::{
-    routing::{delete, get, post},
-    Router,
-};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -21,15 +17,6 @@ mod room;
 mod user;
 #[cfg(test)]
 mod tests;
-
-use handlers::{
-    handle_catalog, handle_create_room, handle_decision, handle_deck, handle_delete_deck_by_id,
-    handle_get_deck_by_id, handle_get_logs, handle_get_replay, handle_health, handle_join_room,
-    handle_list_decks, handle_list_replays, handle_login, handle_me, handle_migrate_decks,
-    handle_register, handle_reset, handle_save_deck, handle_select_deck, handle_set_cpu,
-    handle_state,
-};
-use official_deck::{handle_import_official_deck, handle_publish_deck};
 use room::{MatchManager, SharedState};
 
 /// カレントディレクトリの `.env` ファイルがあれば環境変数として読み込む（外部クレート不要）
@@ -172,33 +159,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let static_dir = PathBuf::from("src/conan_engine/web/static");
 
-    let app = Router::new()
-        .route("/health", get(handle_health))
-        .route("/api/health", get(handle_health))
-        .route("/api/register", post(handle_register))
-        .route("/api/login", post(handle_login))
-        .route("/api/me", get(handle_me))
-        .route("/api/state", get(handle_state))
-        .route("/api/logs", get(handle_get_logs))
-        .route("/api/replays", get(handle_list_replays))
-        .route("/api/replays/:id", get(handle_get_replay))
-        .route("/api/catalog", get(handle_catalog))
-        .route("/api/deck", get(handle_deck))
-        .route("/api/decks", get(handle_list_decks))
-        .route("/api/decks/migrate", post(handle_migrate_decks))
-        .route("/api/decks/:id", get(handle_get_deck_by_id))
-        .route("/api/decks/:id", delete(handle_delete_deck_by_id))
-        .route("/api/decks/:id/select", post(handle_select_deck))
-        .route("/api/rooms/create", post(handle_create_room))
-        .route("/api/rooms/join", post(handle_join_room))
-        .route("/api/reset", post(handle_reset))
-        .route("/api/set_cpu", post(handle_set_cpu))
-        .route("/api/save_deck", post(handle_save_deck))
-        .route("/api/deck/publish", post(handle_publish_deck))
-        .route("/api/deck/import_official", post(handle_import_official_deck))
-        .route("/api/decision", post(handle_decision))
-        .fallback_service(ServeDir::new(&static_dir))
-        .with_state(shared_state);
+    let app = handlers::build_api_router(shared_state)
+        .fallback_service(ServeDir::new(&static_dir));
 
     let port: u16 = std::env::args()
         .nth(1)

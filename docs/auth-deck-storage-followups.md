@@ -54,10 +54,10 @@
 
 | # | 項目 | 現状 | 対応案 |
 |---|------|------|--------|
-| T1 | HTTPハンドラの認証統合テストなし | `UserManager` の単体テストのみ。401/403/400 のエンドポイント挙動を未検証 | `axum::test` + `tower::ServiceExt` での統合テスト |
-| T2 | 移行APIの冪等性テストなし | `migrate_user_decks` の重複・presetスキップをテストで担保していない | 移行テストの追加（既存deckIdスキップ、preset_スキップ） |
-| T3 | 他ユーザーデッキへのアクセス拒否テストなし | `user_B` が `user_A` のデッキを get/delete できないことを検証していない | ルーム間分離のテスト追加 |
-| T4 | フロントエンドのE2Eテストなし | ログイン→移行→保存→再ログインの一連フローを手動確認のみ | Playwright等のE2E導入 |
+| T1 | ✅ 実装済み（2026-11-25）。`conan_server/src/tests/http_integration.rs` で `tower::ServiceExt::oneshot` により 401（未認証/無効トークン）・403（プリセット削除）・400（枚数不正）・200（有効トークン）を検証 | 完了 | ✅ |
+| T2 | ✅ 実装済み。`t2_migrate_is_idempotent_and_skips_preset` で既存deckIdスキップ・preset_スキップ・再実行時の冪等性（imported=0）を検証 | 完了 | ✅ |
+| T3 | ✅ 実装済み。`t3_cannot_access_other_users_deck` で他ユーザーのデッキの get/delete が 404 になること（ユーザー間分離）を検証 | 完了 | ✅ |
+| T4 | ✅ 実装済み。Playwright（`playwright.config.ts` + `tests/e2e/auth.spec.ts`）で 未ログイン時のオーバーレイ表示・新規登録→ログイン状態→ログアウト→再ログイン・存在しないニックネームのログインエラー を検証（`npm run e2e`） | 完了 | ✅ |
 
 ## 6. UX（重要度: 低）
 

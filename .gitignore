@@ -47,3 +47,9 @@ data/dummy/users.json
 data/dummy/sessions.json
 data/dummy/user_decks/
 server_test.log
+server_health.log
+
+# E2E (Playwright) 生成物
+node_modules/
+test-results/
+playwright-report/
