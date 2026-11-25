@@ -172,16 +172,12 @@ impl MatchRoom {
             }
             let _ = std::io::stdout().flush();
 
-            // 2. ローカルファイル logs/all_rooms.log へ追記
-            if let Ok(mut f) = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open("logs/all_rooms.log")
-            {
-                for line in &lines {
-                    let _ = writeln!(f, "[{}][room:{}] {}", ts, self.room_id, line);
-                }
-                let _ = f.flush();
+            // 2. ローカルファイル logs/all_rooms.log へ追記（上限超過時は自動ローテーション）
+            for line in &lines {
+                crate::logging::append_line(
+                    std::path::Path::new("logs/all_rooms.log"),
+                    &format!("[{}][room:{}] {}", ts, self.room_id, line),
+                );
             }
         }
 
@@ -327,14 +323,11 @@ impl MatchRoom {
                     "p1Zones": p1_zones,
                     "p2Zones": p2_zones,
                 });
-                if let Ok(mut f) = std::fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open("logs/matches.jsonl")
-                {
-                    let _ = writeln!(f, "{}", rec);
-                    let _ = f.flush();
-                }
+                // 上限超過時は自動ローテーション
+                crate::logging::append_line(
+                    std::path::Path::new("logs/matches.jsonl"),
+                    &rec.to_string(),
+                );
 
                 // 試合終了時にその試合の全ログと試合結果をまとめて GAS Webhook へ送信
                 let mut webhook_rows: Vec<Value> = self

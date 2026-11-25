@@ -12,6 +12,7 @@ mod catalog;
 mod effects;
 mod engine;
 mod handlers;
+mod logging;
 mod models;
 mod observation;
 mod official_deck;
@@ -159,6 +160,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     println!("🚀 Detective Conan TCG Server (Rust) running at http://0.0.0.0:{port}");
     println!("📝 ログ出力先: 標準出力 / logs/all_rooms.log / logs/matches.jsonl / GET /api/logs");
+    println!(
+        "♻️ ログローテーション: 1ファイル上限 {}MB / バックアップ保持数 {} 世代（LOG_MAX_BYTES / LOG_KEEP で調整可）",
+        logging::max_bytes() / (1024 * 1024),
+        logging::keep_count()
+    );
     println!("📲 スマホから接続する場合: 同じWi-Fiに接続し http://<このPCのIPアドレス>:{port} をブラウザで開いてください");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
