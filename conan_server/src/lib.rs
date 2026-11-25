@@ -5,6 +5,8 @@ pub mod catalog;
 pub mod models;
 
 #[cfg(target_arch = "wasm32")]
+mod worker_auth;
+#[cfg(target_arch = "wasm32")]
 mod worker_images;
 
 #[cfg(target_arch = "wasm32")]
@@ -32,6 +34,36 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
                 Ok(cat) => Response::from_json(&cat.raw_json),
                 Err(e) => Response::error(format!("カタログ読み込みエラー: {}", e), 500),
             }
+        })
+        .post_async("/api/register", |req, ctx| async move {
+            worker_auth::register(req, ctx.env).await
+        })
+        .post_async("/api/login", |req, ctx| async move {
+            worker_auth::login(req, ctx.env).await
+        })
+        .get_async("/api/me", |req, ctx| async move {
+            worker_auth::me(req, ctx.env).await
+        })
+        .get_async("/api/deck", |req, ctx| async move {
+            worker_auth::get_active_deck(req, ctx.env).await
+        })
+        .get_async("/api/decks", |req, ctx| async move {
+            worker_auth::list_decks(req, ctx.env).await
+        })
+        .get_async("/api/decks/:id", |_req, ctx| async move {
+            let id = ctx.param("id").cloned().unwrap_or_default();
+            worker_auth::get_deck_by_id(&id, ctx.env).await
+        })
+        .delete_async("/api/decks/:id", |req, ctx| async move {
+            let id = ctx.param("id").cloned().unwrap_or_default();
+            worker_auth::delete_deck(&id, req, ctx.env).await
+        })
+        .post_async("/api/decks/:id/select", |req, ctx| async move {
+            let id = ctx.param("id").cloned().unwrap_or_default();
+            worker_auth::select_deck(&id, req, ctx.env).await
+        })
+        .post_async("/api/save_deck", |req, ctx| async move {
+            worker_auth::save_deck(req, ctx.env).await
         })
         .post_async("/api/images/upload", |req, ctx| async move {
             worker_images::upload_image(req, ctx.env).await
