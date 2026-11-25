@@ -970,12 +970,11 @@ impl MatchEngine {
                     let opp_id = self.opponent_id_of(player_id);
                     let mut discarded = vec![];
                     if let Some(ops_ps) = self.players.get_mut(&opp_id) {
-                        let mut rng = rand::thread_rng();
                         for _ in 0..*n {
                             if ops_ps.hand.is_empty() {
                                 break;
                             }
-                            let ridx = rng.gen_range(0..ops_ps.hand.len());
+                            let ridx = self.rng.gen_range(0..ops_ps.hand.len());
                             let mut c = ops_ps.hand.remove(ridx);
                             c.zone = Zone::REMOVE;
                             c.face_up = true;
@@ -1540,8 +1539,7 @@ impl MatchEngine {
                             }
                             matched_card = Some(CardInstance { instance_id: mname, ..Default::default() });
                         }
-                        let mut rng = rand::thread_rng();
-                        revealed.shuffle(&mut rng);
+                        revealed.shuffle(&mut self.rng);
                         for mut rc in revealed {
                             rc.face_up = false;
                             ps.deck.insert(0, rc);

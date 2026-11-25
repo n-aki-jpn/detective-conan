@@ -19,6 +19,19 @@ impl MatchEngine {
 
         self.revision += 1;
 
+        // リプレイ記録: 意思決定（decisionId・回答・盤面メタ）
+        self.record_event(json!({
+            "type": "decision",
+            "timestamp": crate::engine::now_ts(),
+            "decisionId": dec["decisionId"].clone(),
+            "kind": kind.clone(),
+            "playerId": dec_player.clone(),
+            "revision": self.revision,
+            "turn": self.turn,
+            "phase": format!("{:?}", self.phase),
+            "answer": val.clone(),
+        }));
+
         match kind.as_str() {
             "mulligan" => self.handle_mulligan_answer(player_id, &val),
             "mainAction" => self.handle_main_action(player_id, &val),
@@ -1752,8 +1765,7 @@ impl MatchEngine {
             let mut removed_def_ids: Vec<String> = Vec::new();
             if let Some(mut rem) = remaining_opt.take() {
                 if shuffle_remainder {
-                    let mut rng = rand::thread_rng();
-                    rem.shuffle(&mut rng);
+                    rem.shuffle(&mut self.rng);
                 }
                 for mut c in rem {
                     if remainder_to_remove {

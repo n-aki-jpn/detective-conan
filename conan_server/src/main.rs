@@ -23,9 +23,9 @@ mod tests;
 
 use handlers::{
     handle_catalog, handle_create_room, handle_decision, handle_deck, handle_delete_deck_by_id,
-    handle_get_deck_by_id, handle_get_logs, handle_join_room, handle_list_decks, handle_login,
-    handle_me, handle_migrate_decks, handle_register, handle_reset, handle_save_deck,
-    handle_select_deck, handle_set_cpu, handle_state,
+    handle_get_deck_by_id, handle_get_logs, handle_get_replay, handle_join_room, handle_list_decks,
+    handle_list_replays, handle_login, handle_me, handle_migrate_decks, handle_register,
+    handle_reset, handle_save_deck, handle_select_deck, handle_set_cpu, handle_state,
 };
 use official_deck::{handle_import_official_deck, handle_publish_deck};
 use room::{MatchManager, SharedState};
@@ -134,6 +134,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/me", get(handle_me))
         .route("/api/state", get(handle_state))
         .route("/api/logs", get(handle_get_logs))
+        .route("/api/replays", get(handle_list_replays))
+        .route("/api/replays/:id", get(handle_get_replay))
         .route("/api/catalog", get(handle_catalog))
         .route("/api/deck", get(handle_deck))
         .route("/api/decks", get(handle_list_decks))

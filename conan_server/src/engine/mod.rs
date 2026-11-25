@@ -28,8 +28,9 @@ use crate::effects::{
 use crate::models::{
     CardInstance, CardOrientation, CardType, CasePhase, DeckDefinition, MatchPhase, Zone,
 };
+use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
-use rand::Rng;
+use rand::{Rng, SeedableRng};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 
@@ -153,6 +154,25 @@ pub struct MatchEngine {
     pub field_overflow_excluded_ids: HashSet<String>,
     pub logs: Vec<String>,
     pub pending_file_logs: Vec<String>,
+    // ─── リプレイ記録用フィールド ──────────────────────────────────────────────
+    /// 対戦一意ID（room側で採番。記録イベントに付与）
+    pub match_id: String,
+    /// この対戦のゲーム乱数シード（再現のための記録入力）
+    pub match_seed: u64,
+    /// シードから初期化した決定論的RNG（thread_rng の代わりに使用）
+    pub rng: StdRng,
+    /// イベント通し番号（eventSeq）
+    pub event_seq: i64,
+    /// リプレイイベントログ（match_start / decision / match_end）
+    pub replay_log: Vec<Value>,
+}
+
+/// UNIX秒のタイムスタンプ（リプレイイベント記録用）
+pub fn now_ts() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
 }
 
 fn normalize_color_set(raw_colors: &[String]) -> HashSet<String> {
@@ -232,7 +252,34 @@ impl MatchEngine {
             field_overflow_excluded_ids: HashSet::new(),
             logs: vec![],
             pending_file_logs: vec![],
+            match_id: String::new(),
+            match_seed: 0,
+            rng: StdRng::from_entropy(),
+            event_seq: 0,
+            replay_log: vec![],
         }
+    }
+
+    /// 指定シードで決定論的に初期化する（再現シミュレーション・リプレイ用）
+    pub fn new_with_seed(catalog: CardCatalog, seed: u64) -> Self {
+        let mut engine = Self::new(catalog);
+        engine.match_seed = seed;
+        engine.rng = StdRng::seed_from_u64(seed);
+        engine
+    }
+
+    pub fn set_match_id(&mut self, id: &str) {
+        self.match_id = id.to_string();
+    }
+
+    /// リプレイイベントを1件追記する（eventSeq を自動採番）
+    pub fn record_event(&mut self, mut ev: Value) {
+        self.event_seq += 1;
+        if let Some(obj) = ev.as_object_mut() {
+            obj.insert("eventSeq".to_string(), json!(self.event_seq));
+            obj.insert("matchId".to_string(), json!(self.match_id));
+        }
+        self.replay_log.push(ev);
     }
 
     pub fn find_card_def_id_in_set(&self, ps: &PlayerState, instance_id: &str) -> Option<String> {
@@ -398,8 +445,8 @@ impl MatchEngine {
             return;
         }
 
-        let mut rng = rand::thread_rng();
-        if rng.gen_bool(0.5) {
+        let swap = self.rng.gen_bool(0.5);
+        if swap {
             self.player_order.swap(0, 1);
         }
 
@@ -411,13 +458,18 @@ impl MatchEngine {
         self.log(format!("⚔️ 対戦開始！ 先攻: {}, 後攻: {}", p1_id, p2_id));
 
         // Shuffle and deal 5 cards
-        for ps in self.players.values_mut() {
-            ps.deck.shuffle(&mut rng);
-            for _ in 0..5 {
-                if let Some(mut card) = ps.deck.pop() {
-                    card.zone = Zone::HAND;
-                    card.face_up = true;
-                    ps.hand.push(card);
+        // ※ HashMap の values_mut() は反復順がプロセス間で揺らぐため、
+        //   リプレイ再現性の決定論性を担保するよう player_order の順で処理する
+        let order = self.player_order.clone();
+        for pid in order {
+            if let Some(ps) = self.players.get_mut(&pid) {
+                ps.deck.shuffle(&mut self.rng);
+                for _ in 0..5 {
+                    if let Some(mut card) = ps.deck.pop() {
+                        card.zone = Zone::HAND;
+                        card.face_up = true;
+                        ps.hand.push(card);
+                    }
                 }
             }
         }

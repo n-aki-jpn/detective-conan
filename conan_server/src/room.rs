@@ -21,6 +21,26 @@ pub struct MatchRoom {
     pub p2_connected: bool,
     pub created_at: std::time::Instant,
     pub match_logged: bool,
+    /// リプレイ記録の一意ID（match_start ごとに採番）
+    pub match_id: String,
+    /// replay_log のうち既にファイルへ書き出した件数
+    pub replay_flushed_count: usize,
+}
+
+/// リプレイ用ディレクトリ
+pub fn replays_dir() -> PathBuf {
+    PathBuf::from("logs/replays")
+}
+
+/// 一意な match_id を生成する（ファイル名安全な英数字のみ）
+fn gen_match_id() -> String {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    format!("m{}{}", ts, rng.gen_range(1000..9999))
 }
 
 impl MatchRoom {
@@ -31,7 +51,11 @@ impl MatchRoom {
         is_cpu: bool,
         default_p2_deck: DeckDefinition,
     ) -> Self {
-        let engine = MatchEngine::new(catalog.clone());
+        let seed: u64 = {
+            use rand::Rng;
+            rand::thread_rng().gen()
+        };
+        let engine = MatchEngine::new_with_seed(catalog.clone(), seed);
         let cpu_agent = if is_cpu {
             Some(RandomAgent::new("player2"))
         } else {
@@ -53,7 +77,10 @@ impl MatchRoom {
             p2_connected: is_cpu,
             created_at: std::time::Instant::now(),
             match_logged: false,
+            match_id: gen_match_id(),
+            replay_flushed_count: 0,
         };
+        room.engine.set_match_id(&room.match_id);
 
         // 両プレイヤーの状態を初期化（クライアントでの観戦・表示用）
         room.engine.add_player("player1", &p1_deck);
@@ -65,6 +92,7 @@ impl MatchRoom {
         room.engine.add_player("player2", &p2_init_deck);
 
         if is_cpu {
+            room.record_match_start();
             room.engine.start_match();
             room.process_cpu_if_needed();
         } else {
@@ -85,12 +113,20 @@ impl MatchRoom {
         self.cpu_agent = None;
 
         // P2参加と同時に、新鮮な両者デッキで試合開始！
-        let mut engine = MatchEngine::new(catalog.clone());
+        let seed: u64 = {
+            use rand::Rng;
+            rand::thread_rng().gen()
+        };
+        let mut engine = MatchEngine::new_with_seed(catalog.clone(), seed);
+        self.match_id = gen_match_id();
+        self.replay_flushed_count = 0;
+        engine.set_match_id(&self.match_id);
         engine.add_player("player1", &self.p1_deck);
         engine.add_player("player2", &p2_deck);
-        engine.start_match();
         self.engine = engine;
         self.match_logged = false;
+        self.record_match_start();
+        self.engine.start_match();
         self.flush_logs();
     }
 
@@ -98,15 +134,47 @@ impl MatchRoom {
         // リセット前の未出力ファイル/標準出力ログをフラッシュ（未完了試合は外部送信しない）
         self.flush_logs();
 
-        let mut engine = MatchEngine::new(catalog.clone());
+        let seed: u64 = {
+            use rand::Rng;
+            rand::thread_rng().gen()
+        };
+        let mut engine = MatchEngine::new_with_seed(catalog.clone(), seed);
+        self.match_id = gen_match_id();
+        self.replay_flushed_count = 0;
+        engine.set_match_id(&self.match_id);
         engine.add_player("player1", &self.p1_deck);
         let p2_deck = self.p2_deck.as_ref().unwrap_or(&self.p1_deck);
         engine.add_player("player2", p2_deck);
-        engine.start_match();
         self.engine = engine;
         self.match_logged = false;
+        self.record_match_start();
+        self.engine.start_match();
         self.process_cpu_if_needed();
         self.flush_logs();
+    }
+
+    /// match_start イベントを記録する（両者デッキ・シード・先攻順の再現情報）
+    pub fn record_match_start(&mut self) {
+        let p2_ref = self.p2_deck.as_ref().unwrap_or(&self.p1_deck);
+        let deck_compact = |deck: &DeckDefinition| -> Value {
+            json!({
+                "partnerId": deck.partner_id,
+                "caseId": deck.case_id,
+                "mainDeck": deck
+                    .main_deck
+                    .iter()
+                    .map(|i| json!({ "definitionId": i.definition_id, "count": i.count }))
+                    .collect::<Vec<_>>(),
+            })
+        };
+        self.engine.record_event(json!({
+            "type": "match_start",
+            "timestamp": crate::engine::now_ts(),
+            "seed": self.engine.match_seed,
+            "p1Deck": deck_compact(&self.p1_deck),
+            "p2Deck": deck_compact(p2_ref),
+            "p2IsCpu": self.p2_is_cpu,
+        }));
     }
 
     pub fn send_logs_to_gas_webhook(rows: Vec<Value>) {
@@ -178,6 +246,17 @@ impl MatchRoom {
                     std::path::Path::new("logs/all_rooms.log"),
                     &format!("[{}][room:{}] {}", ts, self.room_id, line),
                 );
+            }
+        }
+
+        // 2.5 リプレイイベントを logs/replays/<match_id>.jsonl へ追記（上限超過時は自動ローテーション）
+        if self.engine.replay_log.len() > self.replay_flushed_count {
+            let new_events: Vec<Value> =
+                self.engine.replay_log[self.replay_flushed_count..].to_vec();
+            self.replay_flushed_count = self.engine.replay_log.len();
+            let path = replays_dir().join(format!("{}.jsonl", self.match_id));
+            for ev in &new_events {
+                crate::logging::append_line(&path, &ev.to_string());
             }
         }
 
@@ -858,6 +937,100 @@ impl MatchManager {
             }
         }
         (imported, skipped)
+    }
+
+    // ─── リプレイ記録の取得 ────────────────────────────────────────────────────
+
+    /// match_id をファイル名安全な文字のみへ正規化する
+    fn sanitize_match_id(id: &str) -> String {
+        id.chars()
+            .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
+            .collect()
+    }
+
+    /// 保存済みリプレイの一覧を返す（各ファイルの match_start / match_end から要約を抽出）
+    pub fn list_replays(&self, limit: usize) -> Vec<Value> {
+        let dir = replays_dir();
+        let mut items: Vec<(u64, Value)> = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(&dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) != Some("jsonl") {
+                    continue;
+                }
+                let content = match std::fs::read_to_string(&path) {
+                    Ok(c) => c,
+                    Err(_) => continue,
+                };
+                let mut start: Option<Value> = None;
+                let mut end: Option<Value> = None;
+                let mut event_count = 0usize;
+                for line in content.lines() {
+                    let line = line.trim();
+                    if line.is_empty() {
+                        continue;
+                    }
+                    if let Ok(ev) = serde_json::from_str::<Value>(line) {
+                        event_count += 1;
+                        match ev.get("type").and_then(|t| t.as_str()) {
+                            Some("match_start") => start = Some(ev),
+                            Some("match_end") => end = Some(ev),
+                            _ => {}
+                        }
+                    }
+                }
+                let match_id = path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("")
+                    .to_string();
+                let ts = start
+                    .as_ref()
+                    .and_then(|s| s.get("timestamp").and_then(|v| v.as_u64()))
+                    .unwrap_or(0);
+                items.push((
+                    ts,
+                    json!({
+                        "matchId": match_id,
+                        "eventCount": event_count,
+                        "seed": start.as_ref().and_then(|s| s.get("seed").cloned()),
+                        "p1DeckPartner": start.as_ref()
+                            .and_then(|s| s.get("p1Deck").and_then(|d| d.get("partnerId")).cloned()),
+                        "p2DeckPartner": start.as_ref()
+                            .and_then(|s| s.get("p2Deck").and_then(|d| d.get("partnerId")).cloned()),
+                        "p2IsCpu": start.as_ref().and_then(|s| s.get("p2IsCpu").cloned()),
+                        "winnerId": end.as_ref().and_then(|e| e.get("winnerId").cloned()),
+                        "finishReason": end.as_ref().and_then(|e| e.get("finishReason").cloned()),
+                        "finished": end.is_some(),
+                        "startedAt": ts,
+                    }),
+                ));
+            }
+        }
+        // 新しい順にソートして limit 件
+        items.sort_by(|a, b| b.0.cmp(&a.0));
+        items.into_iter().take(limit).map(|(_, v)| v).collect()
+    }
+
+    /// 指定 match_id の全リプレイイベントを返す
+    pub fn get_replay(&self, match_id: &str) -> Option<Vec<Value>> {
+        let safe = Self::sanitize_match_id(match_id);
+        if safe.is_empty() {
+            return None;
+        }
+        let path = replays_dir().join(format!("{}.jsonl", safe));
+        let content = std::fs::read_to_string(&path).ok()?;
+        let mut events = Vec::new();
+        for line in content.lines() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            if let Ok(ev) = serde_json::from_str::<Value>(line) {
+                events.push(ev);
+            }
+        }
+        Some(events)
     }
 }
 

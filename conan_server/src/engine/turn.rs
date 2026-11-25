@@ -50,8 +50,7 @@ impl MatchEngine {
                     ps.deck.push(c);
                 }
 
-                let mut rng = rand::thread_rng();
-                ps.deck.shuffle(&mut rng);
+                ps.deck.shuffle(&mut self.rng);
 
                 for _ in 0..replace_count {
                     if let Some(mut draw_c) = ps.deck.pop() {
@@ -360,8 +359,7 @@ impl MatchEngine {
             c.face_up = false;
             ps.deck.push(c);
         }
-        let mut rng = rand::thread_rng();
-        ps.deck.shuffle(&mut rng);
+        ps.deck.shuffle(&mut self.rng);
 
         self.refreshed_players.insert(player_id.to_string());
         self.log(format!("🔄 {} の山札が無くなりリフレッシュ発生！（相手の証拠+1）", player_id));
@@ -382,5 +380,14 @@ impl MatchEngine {
             _ => reason,
         };
         self.log(format!("🏆 【対戦終了】勝者: {} ({})", winner_id, reason_str));
+
+        // リプレイ記録: 対戦終了
+        self.record_event(json!({
+            "type": "match_end",
+            "timestamp": crate::engine::now_ts(),
+            "winnerId": winner_id,
+            "finishReason": reason,
+            "turn": self.turn,
+        }));
     }
 }

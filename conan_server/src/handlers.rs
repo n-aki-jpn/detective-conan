@@ -27,6 +27,11 @@ pub struct LogsQuery {
 }
 
 #[derive(Deserialize)]
+pub struct ReplaysQuery {
+    pub limit: Option<usize>,
+}
+
+#[derive(Deserialize)]
 pub struct SetCpuRequest {
     #[serde(rename = "isCpu")]
     pub is_cpu: bool,
@@ -277,6 +282,36 @@ pub async fn handle_get_logs(
         "recentMatches": match_records,
     }))
     .into_response()
+}
+
+/// リプレイ一覧を取得（新しい順。各試合の要約）
+pub async fn handle_list_replays(
+    State(state): State<SharedState>,
+    Query(params): Query<ReplaysQuery>,
+) -> impl IntoResponse {
+    let mgr = state.lock().unwrap();
+    let limit = params.limit.unwrap_or(50).min(500);
+    let replays = mgr.list_replays(limit);
+    Json(json!({ "count": replays.len(), "replays": replays })).into_response()
+}
+
+/// 指定 match_id の全リプレイイベントを取得（再生入力として使用可能）
+pub async fn handle_get_replay(
+    State(state): State<SharedState>,
+    AxumPath(match_id): AxumPath<String>,
+) -> impl IntoResponse {
+    let mgr = state.lock().unwrap();
+    match mgr.get_replay(&match_id) {
+        Some(events) => {
+            Json(json!({ "matchId": match_id, "eventCount": events.len(), "events": events }))
+                .into_response()
+        }
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": "replay not found", "matchId": match_id })),
+        )
+            .into_response(),
+    }
 }
 
 pub async fn handle_create_room(

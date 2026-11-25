@@ -14,6 +14,7 @@ mod regression_b01_b06;
 mod regression_b07_b10;
 mod regression_b11;
 mod regression_mechanics;
+mod replay_recording;
 mod ui_smoke;
 
 pub(super) fn test_inst(
