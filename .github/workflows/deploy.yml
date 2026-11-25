@@ -37,8 +37,8 @@ jobs:
           if ! command -v worker-build >/dev/null 2>&1; then
             cargo install worker-build --version "^0.1" --locked || cargo install worker-build --version "^0.1"
           fi
-          if ! wasm-bindgen --version 2>/dev/null | grep -q "0.2.130"; then
-            cargo install wasm-bindgen-cli --version 0.2.130 --locked || cargo install wasm-bindgen-cli --version 0.2.130
+          if ! wasm-bindgen --version 2>/dev/null | grep -q "0.2.105"; then
+            cargo install wasm-bindgen-cli --version 0.2.105 --locked || cargo install wasm-bindgen-cli --version 0.2.105
           fi
 
       - name: Deploy with Wrangler
