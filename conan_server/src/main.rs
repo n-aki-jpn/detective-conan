@@ -125,6 +125,48 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
+    if args.get(1).map(|s| s.as_str()) == Some("simulate") {
+        // 固定シード・シミュレーション:
+        //   simulate [games] [seed] [p1_deck_path] [p2_deck_path]
+        // 同一引数なら結果が完全に再現される（回帰テスト・バランス調整用）
+        let games: usize = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(100);
+        let seed: u64 = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(0);
+        let p1_deck = if let Some(path) = args.get(4) {
+            match MatchManager::load_deck(&PathBuf::from(path)) {
+                Ok(d) => d,
+                Err(e) => {
+                    eprintln!("❌ P1デッキの読み込みに失敗しました ({}): {}", path, e);
+                    return Err(e);
+                }
+            }
+        } else {
+            mgr.deck_def.clone()
+        };
+        let p2_deck = if let Some(path) = args.get(5) {
+            match MatchManager::load_deck(&PathBuf::from(path)) {
+                Ok(d) => d,
+                Err(e) => {
+                    eprintln!("❌ P2デッキの読み込みに失敗しました ({}): {}", path, e);
+                    return Err(e);
+                }
+            }
+        } else {
+            p1_deck.clone()
+        };
+        let w = agent::CpuWeights::load_or_default("data/cpu_weights.json");
+        let summary = agent::run_fixed_seed_simulation(
+            &mgr.catalog,
+            &p1_deck,
+            &p2_deck,
+            &w,
+            &w,
+            games,
+            seed,
+        );
+        println!("{}", serde_json::to_string_pretty(&summary).unwrap());
+        return Ok(());
+    }
+
     let shared_state: SharedState = Arc::new(Mutex::new(mgr));
 
     let static_dir = PathBuf::from("src/conan_engine/web/static");

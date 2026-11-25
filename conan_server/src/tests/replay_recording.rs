@@ -2,6 +2,39 @@ use super::*;
 use crate::models::DeckCardItem;
 use serde_json::json;
 
+fn sim_deck() -> models::DeckDefinition {
+    models::DeckDefinition {
+        deck_id: Some("sim".to_string()),
+        deck_name: Some("sim".to_string()),
+        catalog_version: None,
+        partner_id: "B01005P".to_string(),
+        case_id: "B01005".to_string(),
+        main_deck: (0..40)
+            .map(|i| DeckCardItem {
+                definition_id: format!("CARD{}", i % 10),
+                count: 1,
+            })
+            .collect(),
+    }
+}
+
+/// 固定シード・シミュレーションが同一引数で完全に再現されること
+#[test]
+fn fixed_seed_simulation_is_reproducible() {
+    let catalog = load_test_catalog();
+    let deck = sim_deck();
+    let w = crate::agent::CpuWeights::load_or_default("data/cpu_weights.json");
+
+    let s1 = crate::agent::run_fixed_seed_simulation(&catalog, &deck, &deck, &w, &w, 8, 123);
+    let s2 = crate::agent::run_fixed_seed_simulation(&catalog, &deck, &deck, &w, &w, 8, 123);
+
+    assert_eq!(s1.p1_wins, s2.p1_wins);
+    assert_eq!(s1.p2_wins, s2.p2_wins);
+    assert_eq!(s1.draws, s2.draws);
+    assert_eq!(s1.avg_evidence_diff, s2.avg_evidence_diff);
+    assert_eq!(s1.p1_wins + s1.p2_wins + s1.draws, 8, "全試勝敗が計上される");
+}
+
 fn make_deck() -> models::DeckDefinition {
     models::DeckDefinition {
         deck_id: Some("test_replay".to_string()),

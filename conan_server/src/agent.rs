@@ -1,12 +1,14 @@
 use crate::catalog::CardCatalog;
 use crate::engine::MatchEngine;
 use crate::models::{CardDefinition, CardOrientation, CardType, CasePhase, DeckDefinition};
+use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
-use rand::Rng;
+use rand::{Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
+use std::sync::Mutex;
 
 /// 序盤(事件編)・終盤(解決編)の2フェーズ重みペア (Tapered Evaluation)
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -226,6 +228,9 @@ pub struct RandomAgent {
     opp_no_cutin_observations: AtomicUsize,
     /// 軽量ソフト信念: 相手がカットインを使用した観測回数
     opp_cutin_used_count: AtomicUsize,
+    /// CPU判断用RNG（既定はエントロピー初期化。with_seedでシード固定し再現性を担保）
+    /// ※ SharedState内で保持されるため Send が必要な Mutex を使用
+    rng: Mutex<StdRng>,
 }
 
 impl Clone for RandomAgent {
@@ -243,6 +248,7 @@ impl Clone for RandomAgent {
             opp_cutin_used_count: AtomicUsize::new(
                 self.opp_cutin_used_count.load(Ordering::Relaxed),
             ),
+            rng: Mutex::new(StdRng::from_entropy()),
         }
     }
 }
@@ -258,6 +264,22 @@ impl RandomAgent {
             last_hint_skipped: AtomicBool::new(false),
             opp_no_cutin_observations: AtomicUsize::new(0),
             opp_cutin_used_count: AtomicUsize::new(0),
+            rng: Mutex::new(StdRng::from_entropy()),
+        }
+    }
+
+    /// シード指定でCPU判断RNGを初期化（固定シード・シミュレーション用）
+    pub fn with_seed(player_id: &str, weights: CpuWeights, seed: u64) -> Self {
+        Self {
+            player_id: player_id.to_string(),
+            weights,
+            difficulty: CpuDifficulty::Strongest,
+            last_turn: AtomicI32::new(-1),
+            hints_used_this_turn: AtomicUsize::new(0),
+            last_hint_skipped: AtomicBool::new(false),
+            opp_no_cutin_observations: AtomicUsize::new(0),
+            opp_cutin_used_count: AtomicUsize::new(0),
+            rng: Mutex::new(StdRng::seed_from_u64(seed)),
         }
     }
 
@@ -271,6 +293,7 @@ impl RandomAgent {
             last_hint_skipped: AtomicBool::new(false),
             opp_no_cutin_observations: AtomicUsize::new(0),
             opp_cutin_used_count: AtomicUsize::new(0),
+            rng: Mutex::new(StdRng::from_entropy()),
         }
     }
 
@@ -284,6 +307,7 @@ impl RandomAgent {
             last_hint_skipped: AtomicBool::new(false),
             opp_no_cutin_observations: AtomicUsize::new(0),
             opp_cutin_used_count: AtomicUsize::new(0),
+            rng: Mutex::new(StdRng::from_entropy()),
         }
     }
 
@@ -3044,7 +3068,8 @@ impl RandomAgent {
     pub fn choose_action(&self, decision: &Value) -> Value {
         let kind = decision.get("kind").and_then(|v| v.as_str()).unwrap_or("");
         let opts = decision.get("options").cloned().unwrap_or(json!({}));
-        let mut rng = rand::thread_rng();
+        let mut rng_guard = self.rng.lock().unwrap_or_else(|e| e.into_inner());
+        let mut rng: &mut StdRng = &mut rng_guard;
 
         match kind {
             "mulligan" => {
@@ -3385,14 +3410,15 @@ fn simulate_match(
     p2_deck: &DeckDefinition,
     w1: &CpuWeights,
     w2: &CpuWeights,
+    seed: u64,
 ) -> (Option<String>, i32, Vec<String>, Vec<String>) {
-    let mut engine = MatchEngine::new(catalog.clone());
+    let mut engine = MatchEngine::new_with_seed(catalog.clone(), seed);
     engine.add_player("p1", p1_deck);
     engine.add_player("p2", p2_deck);
     engine.start_match();
 
-    let a1 = RandomAgent::with_weights("p1", w1.clone());
-    let a2 = RandomAgent::with_weights("p2", w2.clone());
+    let a1 = RandomAgent::with_seed("p1", w1.clone(), seed ^ 0x9E37_79B9_7F4A_7C15);
+    let a2 = RandomAgent::with_seed("p2", w2.clone(), seed ^ 0xBF58_476D_1CE4_E5B9);
 
     for _ in 0..800 {
         if engine.winner_id.is_some() {
@@ -3434,6 +3460,57 @@ fn simulate_match(
     }
 
     (engine.winner_id, p1_ev - p2_ev, winner_active_cards, loser_stranded_hand)
+}
+
+/// 固定シード・シミュレーションの集計サマリ
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SimulationSummary {
+    pub games: usize,
+    pub seed: u64,
+    pub p1_wins: usize,
+    pub p2_wins: usize,
+    pub draws: usize,
+    /// 1試合平均の (p1証拠 - p2証拠)
+    pub avg_evidence_diff: f64,
+}
+
+/// 固定シードで N 試合同士打戦をシミュレーションし、勝敗を集計する。
+/// 各試合のシードは base seed から決定的に導出するため、
+/// 同一 (catalog, decks, weights, games, seed) なら結果が完全に再現される。
+pub fn run_fixed_seed_simulation(
+    catalog: &CardCatalog,
+    p1_deck: &DeckDefinition,
+    p2_deck: &DeckDefinition,
+    w1: &CpuWeights,
+    w2: &CpuWeights,
+    games: usize,
+    seed: u64,
+) -> SimulationSummary {
+    let mut p1_wins = 0usize;
+    let mut p2_wins = 0usize;
+    let mut draws = 0usize;
+    let mut ev_diff_sum: i64 = 0;
+
+    for i in 0..games {
+        let game_seed = seed ^ ((i as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15));
+        let (winner, diff, _, _) = simulate_match(catalog, p1_deck, p2_deck, w1, w2, game_seed);
+        match winner.as_deref() {
+            Some("p1") => p1_wins += 1,
+            Some("p2") => p2_wins += 1,
+            _ => draws += 1,
+        }
+        ev_diff_sum += diff as i64;
+    }
+
+    SimulationSummary {
+        games,
+        seed,
+        p1_wins,
+        p2_wins,
+        draws,
+        avg_evidence_diff: ev_diff_sum as f64 / games.max(1) as f64,
+    }
 }
 
 /// 第2部 2.4・2.5節: Rademacher SPSA + 先後入替ペア対戦 + Paired Trinomial GSPRT による自己対戦学習
@@ -3492,9 +3569,11 @@ pub fn train_cpu_self_play(
 
         for _ in 0..pairs_per_gen {
             // Game 1: w_plus(先攻 p1) vs w_minus(後攻 p2)
-            let (w1, diff1, wc1, lh1) = simulate_match(catalog, p1_deck, p2_deck, &w_plus, &w_minus);
+            let seed1 = rng.gen::<u64>();
+            let (w1, diff1, wc1, lh1) = simulate_match(catalog, p1_deck, p2_deck, &w_plus, &w_minus, seed1);
             // Game 2: w_minus(先攻 p1) vs w_plus(後攻 p2)
-            let (w2, diff2, wc2, lh2) = simulate_match(catalog, p1_deck, p2_deck, &w_minus, &w_plus);
+            let seed2 = rng.gen::<u64>();
+            let (w2, diff2, wc2, lh2) = simulate_match(catalog, p1_deck, p2_deck, &w_minus, &w_plus, seed2);
 
             for cid in wc1.into_iter().chain(wc2.into_iter()) {
                 *win_card_counts.entry(cid).or_insert(0) += 1;

@@ -36,7 +36,7 @@
 
 | 項目 | 現状 | ステータス |
 |------|------|-----------|
-| 固定シードシミュレーション | `docs/logging-and-simulation.md` に設計あり（`simulate --games 100 --seed 42`）。`train` CLIはあるが、固定シードでの再現性シミュレーションは未実装（fuzzテスト内でのみシード使用） | ❌ |
+| 固定シードシミュレーション | ✅ 実装済み。`agent::run_fixed_seed_simulation`（エンジンRNG＋CPU判断RNGの両方をシード固定で決定論化）とCLI `simulate [games] [seed] [p1deck] [p2deck]` を追加。同一引数で勝敗・平均証拠差が完全再現されることをテストで担保（`RandomAgent` に `Mutex<StdRng>` と `with_seed` を追加） | ✅ |
 | リプレイ機能 | ✅ 記録基盤＋API実装済み（エンジンにシード対応StdRng・match_id・replay_log を追加、match_start/decision/match_end を `logs/replays/<matchId>.jsonl` へ永続保存、`GET /api/replays` 一覧・`GET /api/replays/:id` 全イベント取得）。同一シードで先攻順・手札配列が一致する再現性をテストで担保。UI再生は未実装（次段階） | 🟡 記録+API実装済 / UI未 |
 | 学習と評価の分離 | `train_cpu_self_play` はあるが、試合単位の学習/評価分割は未実装 | ❌ |
 | 再生一致率評価 | 設計のみ | ❌ |
