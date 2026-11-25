@@ -16,6 +16,7 @@ mod logging;
 mod models;
 mod observation;
 mod official_deck;
+mod rate_limiter;
 mod room;
 mod user;
 #[cfg(test)]
@@ -170,7 +171,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("📲 スマホから接続する場合: 同じWi-Fiに接続し http://<このPCのIPアドレス>:{port} をブラウザで開いてください");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
 
     Ok(())
 }

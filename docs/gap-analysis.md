@@ -13,7 +13,7 @@
 
 | 項目 | 現状 | ステータス |
 |------|------|-----------|
-| 認証・ユーザー管理 | ✅ 実装済み（ニックネーム＋Bearerトークン、ユーザー単位デッキ保存、コミット `fcb118b`）。ただしパスワードなし・レート制限なしなど残課題あり（→ auth-deck-storage-followups.md） | ✅ 基盤実装済 / 残課題あり |
+| 認証・ユーザー管理 | ✅ 実装済み（ニックネーム＋Bearerトークン、ユーザー単位デッキ保存、コミット `fcb118b`）。✅ 認証系（register/login）にIP単位の固定ウィンドウ・レート制限を追加（`conan_server/src/rate_limiter.rs`、`RATE_LIMIT_MAX`/`RATE_LIMIT_WINDOW` で調整可）。残課題: パスワードなし・HTTPS（→ auth-deck-storage-followups.md） | ✅ 基盤実装済 / 残課題あり |
 | データベース | ファイルベース（deck.json / users.json / user_decks/）。グローバルMutex前提で同時書き込み競合のリスクあり。SQLite等への移行未実施 | ❌ |
 | 切断猶予・再接続 | `p1_connected` / `p2_connected` フラグはあるが、切断後の猶予時間・自動再接続・ルーム回収処理は未実装 | ❌ |
 | ログ保存期間 | ✅ サイズベースローテーション実装済み（`conan_server/src/logging.rs`、デフォルト5MB×5世代、`LOG_MAX_BYTES` / `LOG_KEEP` で調整可） | ✅ |

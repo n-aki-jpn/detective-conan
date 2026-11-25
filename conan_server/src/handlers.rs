@@ -3,7 +3,7 @@ use crate::models::DeckDefinition;
 use crate::observation::build_player_observation;
 use crate::room::{sanitize_deck, MatchRoom, SharedState};
 use axum::{
-    extract::{FromRequestParts, Path as AxumPath, Query, State},
+    extract::{ConnectInfo, FromRequestParts, Path as AxumPath, Query, State},
     http::{request::Parts, StatusCode},
     response::IntoResponse,
     Json,
@@ -133,10 +133,44 @@ pub struct MigrateDecksRequest {
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
+/// X-Forwarded-For があれば最上位IP、無ければ ConnectInfo のピアアドレスを返す。
+fn client_ip(parts: &Parts, peer: std::net::SocketAddr) -> String {
+    if let Some(fwd) = parts
+        .headers
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+    {
+        if let Some(first) = fwd.split(',').next().map(|s| s.trim()) {
+            if !first.is_empty() {
+                return first.to_string();
+            }
+        }
+    }
+    peer.ip().to_string()
+}
+
+/// レート制限に掛かった場合の 429 レスポンス
+fn rate_limited() -> axum::response::Response {
+    (
+        StatusCode::TOO_MANY_REQUESTS,
+        Json(json!({"error": "リクエストが多すぎます。しばらくしてから再試行してください。"})),
+    )
+        .into_response()
+}
+
 pub async fn handle_register(
     State(state): State<SharedState>,
+    ConnectInfo(peer): ConnectInfo<std::net::SocketAddr>,
+    parts: Parts,
     Json(body): Json<AuthRequest>,
 ) -> impl IntoResponse {
+    let ip = client_ip(&parts, peer);
+    {
+        let mut mgr = state.lock().unwrap();
+        if !mgr.rate_limiter.check(&format!("register:{}", ip)) {
+            return rate_limited();
+        }
+    }
     let mut mgr = state.lock().unwrap();
     match mgr.user_manager.register(&body.nickname) {
         Ok((user, session)) => Json(json!({
@@ -151,8 +185,17 @@ pub async fn handle_register(
 
 pub async fn handle_login(
     State(state): State<SharedState>,
+    ConnectInfo(peer): ConnectInfo<std::net::SocketAddr>,
+    parts: Parts,
     Json(body): Json<AuthRequest>,
 ) -> impl IntoResponse {
+    let ip = client_ip(&parts, peer);
+    {
+        let mut mgr = state.lock().unwrap();
+        if !mgr.rate_limiter.check(&format!("login:{}", ip)) {
+            return rate_limited();
+        }
+    }
     let mut mgr = state.lock().unwrap();
     match mgr.user_manager.login(&body.nickname) {
         Ok((user, session)) => Json(json!({

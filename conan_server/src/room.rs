@@ -544,6 +544,8 @@ pub struct MatchManager {
     pub deck_def: DeckDefinition,
     pub rooms: HashMap<String, MatchRoom>,
     pub user_manager: crate::user::UserManager,
+    /// 認証系エンドポイントのレートリミッタ
+    pub rate_limiter: crate::rate_limiter::RateLimiter,
 }
 
 pub fn sanitize_deck(
@@ -616,6 +618,7 @@ impl MatchManager {
             deck_def: deck_def.clone(),
             rooms: HashMap::new(),
             user_manager,
+            rate_limiter: crate::rate_limiter::RateLimiter::new(),
         };
 
         // Create initial default local room
