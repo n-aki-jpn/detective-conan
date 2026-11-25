@@ -2,12 +2,17 @@
 //! ネイティブビルド（ローカルサーバー / `cargo test`）時は `main.rs` が使用されます。
 
 pub mod catalog;
+pub mod effects;
+pub mod engine;
 pub mod models;
+pub mod observation;
 
 #[cfg(target_arch = "wasm32")]
 mod worker_auth;
 #[cfg(target_arch = "wasm32")]
 mod worker_images;
+#[cfg(target_arch = "wasm32")]
+mod worker_rooms;
 
 #[cfg(target_arch = "wasm32")]
 use worker::*;
@@ -64,6 +69,33 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         })
         .post_async("/api/save_deck", |req, ctx| async move {
             worker_auth::save_deck(req, ctx.env).await
+        })
+        .get_async("/api/state", |req, ctx| async move {
+            worker_rooms::get_state(req, ctx.env, CARDS_JSON).await
+        })
+        .post_async("/api/decision", |req, ctx| async move {
+            worker_rooms::submit_decision(req, ctx.env, CARDS_JSON).await
+        })
+        .post_async("/api/reset", |req, ctx| async move {
+            worker_rooms::reset_room(req, ctx.env, CARDS_JSON).await
+        })
+        .post_async("/api/set_cpu", |req, ctx| async move {
+            worker_rooms::set_cpu(req, ctx.env).await
+        })
+        .post_async("/api/rooms/create", |req, ctx| async move {
+            worker_rooms::create_room(req, ctx.env).await
+        })
+        .post_async("/api/rooms/join", |req, ctx| async move {
+            worker_rooms::join_room(req, ctx.env).await
+        })
+        .post_async("/api/rewind", |req, _ctx| async move {
+            worker_rooms::rewind_stub(req).await
+        })
+        .post_async("/api/rewind/accept", |req, _ctx| async move {
+            worker_rooms::rewind_stub(req).await
+        })
+        .post_async("/api/rewind/reject", |req, _ctx| async move {
+            worker_rooms::rewind_stub(req).await
         })
         .post_async("/api/images/upload", |req, ctx| async move {
             worker_images::upload_image(req, ctx.env).await
