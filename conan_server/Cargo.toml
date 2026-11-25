@@ -3,17 +3,27 @@ name = "conan_server"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
-axum = "0.7"
-tokio = { version = "1.0", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tower-http = { version = "0.5", features = ["fs", "cors", "trace"] }
 rand = "0.8"
 tracing = "0.1"
+url = "2.5"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+worker = { version = "0.5", features = ["d1"] }
+getrandom = { version = "0.2", features = ["js"] }
+console_error_panic_hook = "0.1"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+axum = "0.7"
+tokio = { version = "1.0", features = ["full"] }
+tower-http = { version = "0.5", features = ["fs", "cors", "trace"] }
 tracing-subscriber = "0.3"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
-url = "2.5"
 
 [dev-dependencies]
 tower = { version = "0.4", features = ["util"] }

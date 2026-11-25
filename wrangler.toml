@@ -1,0 +1,22 @@
+name = "conan-tcg-worker"
+main = "conan_server/build/worker/shim.mjs"
+compatibility_date = "2024-11-01"
+
+[build]
+command = "cd conan_server && worker-build --release"
+
+# D1 データベース バインディング
+[[d1_databases]]
+binding = "DB"
+database_name = "conan-tcg-db"
+database_id = "a061750b-4735-4f25-a23d-b0c6601ca1cc"
+migrations_dir = "migrations"
+
+# R2 バケット バインディング (JPG画像保存用)
+[[r2_buckets]]
+binding = "IMAGES_BUCKET"
+bucket_name = "conan-tcg-images"
+
+# 任意の公開URLベース（R2カスタムドメインやr2.devを有効化した場合に設定）
+# [vars]
+# R2_PUBLIC_BASE_URL = "https://pub-xxxxxxxxxxxxxxxx.r2.dev"
