@@ -23,6 +23,26 @@ pub struct ImageRecord {
 /// - `card_id`: 関連するカードID
 /// - `title`: 画像タイトルやメモ
 pub async fn upload_image(mut req: Request, env: Env) -> Result<Response> {
+    // UPLOAD_API_TOKEN が設定されていない場合はアップロードを無効化（403）
+    let expected_token = match env.secret("UPLOAD_API_TOKEN").or_else(|_| env.var("UPLOAD_API_TOKEN")) {
+        Ok(val) if !val.to_string().trim().is_empty() => val.to_string(),
+        _ => {
+            return Response::error(
+                "アップロードエンドポイントは現在無効化されています",
+                403,
+            );
+        }
+    };
+
+    let auth_header = req
+        .headers()
+        .get("Authorization")?
+        .unwrap_or_default();
+    let provided_token = auth_header.strip_prefix("Bearer ").unwrap_or("").trim();
+    if provided_token != expected_token {
+        return Response::error("Unauthorized", 401);
+    }
+
     let url = req.url()?;
     let mut object_key: Option<String> = None;
     let mut card_id: Option<String> = None;
