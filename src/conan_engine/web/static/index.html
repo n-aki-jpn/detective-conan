@@ -2563,10 +2563,21 @@
       if (appStarted) return;
       appStarted = true;
       ensureDeckReady();
-      setInterval(() => {
-        if (!document.hidden) fetchState();
-      }, 1800);
-      fetchState();
+      let isFetchingState = false;
+      async function pollStateLoop() {
+        if (!document.hidden && !isFetchingState) {
+          isFetchingState = true;
+          try {
+            await fetchState();
+          } catch (e) {
+            console.warn('fetchState error:', e);
+          } finally {
+            isFetchingState = false;
+          }
+        }
+        setTimeout(pollStateLoop, 1800);
+      }
+      pollStateLoop();
       loadBattleDecks();
       // URLの ?join=XXXX による自動参加処理
       if (urlParams.has('join')) {
