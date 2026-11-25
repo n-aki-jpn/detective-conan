@@ -1,11 +1,17 @@
 //! Cloudflare Workers (workers-rs) エントリーポイント。
 //! ネイティブビルド（ローカルサーバー / `cargo test`）時は `main.rs` が使用されます。
 
+pub mod catalog;
+pub mod models;
+
 #[cfg(target_arch = "wasm32")]
 mod worker_images;
 
 #[cfg(target_arch = "wasm32")]
 use worker::*;
+
+#[cfg(target_arch = "wasm32")]
+const CARDS_JSON: &str = include_str!("../../data/dummy/cards.json");
 
 #[cfg(target_arch = "wasm32")]
 #[event(fetch)]
@@ -16,13 +22,19 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
 
     router
         .get("/", |_req, _ctx| {
-            Response::ok("Conan TCG Worker is running! Endpoints: GET /api/health, POST /api/images/upload, GET /api/images, GET /api/images/:key")
+            Response::ok("Conan TCG Worker is running! Endpoints: GET /api/health, GET /api/catalog, POST /api/images/upload, GET /api/images, GET /api/images/:key")
         })
         .get("/api/health", |_req, _ctx| {
             Response::from_json(&serde_json::json!({
                 "status": "ok",
                 "runtime": "cloudflare-workers"
             }))
+        })
+        .get("/api/catalog", |_req, _ctx| {
+            match catalog::CardCatalog::load_from_str(CARDS_JSON) {
+                Ok(cat) => Response::from_json(&cat.raw_json),
+                Err(e) => Response::error(format!("カタログ読み込みエラー: {}", e), 500),
+            }
         })
         .post_async("/api/images/upload", |req, ctx| async move {
             worker_images::upload_image(req, ctx.env).await

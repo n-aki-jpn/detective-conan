@@ -16,7 +16,16 @@ impl CardCatalog {
     pub fn load_from_json<P: AsRef<Path>>(file_path: P) -> Result<Self, Box<dyn std::error::Error>> {
         let file = File::open(file_path)?;
         let reader = BufReader::new(file);
-        let mut raw_json: Value = serde_json::from_reader(reader)?;
+        let raw_json: Value = serde_json::from_reader(reader)?;
+        Self::from_raw_json(raw_json)
+    }
+
+    pub fn load_from_str(json_str: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let raw_json: Value = serde_json::from_str(json_str)?;
+        Self::from_raw_json(raw_json)
+    }
+
+    fn from_raw_json(mut raw_json: Value) -> Result<Self, Box<dyn std::error::Error>> {
 
         let catalog_version = raw_json
             .get("catalogVersion")
