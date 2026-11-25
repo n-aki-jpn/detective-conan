@@ -50,11 +50,11 @@
 |------|------|-----------|
 | Python版レガシーコード | `src/conan_engine/*.py`（agent / catalog / engine / observation / server）が残存。Rust版へ移行済みなので削除候補 | ❌ 残存 |
 | WebSocket | オンライン対戦はポーリングベース（`GET /api/state` 1秒間隔）。リアルタイム性・スケーラビリティに課題 | ❌ |
-| CI/CD | `.github/workflows` 等なし。テスト実行・ビルドが手動 | ❌ |
+| CI/CD | ✅ GitHub Actions（`.github/workflows/ci.yml`）導入済み。push/PR時に windows-latest で `cargo check` / `build` / `test` を自動実行（cargoキャッシュ付き） | ✅ |
 | Docker化 | Dockerfile なし。デプロイに手作業が必要 | ❌ |
 | 観戦機能 | 第三者がルームを閲覧する機能なし | ❌ |
 | デッキ共有 | ✅ Web UIからの共有コード生成・LINEリンク・インポートを実装済み（`openDeckShareModal`）。`convert_deck_share.py` は補助スクリプト | ✅ |
-| ヘルスチェック | `/health` エンドポイントなし | ❌ |
+| ヘルスチェック | ✅ `GET /health` および `GET /api/health`（認証不要・`{"status":"ok"}`）を実装。稼働確認・LB生存確認用 | ✅ |
 
 ---
 

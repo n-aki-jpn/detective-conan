@@ -208,6 +208,11 @@ pub async fn handle_login(
     }
 }
 
+/// ヘルスチェック（認証不要）。稼働確認・ロードバランサの生存確認用。
+pub async fn handle_health() -> impl IntoResponse {
+    Json(StatusOk { status: "ok" })
+}
+
 pub async fn handle_me(user: AuthUser) -> impl IntoResponse {
     Json(json!({
         "status": "ok",
