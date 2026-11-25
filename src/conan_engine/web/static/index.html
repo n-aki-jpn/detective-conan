@@ -1771,6 +1771,14 @@
         style="padding:4px 8px; font-size:0.75rem; min-height:28px;" title="現在の盤面・ログをコピー">🐛 盤面コピー</button>
       <button class="btn btn-secondary" onclick="resetMatch()"
         style="padding:4px 8px; font-size:0.75rem; min-height:28px;">リセット</button>
+      <button id="btn-rewind" class="btn btn-secondary" onclick="requestRewind()"
+        style="display:none; padding:4px 8px; font-size:0.75rem; min-height:28px;" title="直前の自分の1手を巻き戻す（相手の合意が必要）">↩ 巻き戻す</button>
+      <span id="rewind-req"
+        style="display:none; padding:4px 8px; font-size:0.75rem; color:#fbbf24; border:1px solid rgba(251,191,36,0.4); border-radius:6px; min-height:28px; align-items:center; white-space:nowrap;"></span>
+      <button id="btn-rewind-accept" class="btn" onclick="acceptRewind()"
+        style="display:none; padding:4px 8px; font-size:0.75rem; min-height:28px;">✓ 巻き戻し合意</button>
+      <button id="btn-rewind-reject" class="btn btn-secondary" onclick="rejectRewind()"
+        style="display:none; padding:4px 8px; font-size:0.75rem; min-height:28px;">✕ 拒否</button>
       <span id="auth-nickname-badge"
         style="display:none; padding:4px 8px; font-size:0.75rem; color:#7dd3fc; border:1px solid rgba(56,189,248,0.4); border-radius:6px; min-height:28px; align-items:center; white-space:nowrap;"></span>
       <button id="btn-logout" class="btn btn-secondary" onclick="logout()"
@@ -2800,6 +2808,7 @@
 
         lastObs = data;
         updatePlayerViewBadge(data);
+        updateRewindUi(data);
         if (hasChanged) {
           lastRevision = data.revision;
           lastDecisionId = curDecId;
@@ -3113,6 +3122,78 @@
       });
       selectedMulliganIds.clear();
       fetchState();
+    }
+
+    // ─── 巻き戻し（Undo）UI ─────────────────────────────────────────────────
+    async function requestRewind() {
+      if (!lastObs) return;
+      if (!confirm('直前の自分の1手を巻き戻します。相手の合意が必要です。よろしいですか？')) return;
+      try {
+        const res = await api('/api/rewind', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ playerId: currentViewingPlayer, roomId: currentRoomId })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(data.error || '巻き戻しを要求できませんでした');
+        }
+      } catch (e) {
+        alert('巻き戻し要求に失敗しました');
+      }
+      fetchState();
+    }
+
+    async function acceptRewind() {
+      try {
+        const res = await api('/api/rewind/accept', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ playerId: currentViewingPlayer, roomId: currentRoomId })
+        });
+        const data = await res.json();
+        if (!res.ok) alert(data.error || '巻き戻しに失敗しました');
+      } catch (e) {
+        alert('巻き戻しの合意に失敗しました');
+      }
+      fetchState();
+    }
+
+    async function rejectRewind() {
+      try {
+        await api('/api/rewind/reject', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ playerId: currentViewingPlayer, roomId: currentRoomId })
+        });
+      } catch (e) { /* ignore */ }
+      fetchState();
+    }
+
+    function updateRewindUi(obs) {
+      const btnRewind = document.getElementById('btn-rewind');
+      const reqLabel = document.getElementById('rewind-req');
+      const btnAccept = document.getElementById('btn-rewind-accept');
+      const btnReject = document.getElementById('btn-rewind-reject');
+      if (!btnRewind) return;
+      const rw = obs.rewind || {};
+      const me = currentViewingPlayer;
+      const requestedBy = rw.requestedBy || null;
+
+      // 巻き戻し要求中（自分からの要求）: 待機表示（CPU戦は自動で消える）
+      const iRequested = requestedBy && requestedBy === me;
+      // 相手からの要求で、自分が同意できる
+      const canAccept = !!rw.canAccept;
+
+      btnRewind.style.display = (rw.available && !requestedBy) ? 'inline-flex' : 'none';
+      if (iRequested) {
+        reqLabel.style.display = 'inline-flex';
+        reqLabel.textContent = '↩ 巻き戻し要求中…（相手の合意待ち）';
+      } else {
+        reqLabel.style.display = 'none';
+      }
+      btnAccept.style.display = canAccept ? 'inline-flex' : 'none';
+      btnReject.style.display = canAccept ? 'inline-flex' : 'none';
     }
 
     function showCardModal(card) {

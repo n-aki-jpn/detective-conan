@@ -51,6 +51,14 @@ pub struct DecisionRequest {
 }
 
 #[derive(Deserialize)]
+pub struct RewindRequest {
+    #[serde(rename = "playerId")]
+    pub player_id: String,
+    #[serde(rename = "roomId")]
+    pub room_id: Option<String>,
+}
+
+#[derive(Deserialize)]
 pub struct ResetRequest {
     #[serde(rename = "roomId")]
     pub room_id: Option<String>,
@@ -281,6 +289,17 @@ pub async fn handle_state(
     obs["p1Connected"] = json!(room.p1_connected);
     obs["p2Connected"] = json!(room.p2_connected);
     obs["waitingForPlayer2"] = json!(!room.p2_is_cpu && !room.p2_connected);
+
+    // 巻き戻し状態（この視点プレイヤー向けの操作可否）
+    let requested_by = room.rewind_request.clone();
+    obs["rewind"] = json!({
+        "available": room.can_rewind_by(&player_id),
+        "requestedBy": requested_by.clone(),
+        "canAccept": requested_by
+            .as_deref()
+            .map(|req| req != player_id && room.can_rewind_by(req))
+            .unwrap_or(false),
+    });
 
     Json(obs).into_response()
 }
@@ -688,7 +707,7 @@ pub async fn handle_decision(
 
     if let Some(room) = mgr.rooms.get_mut(&room_id) {
         let ans = json!({ "value": body.value.unwrap_or(json!({})) });
-        match room.engine.submit_decision(&body.player_id, &ans) {
+        match room.submit_decision_tracked(&body.player_id, &ans) {
             Ok(_) => {
                 room.process_cpu_if_needed();
                 Json(StatusOk { status: "ok" }).into_response()
@@ -699,6 +718,78 @@ pub async fn handle_decision(
                 room.flush_logs();
                 (StatusCode::BAD_REQUEST, Json(json!({"error": e}))).into_response()
             }
+        }
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "Room not found"})),
+        )
+            .into_response()
+    }
+}
+
+// ─── 巻き戻し（Undo）──────────────────────────────────────────────────────────
+
+/// 巻き戻しを要求する。CPU対戦で人間側からの要求なら即実行される。
+pub async fn handle_rewind(
+    State(state): State<SharedState>,
+    _user: AuthUser,
+    Json(body): Json<RewindRequest>,
+) -> impl IntoResponse {
+    let mut mgr = state.lock().unwrap();
+    let room_id = body.room_id.unwrap_or_else(|| "default".to_string());
+    if let Some(room) = mgr.rooms.get_mut(&room_id) {
+        match room.request_rewind(&body.player_id) {
+            Ok(()) => Json(json!({
+                "status": "ok",
+                "autoApplied": room.rewind_request.is_none(),
+            }))
+            .into_response(),
+            Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"error": e}))).into_response(),
+        }
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "Room not found"})),
+        )
+            .into_response()
+    }
+}
+
+/// 相手側が巻き戻しに同意し、実行する。
+pub async fn handle_rewind_accept(
+    State(state): State<SharedState>,
+    _user: AuthUser,
+    Json(body): Json<RewindRequest>,
+) -> impl IntoResponse {
+    let mut mgr = state.lock().unwrap();
+    let room_id = body.room_id.unwrap_or_else(|| "default".to_string());
+    if let Some(room) = mgr.rooms.get_mut(&room_id) {
+        match room.accept_rewind(&body.player_id) {
+            Ok(()) => Json(StatusOk { status: "ok" }).into_response(),
+            Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"error": e}))).into_response(),
+        }
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "Room not found"})),
+        )
+            .into_response()
+    }
+}
+
+/// 相手側が巻き戻しを拒否する。
+pub async fn handle_rewind_reject(
+    State(state): State<SharedState>,
+    _user: AuthUser,
+    Json(body): Json<RewindRequest>,
+) -> impl IntoResponse {
+    let mut mgr = state.lock().unwrap();
+    let room_id = body.room_id.unwrap_or_else(|| "default".to_string());
+    if let Some(room) = mgr.rooms.get_mut(&room_id) {
+        match room.reject_rewind(&body.player_id) {
+            Ok(()) => Json(StatusOk { status: "ok" }).into_response(),
+            Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"error": e}))).into_response(),
         }
     } else {
         (
@@ -740,5 +831,8 @@ pub fn build_api_router(state: SharedState) -> axum::Router {
             post(crate::official_deck::handle_import_official_deck),
         )
         .route("/api/decision", post(handle_decision))
+        .route("/api/rewind", post(handle_rewind))
+        .route("/api/rewind/accept", post(handle_rewind_accept))
+        .route("/api/rewind/reject", post(handle_rewind_reject))
         .with_state(state)
 }

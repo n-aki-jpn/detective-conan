@@ -25,6 +25,17 @@ pub struct MatchRoom {
     pub match_id: String,
     /// replay_log のうち既にファイルへ書き出した件数
     pub replay_flushed_count: usize,
+    // ─── 巻き戻し（Undo）状態 ───────────────────────────────────────────────
+    /// 直前の「自分の手（mainAction/hintPlay）」提出直前のエンジン状態
+    pub snapshot: Option<MatchEngine>,
+    /// その手を打ったプレイヤーID
+    pub snapshot_actor: Option<String>,
+    /// その decision の kind
+    pub snapshot_kind: Option<String>,
+    /// スナップショット採番後に「打者以外」が意思決定を提出した回数（0なら巻き戻し可）
+    pub others_decided_since_snapshot: usize,
+    /// 巻き戻し要求中の要求者ID（None=要求なし）
+    pub rewind_request: Option<String>,
 }
 
 /// リプレイ用ディレクトリ
@@ -79,6 +90,11 @@ impl MatchRoom {
             match_logged: false,
             match_id: gen_match_id(),
             replay_flushed_count: 0,
+            snapshot: None,
+            snapshot_actor: None,
+            snapshot_kind: None,
+            others_decided_since_snapshot: 0,
+            rewind_request: None,
         };
         room.engine.set_match_id(&room.match_id);
 
@@ -125,6 +141,7 @@ impl MatchRoom {
         engine.add_player("player2", &p2_deck);
         self.engine = engine;
         self.match_logged = false;
+        self.reset_rewind_state();
         self.record_match_start();
         self.engine.start_match();
         self.flush_logs();
@@ -147,6 +164,7 @@ impl MatchRoom {
         engine.add_player("player2", p2_deck);
         self.engine = engine;
         self.match_logged = false;
+        self.reset_rewind_state();
         self.record_match_start();
         self.engine.start_match();
         self.process_cpu_if_needed();
@@ -522,7 +540,8 @@ impl MatchRoom {
                         Some(agent) => agent.choose_action_with_engine(&self.engine, dec),
                         None => break,
                     };
-                    if self.engine.submit_decision("player2", &ans).is_err() {
+                    // CPUの応答もトラッキング（打者以外の応答＝隠情報開示として巻き戻し不可化）
+                    if self.submit_decision_tracked("player2", &ans).is_err() {
                         break;
                     }
                 }
@@ -531,6 +550,114 @@ impl MatchRoom {
             steps += 1;
         }
         self.flush_logs();
+    }
+
+    // ─── 巻き戻し（Undo）─────────────────────────────────────────────────────
+
+    /// 巻き戻し状態を初期化（マッチ開始・リセット時）
+    pub fn reset_rewind_state(&mut self) {
+        self.snapshot = None;
+        self.snapshot_actor = None;
+        self.snapshot_kind = None;
+        self.others_decided_since_snapshot = 0;
+        self.rewind_request = None;
+    }
+
+    /// 意思決定を記録付きで提出する。
+    /// 主行動(mainAction)・ヒント使用(hintPlay)の直前にエンジン状態をスナップショット保存し、
+    /// それ以降に「打者以外」が意思決定したら巻き戻し不可にする（隠情報リーク防止）。
+    pub fn submit_decision_tracked(&mut self, player_id: &str, answer: &Value) -> Result<(), String> {
+        let (kind, actor) = self
+            .engine
+            .pending_decision
+            .as_ref()
+            .map(|d| {
+                (
+                    d.get("kind").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    d.get("playerId").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                )
+            })
+            .unwrap_or_default();
+
+        if kind == "mainAction" || kind == "hintPlay" {
+            // 主行動の直前スナップショット（この1手が巻き戻し対象）
+            self.snapshot = Some(self.engine.clone());
+            self.snapshot_actor = Some(actor.clone());
+            self.snapshot_kind = Some(kind.clone());
+            self.others_decided_since_snapshot = 0;
+            self.rewind_request = None;
+        } else if self.snapshot_actor.as_deref() == Some(actor.as_str()) {
+            // 同プレイヤーの応答系（対象選択等）は隠情報を開示しないためカウントしない
+        } else if self.snapshot_actor.is_some() {
+            // 相手側の応答（ガード成否・手札開示等）＝隠情報開示 → 巻き戻し不可化
+            self.others_decided_since_snapshot += 1;
+        }
+
+        self.engine.submit_decision(player_id, answer)
+    }
+
+    /// 指定プレイヤーが巻き戻し可能かを判定
+    pub fn can_rewind_by(&self, requester: &str) -> bool {
+        self.snapshot.is_some()
+            && self.engine.winner_id.is_none()
+            && self.snapshot_actor.as_deref() == Some(requester)
+            && self.others_decided_since_snapshot == 0
+    }
+
+    /// 巻き戻しを要求。CPU対戦で要求者が人間(player1)なら CPU が自動同意する。
+    pub fn request_rewind(&mut self, requester: &str) -> Result<(), String> {
+        if !self.can_rewind_by(requester) {
+            return Err("現在は巻き戻しできません（既に相手の応答が出ているか、自分の手ではありません）".to_string());
+        }
+        self.rewind_request = Some(requester.to_string());
+        // CPU対戦: 人間側の要求には自動同意
+        if self.p2_is_cpu && requester == "player1" {
+            return self.accept_rewind("player2");
+        }
+        Ok(())
+    }
+
+    /// 相手側が同意して巻き戻しを実行する。
+    pub fn accept_rewind(&mut self, acceptor: &str) -> Result<(), String> {
+        let requester = self
+            .rewind_request
+            .clone()
+            .ok_or_else(|| "巻き戻し要求はありません".to_string())?;
+        // 同意者は要求者以外の対戦相手であること
+        if acceptor == requester {
+            return Err("相手側の同意が必要です".to_string());
+        }
+        if !self.can_rewind_by(&requester) {
+            self.rewind_request = None;
+            return Err("巻き戻し条件が満たされなくなりました".to_string());
+        }
+        let snap = self
+            .snapshot
+            .take()
+            .ok_or_else(|| "スナップショットがありません".to_string())?;
+
+        // スナップショット（手提出直前）でエンジンを復元。
+        // リプレイファイルは追記監査ログなので、復元時点までの行は既に書き出し済みとみなす。
+        self.engine = snap;
+        self.replay_flushed_count = self.engine.replay_log.len();
+        self.engine.record_event(json!({
+            "type": "rewind",
+            "timestamp": crate::engine::now_ts(),
+            "requester": requester.clone(),
+            "acceptedBy": acceptor.clone(),
+            "revision": self.engine.revision,
+            "turn": self.engine.turn,
+        }));
+        self.reset_rewind_state();
+        self.flush_logs();
+        Ok(())
+    }
+
+    /// 相手側が巻き戻しを拒否する。
+    pub fn reject_rewind(&mut self, rejector: &str) -> Result<(), String> {
+        let _ = rejector;
+        self.rewind_request = None;
+        Ok(())
     }
 }
 
