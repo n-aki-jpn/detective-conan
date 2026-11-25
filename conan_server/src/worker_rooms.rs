@@ -18,6 +18,10 @@ struct RoomStateRecord {
     p1_deck_json: Option<String>,
     #[serde(default)]
     p2_deck_json: Option<String>,
+    #[serde(default)]
+    cached_obs_p1: Option<Value>,
+    #[serde(default)]
+    cached_obs_p2: Option<Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -72,13 +76,15 @@ async fn load_or_create_room(room_id: &str, env: &Env) -> Result<RoomStateRecord
     }
 
     let seed: u64 = rand::random();
-    let rec = RoomStateRecord {
+    let mut rec = RoomStateRecord {
         seed,
         is_cpu: true,
         p2_joined: false,
         decisions: Vec::new(),
         p1_deck_json: None,
         p2_deck_json: None,
+        cached_obs_p1: None,
+        cached_obs_p2: None,
     };
     save_room(room_id, &rec, env).await?;
     Ok(rec)
@@ -88,13 +94,8 @@ async fn save_room(room_id: &str, rec: &RoomStateRecord, env: &Env) -> Result<()
     let db = env.d1("DB")?;
     let state_json = serde_json::to_string(rec).unwrap_or_else(|_| "{}".to_string());
     db.prepare(
-        "INSERT INTO rooms (id, state_json, p2_joined, is_cpu, updated_at)
-         VALUES (?1, ?2, ?3, ?4, datetime('now'))
-         ON CONFLICT(id) DO UPDATE SET
-           state_json = excluded.state_json,
-           p2_joined = excluded.p2_joined,
-           is_cpu = excluded.is_cpu,
-           updated_at = datetime('now')",
+        "INSERT OR REPLACE INTO rooms (id, state_json, p2_joined, is_cpu, updated_at)
+         VALUES (?1, ?2, ?3, ?4, datetime('now'))",
     )
     .bind(&[
         room_id.into(),
@@ -150,7 +151,7 @@ fn run_cpu_turns(engine: &mut MatchEngine, rec: &mut RoomStateRecord) -> bool {
     changed
 }
 
-fn state_response(engine: &MatchEngine, player_id: &str, room_id: &str, rec: &RoomStateRecord) -> Result<Response> {
+fn build_obs_for(engine: &MatchEngine, player_id: &str, room_id: &str, rec: &RoomStateRecord) -> Value {
     let mut obs = build_player_observation(engine, player_id);
     if let Some(obj) = obs.as_object_mut() {
         obj.insert("p2IsCpu".to_string(), json!(rec.is_cpu));
@@ -165,7 +166,24 @@ fn state_response(engine: &MatchEngine, player_id: &str, room_id: &str, rec: &Ro
             "canAccept": false
         }));
     }
-    Response::from_json(&obs)
+    obs
+}
+
+fn update_cached_obs(engine: &MatchEngine, room_id: &str, rec: &mut RoomStateRecord) {
+    rec.cached_obs_p1 = Some(build_obs_for(engine, "player1", room_id, rec));
+    rec.cached_obs_p2 = Some(build_obs_for(engine, "player2", room_id, rec));
+}
+
+fn state_response_from_rec(player_id: &str, rec: &RoomStateRecord) -> Result<Response> {
+    let obs = if player_id == "player2" {
+        rec.cached_obs_p2.as_ref().or(rec.cached_obs_p1.as_ref())
+    } else {
+        rec.cached_obs_p1.as_ref()
+    };
+    match obs {
+        Some(v) => Response::from_json(v),
+        None => json_err("盤面キャッシュが見つかりません", 500),
+    }
 }
 
 pub async fn get_state(req: Request, env: Env, catalog_json: &str) -> Result<Response> {
@@ -187,14 +205,18 @@ pub async fn get_state(req: Request, env: Env, catalog_json: &str) -> Result<Res
     }
 
     let mut rec = load_or_create_room(&room_id, &env).await?;
+    if rec.cached_obs_p1.is_some() {
+        return state_response_from_rec(&player_id, &rec);
+    }
+
     let mut engine = match build_engine(catalog_json, &rec) {
         Ok(e) => e,
         Err(e) => return json_err(&format!("エンジン初期化エラー: {}", e), 500),
     };
-    if run_cpu_turns(&mut engine, &mut rec) {
-        save_room(&room_id, &rec, &env).await?;
-    }
-    state_response(&engine, &player_id, &room_id, &rec)
+    run_cpu_turns(&mut engine, &mut rec);
+    update_cached_obs(&engine, &room_id, &mut rec);
+    save_room(&room_id, &rec, &env).await?;
+    state_response_from_rec(&player_id, &rec)
 }
 
 pub async fn submit_decision(mut req: Request, env: Env, catalog_json: &str) -> Result<Response> {
@@ -223,8 +245,9 @@ pub async fn submit_decision(mut req: Request, env: Env, catalog_json: &str) -> 
         Err(e) => return json_err(&format!("エンジンエラー: {}", e), 500),
     };
     run_cpu_turns(&mut engine, &mut rec);
+    update_cached_obs(&engine, &room_id, &mut rec);
     save_room(&room_id, &rec, &env).await?;
-    state_response(&engine, &player_id, &room_id, &rec)
+    state_response_from_rec(&player_id, &rec)
 }
 
 #[derive(Debug, Deserialize)]
@@ -290,14 +313,17 @@ pub async fn reset_room(mut req: Request, env: Env, catalog_json: &str) -> Resul
         decisions: Vec::new(),
         p1_deck_json,
         p2_deck_json,
+        cached_obs_p1: None,
+        cached_obs_p2: None,
     };
     let mut engine = match build_engine(catalog_json, &rec) {
         Ok(e) => e,
         Err(e) => return json_err(&format!("リセットエラー: {}", e), 500),
     };
     run_cpu_turns(&mut engine, &mut rec);
+    update_cached_obs(&engine, &room_id, &mut rec);
     save_room(&room_id, &rec, &env).await?;
-    state_response(&engine, &player_id, &room_id, &rec)
+    state_response_from_rec(&player_id, &rec)
 }
 
 pub async fn set_cpu(mut req: Request, env: Env) -> Result<Response> {
@@ -321,6 +347,8 @@ pub async fn create_room(_req: Request, env: Env) -> Result<Response> {
         decisions: Vec::new(),
         p1_deck_json: None,
         p2_deck_json: None,
+        cached_obs_p1: None,
+        cached_obs_p2: None,
     };
     save_room(&room_id, &rec, &env).await?;
     Response::from_json(&json!({
