@@ -2563,7 +2563,9 @@
       if (appStarted) return;
       appStarted = true;
       ensureDeckReady();
-      setInterval(fetchState, 1000);
+      setInterval(() => {
+        if (!document.hidden) fetchState();
+      }, 1800);
       fetchState();
       loadBattleDecks();
       // URLの ?join=XXXX による自動参加処理
