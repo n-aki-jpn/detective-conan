@@ -14,6 +14,10 @@ struct RoomStateRecord {
     is_cpu: bool,
     p2_joined: bool,
     decisions: Vec<(String, Value)>,
+    #[serde(default)]
+    p1_deck_json: Option<String>,
+    #[serde(default)]
+    p2_deck_json: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -32,10 +36,20 @@ fn json_err(msg: &str, status: u16) -> Result<Response> {
 
 fn build_engine(catalog_json: &str, state: &RoomStateRecord) -> std::result::Result<MatchEngine, String> {
     let catalog = CardCatalog::load_from_str(catalog_json).map_err(|e| e.to_string())?;
-    let deck: DeckDefinition = serde_json::from_str(DEFAULT_DECK_JSON).map_err(|e| e.to_string())?;
+    let default_deck: DeckDefinition = serde_json::from_str(DEFAULT_DECK_JSON).map_err(|e| e.to_string())?;
+    let p1_deck: DeckDefinition = state
+        .p1_deck_json
+        .as_deref()
+        .and_then(|s| serde_json::from_str(s).ok())
+        .unwrap_or_else(|| default_deck.clone());
+    let p2_deck: DeckDefinition = state
+        .p2_deck_json
+        .as_deref()
+        .and_then(|s| serde_json::from_str(s).ok())
+        .unwrap_or(default_deck);
     let mut engine = MatchEngine::new(catalog);
-    engine.add_player("player1", &deck);
-    engine.add_player("player2", &deck);
+    engine.add_player("player1", &p1_deck);
+    engine.add_player("player2", &p2_deck);
     engine.start_match();
     for (pid, dec) in &state.decisions {
         let _ = engine.submit_decision(pid, dec);
@@ -63,6 +77,8 @@ async fn load_or_create_room(room_id: &str, env: &Env) -> Result<RoomStateRecord
         is_cpu: true,
         p2_joined: false,
         decisions: Vec::new(),
+        p1_deck_json: None,
+        p2_deck_json: None,
     };
     save_room(room_id, &rec, env).await?;
     Ok(rec)
@@ -211,6 +227,31 @@ pub async fn submit_decision(mut req: Request, env: Env, catalog_json: &str) -> 
     state_response(&engine, &player_id, &room_id, &rec)
 }
 
+#[derive(Debug, Deserialize)]
+struct DeckJsonRow {
+    deck_json: String,
+}
+
+async fn resolve_deck_json(deck_val: Option<&Value>, deck_id: Option<&str>, env: &Env) -> Option<String> {
+    if let Some(v) = deck_val {
+        if v.is_object() {
+            if let Ok(s) = serde_json::to_string(v) {
+                return Some(s);
+            }
+        }
+    }
+    if let Some(id) = deck_id.filter(|s| !s.trim().is_empty()) {
+        if let Ok(db) = env.d1("DB") {
+            if let Ok(stmt) = db.prepare("SELECT deck_json FROM decks WHERE id = ?1 LIMIT 1").bind(&[id.into()]) {
+                if let Ok(Some(row)) = stmt.first::<DeckJsonRow>(None).await {
+                    return Some(row.deck_json);
+                }
+            }
+        }
+    }
+    None
+}
+
 pub async fn reset_room(mut req: Request, env: Env, catalog_json: &str) -> Result<Response> {
     let body: Value = req.json().await.unwrap_or_else(|_| json!({}));
     let room_id = body.get("roomId").or_else(|| body.get("room_id")).and_then(|v| v.as_str()).unwrap_or("default").to_string();
@@ -226,17 +267,36 @@ pub async fn reset_room(mut req: Request, env: Env, catalog_json: &str) -> Resul
         .unwrap_or("player1")
         .to_string();
 
-    let rec = RoomStateRecord {
+    let prev = load_or_create_room(&room_id, &env).await.ok();
+    let p1_deck_json = resolve_deck_json(
+        body.get("p1Deck"),
+        body.get("p1DeckId").and_then(|v| v.as_str()),
+        &env,
+    )
+    .await
+    .or_else(|| prev.as_ref().and_then(|p| p.p1_deck_json.clone()));
+    let p2_deck_json = resolve_deck_json(
+        body.get("p2Deck"),
+        body.get("p2DeckId").and_then(|v| v.as_str()),
+        &env,
+    )
+    .await
+    .or_else(|| prev.as_ref().and_then(|p| p.p2_deck_json.clone()));
+
+    let mut rec = RoomStateRecord {
         seed: rand::random(),
-        is_cpu: true,
-        p2_joined: false,
+        is_cpu: prev.as_ref().map(|p| p.is_cpu).unwrap_or(true),
+        p2_joined: prev.as_ref().map(|p| p.p2_joined).unwrap_or(false),
         decisions: Vec::new(),
+        p1_deck_json,
+        p2_deck_json,
     };
-    save_room(&room_id, &rec, &env).await?;
-    let engine = match build_engine(catalog_json, &rec) {
+    let mut engine = match build_engine(catalog_json, &rec) {
         Ok(e) => e,
         Err(e) => return json_err(&format!("リセットエラー: {}", e), 500),
     };
+    run_cpu_turns(&mut engine, &mut rec);
+    save_room(&room_id, &rec, &env).await?;
     state_response(&engine, &player_id, &room_id, &rec)
 }
 
@@ -259,6 +319,8 @@ pub async fn create_room(_req: Request, env: Env) -> Result<Response> {
         is_cpu: false,
         p2_joined: false,
         decisions: Vec::new(),
+        p1_deck_json: None,
+        p2_deck_json: None,
     };
     save_room(&room_id, &rec, &env).await?;
     Response::from_json(&json!({
