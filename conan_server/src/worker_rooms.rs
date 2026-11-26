@@ -300,6 +300,9 @@ async fn resolve_deck_json(deck_val: Option<&Value>, deck_id: Option<&str>, env:
         }
     }
     if let Some(id) = deck_id.filter(|s| !s.trim().is_empty()) {
+        if let Some(raw) = crate::worker_auth::find_preset_deck_json(id) {
+            return Some(raw.to_string());
+        }
         if let Ok(db) = env.d1("DB") {
             if let Ok(stmt) = db.prepare("SELECT deck_json FROM decks WHERE id = ?1 LIMIT 1").bind(&[id.into()]) {
                 if let Ok(Some(row)) = stmt.first::<DeckJsonRow>(None).await {

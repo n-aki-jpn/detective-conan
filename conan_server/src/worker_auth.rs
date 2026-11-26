@@ -2,6 +2,20 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use worker::*;
 
+const PRESET_DECKS: &[(&str, &str)] = &[
+    ("preset_black", include_str!("../../data/dummy/decks/preset_black.json")),
+    ("preset_blue_white", include_str!("../../data/dummy/decks/preset_blue_white.json")),
+    ("preset_green", include_str!("../../data/dummy/decks/preset_green.json")),
+    ("preset_green_red", include_str!("../../data/dummy/decks/preset_green_red.json")),
+    ("preset_red", include_str!("../../data/dummy/decks/preset_red.json")),
+    ("preset_yellow", include_str!("../../data/dummy/decks/preset_yellow.json")),
+];
+
+pub fn find_preset_deck_json(id: &str) -> Option<&'static str> {
+    let norm = id.strip_suffix(".json").unwrap_or(id);
+    PRESET_DECKS.iter().find(|(k, _)| *k == norm).map(|(_, v)| *v)
+}
+
 #[derive(Deserialize)]
 struct AuthReq {
     nickname: Option<String>,
@@ -192,7 +206,7 @@ pub async fn list_decks(req: Request, env: Env) -> Result<Response> {
         .await?;
 
     let rows: Vec<DeckRow> = res.results()?;
-    let decks: Vec<Value> = rows
+    let mut decks: Vec<Value> = rows
         .into_iter()
         .map(|d| {
             json!({
@@ -202,15 +216,37 @@ pub async fn list_decks(req: Request, env: Env) -> Result<Response> {
                 "isPublic": d.is_public == 1,
                 "isActive": d.is_active == 1,
                 "isOwner": d.user_id == uid,
+                "isPreset": false,
                 "updatedAt": d.updated_at
             })
         })
         .collect();
 
+    for (pid, raw) in PRESET_DECKS {
+        let name = serde_json::from_str::<Value>(raw)
+            .ok()
+            .and_then(|v| v.get("deckName").and_then(|n| n.as_str()).map(|s| s.to_string()))
+            .unwrap_or_else(|| pid.to_string());
+        decks.push(json!({
+            "deckId": pid,
+            "fileId": pid,
+            "deckName": name,
+            "isPublic": true,
+            "isActive": false,
+            "isOwner": false,
+            "isPreset": true,
+            "updatedAt": "preset"
+        }));
+    }
+
     Response::from_json(&json!({ "decks": decks }))
 }
 
 pub async fn get_deck_by_id(id: &str, env: Env) -> Result<Response> {
+    if let Some(raw) = find_preset_deck_json(id) {
+        let val: Value = serde_json::from_str(raw).unwrap_or_else(|_| json!({}));
+        return Response::from_json(&val);
+    }
     let db = env.d1("DB")?;
     let row = db
         .prepare("SELECT id, user_id, deck_name, deck_json, is_public, is_active, updated_at FROM decks WHERE id = ?1 LIMIT 1")
@@ -239,7 +275,7 @@ pub async fn save_deck(mut req: Request, env: Env) -> Result<Response> {
         .get("deckId")
         .or_else(|| val.get("fileId"))
         .and_then(|v| v.as_str())
-        .filter(|s| !s.trim().is_empty())
+        .filter(|s| !s.trim().is_empty() && !s.starts_with("preset_"))
         .map(|s| s.to_string())
         .unwrap_or_else(|| format!("deck_{}", gen_token()));
 
