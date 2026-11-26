@@ -63,11 +63,14 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: nowrap;
+      gap: 8px;
     }
 
     .nav-tabs {
       display: flex;
       gap: 6px;
+      flex-shrink: 0;
     }
 
     .nav-tab-btn {
@@ -94,10 +97,151 @@
       display: flex;
       align-items: center;
       gap: 6px;
+      min-width: 0;
+      flex-shrink: 1;
     }
 
-    .nav-actions .btn {
+    .nav-actions > .btn {
       white-space: nowrap;
+    }
+
+    .nav-icon-btn {
+      padding: 4px 8px;
+      min-height: 30px;
+      min-width: 32px;
+      font-size: 0.8rem;
+    }
+
+    .nav-menu-btn {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 9px;
+      min-height: 30px;
+      font-size: 0.78rem;
+      max-width: 150px;
+    }
+
+    .nav-user-chip {
+      max-width: 96px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #7dd3fc;
+      font-weight: 700;
+      font-size: 0.74rem;
+    }
+
+    .nav-menu-dot {
+      display: none;
+      position: absolute;
+      top: 3px;
+      right: 3px;
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 6px rgba(56, 189, 248, 0.8);
+    }
+
+    .nav-bar:has(#pwa-install-btn:not([hidden])) .nav-menu-dot {
+      display: block;
+    }
+
+    .nav-menu-popover {
+      position: fixed;
+      background: rgba(15, 23, 42, 0.98);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 8px;
+      min-width: 224px;
+      max-width: min(272px, calc(100dvw - 16px));
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+      color: var(--text);
+      gap: 4px;
+      z-index: 200;
+    }
+
+    .nav-menu-popover:is(:popover-open, .is-open) {
+      display: flex;
+      flex-direction: column;
+    }
+
+    @supports not selector(:popover-open) {
+      .nav-menu-popover:not(.is-open) {
+        display: none;
+      }
+    }
+
+    @supports (position-area: block-end) {
+      .nav-menu-popover {
+        inset: auto;
+        margin: 0;
+        margin-block-start: 6px;
+        position-area: block-end span-inline-start;
+        position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+      }
+    }
+
+    @supports not (position-area: block-end) {
+      .nav-menu-popover {
+        inset: auto;
+        top: calc(46px + env(safe-area-inset-top, 0px));
+        right: 8px;
+        margin: 0;
+      }
+    }
+
+    .nav-menu-user-full {
+      padding: 6px 10px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: #7dd3fc;
+      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 4px;
+      word-break: break-all;
+    }
+
+    .nav-menu-section-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+    }
+
+    .nav-menu-divider {
+      height: 1px;
+      background: var(--border-color);
+      margin: 4px 0;
+    }
+
+    .nav-menu-item {
+      width: 100%;
+      justify-content: flex-start;
+      background: transparent;
+      border: 1px solid transparent;
+      padding: 7px 10px;
+      min-height: 36px;
+      font-size: 0.8rem;
+      border-radius: 6px;
+      color: var(--text);
+    }
+
+    .nav-menu-item:hover {
+      background: rgba(51, 65, 85, 0.65);
+    }
+
+    .nav-menu-item[hidden] {
+      display: none !important;
+    }
+
+    .nav-menu-item-danger {
+      color: #fca5a5;
+    }
+
+    .nav-menu-item-danger:hover {
+      background: rgba(220, 38, 38, 0.18);
     }
 
     @media (max-width: 520px) {
@@ -111,15 +255,25 @@
       }
       .nav-tab-btn {
         padding: 4px 7px;
-        font-size: 0.72rem;
+        font-size: 0.74rem;
       }
-      .nav-actions .btn {
+      .nav-user-chip {
+        max-width: 64px;
+        font-size: 0.7rem;
+      }
+      .nav-actions > .btn {
         padding: 4px 6px !important;
-        font-size: 0.69rem !important;
-        min-height: 26px !important;
+        font-size: 0.72rem !important;
+        min-height: 28px !important;
       }
-      #bgm-volume-slider {
+    }
+
+    @media (max-width: 390px) {
+      .nav-btn-label {
         display: none;
+      }
+      .nav-user-chip {
+        max-width: 52px;
       }
     }
 
@@ -1816,30 +1970,42 @@
       <button type="button" id="tab-deck" class="nav-tab-btn" onclick="switchTab('deck')">🃏 デッキ構築</button>
     </div>
     <div class="nav-actions">
-      <button type="button" id="bgm-toggle-btn" class="btn btn-secondary" onclick="toggleBgm()"
-        style="padding:4px 8px; font-size:0.75rem; min-height:28px;" title="対戦BGMのON/OFF">🔊 BGM</button>
-      <input id="bgm-volume-slider" type="range" min="0" max="1" step="0.05" value="0.35"
-        oninput="setBgmVolume(this.value)" style="width:54px; accent-color:#38bdf8; cursor:pointer;" title="BGM音量">
-      <button type="button" class="btn btn-secondary" onclick="showRoomModal()"
-        style="padding:4px 8px; font-size:0.75rem; min-height:28px;">📶 対戦ルーム</button>
-      <button type="button" id="btn-copy-board" class="btn btn-secondary" onclick="copyBoardState()"
-        style="padding:4px 8px; font-size:0.75rem; min-height:28px;" title="現在の盤面・ログをコピー">🐛 盤面コピー</button>
-      <button type="button" class="btn btn-secondary" onclick="resetMatch()"
-        style="padding:4px 8px; font-size:0.75rem; min-height:28px;">リセット</button>
-      <button type="button" id="btn-rewind" class="btn btn-secondary" onclick="requestRewind()"
-        style="display:none; padding:4px 8px; font-size:0.75rem; min-height:28px;" title="直前の自分の1手を巻き戻す（相手の合意が必要）">↩ 巻き戻す</button>
+      <button type="button" id="btn-rewind" class="btn btn-secondary nav-icon-btn" onclick="requestRewind()"
+        style="display:none;" title="直前の自分の1手を巻き戻す（相手の合意が必要）">↩ 戻す</button>
       <span id="rewind-req"
-        style="display:none; padding:4px 8px; font-size:0.75rem; color:#fbbf24; border:1px solid rgba(251,191,36,0.4); border-radius:6px; min-height:28px; align-items:center; white-space:nowrap;"></span>
-      <button type="button" id="btn-rewind-accept" class="btn" onclick="acceptRewind()"
-        style="display:none; padding:4px 8px; font-size:0.75rem; min-height:28px;">✓ 巻き戻し合意</button>
-      <button type="button" id="btn-rewind-reject" class="btn btn-secondary" onclick="rejectRewind()"
-        style="display:none; padding:4px 8px; font-size:0.75rem; min-height:28px;">✕ 拒否</button>
-      <span id="auth-nickname-badge"
-        style="display:none; padding:4px 8px; font-size:0.75rem; color:#7dd3fc; border:1px solid rgba(56,189,248,0.4); border-radius:6px; min-height:28px; align-items:center; white-space:nowrap;"></span>
-      <button type="button" id="pwa-install-btn" class="btn btn-secondary" hidden
-        style="padding:4px 8px; font-size:0.75rem; min-height:28px;" title="ホーム画面・アプリとしてインストール">📲 アプリ追加</button>
-      <button type="button" id="btn-logout" class="btn btn-secondary" onclick="logout()"
-        style="display:none; padding:4px 8px; font-size:0.75rem; min-height:28px;">ログアウト</button>
+        style="display:none; padding:4px 6px; font-size:0.72rem; color:#fbbf24; border:1px solid rgba(251,191,36,0.4); border-radius:6px; min-height:28px; align-items:center; white-space:nowrap;"></span>
+      <button type="button" id="btn-rewind-accept" class="btn nav-icon-btn" onclick="acceptRewind()"
+        style="display:none;">✓ 合意</button>
+      <button type="button" id="btn-rewind-reject" class="btn btn-secondary nav-icon-btn" onclick="rejectRewind()"
+        style="display:none;">✕ 拒否</button>
+      <button type="button" id="btn-room" class="btn btn-secondary nav-icon-btn" onclick="showRoomModal()"
+        title="オンライン対戦ルーム">📶<span class="nav-btn-label"> ルーム</span></button>
+      <button type="button" id="bgm-toggle-btn" class="btn btn-secondary nav-icon-btn" onclick="toggleBgm()"
+        aria-label="BGMのON/OFF" title="対戦BGMのON/OFF">🔊</button>
+      <button type="button" id="nav-menu-btn" class="btn btn-secondary nav-menu-btn"
+        popovertarget="nav-menu-popover" popovertargetaction="toggle" aria-controls="nav-menu-popover"
+        aria-label="メニューを開く" title="メニュー・設定">
+        <span id="auth-nickname-badge" class="nav-user-chip" style="display:none;"></span>
+        <span aria-hidden="true">☰</span>
+        <span class="nav-menu-dot" aria-hidden="true"></span>
+      </button>
+      <div id="nav-menu-popover" class="nav-menu-popover" popover="auto">
+        <div id="nav-menu-user-full" class="nav-menu-user-full" style="display:none;"></div>
+        <div class="nav-menu-section-row">
+          <label for="bgm-volume-slider" style="font-size:0.75rem; color:var(--text-muted); white-space:nowrap;">🔊 音量</label>
+          <input id="bgm-volume-slider" type="range" min="0" max="1" step="0.05" value="0.35"
+            oninput="setBgmVolume(this.value)" style="flex:1; accent-color:#38bdf8; cursor:pointer;" title="BGM音量">
+        </div>
+        <div class="nav-menu-divider"></div>
+        <button type="button" id="btn-reset-match" class="btn nav-menu-item" onclick="closeNavMenu(); resetMatch();">🔄 対戦をリセット</button>
+        <button type="button" id="btn-copy-board" class="btn nav-menu-item" onclick="closeNavMenu(); copyBoardState();"
+          title="現在の盤面・ログをコピー">🐛 盤面・ログをコピー</button>
+        <button type="button" id="pwa-install-btn" class="btn nav-menu-item" hidden
+          title="ホーム画面・アプリとしてインストール">📲 アプリを追加</button>
+        <div id="nav-menu-auth-divider" class="nav-menu-divider" style="display:none;"></div>
+        <button type="button" id="btn-logout" class="btn nav-menu-item nav-menu-item-danger" onclick="closeNavMenu(); logout();"
+          style="display:none;">🚪 ログアウト</button>
+      </div>
     </div>
   </nav>
   <div id="pwa-offline-banner" class="pwa-banner pwa-banner-offline" hidden role="status" aria-live="polite">
@@ -2544,18 +2710,51 @@
       if (ov) ov.style.display = 'none';
     }
 
+    function closeNavMenu() {
+      const pop = document.getElementById('nav-menu-popover');
+      if (!pop) return;
+      if (typeof pop.hidePopover === 'function') {
+        try { pop.hidePopover(); } catch (_) {}
+      } else {
+        pop.classList.remove('is-open');
+      }
+    }
+
+    (function initNavMenuFallback() {
+      if (typeof HTMLElement !== 'undefined' && !Object.prototype.hasOwnProperty.call(HTMLElement.prototype, 'popover')) {
+        const menuBtn = document.getElementById('nav-menu-btn');
+        const pop = document.getElementById('nav-menu-popover');
+        if (menuBtn && pop && typeof menuBtn.addEventListener === 'function') {
+          menuBtn.addEventListener('click', () => {
+            pop.classList.toggle('is-open');
+          });
+        }
+      }
+    })();
+
     function updateAuthUi() {
       const badge = document.getElementById('auth-nickname-badge');
+      const userFull = document.getElementById('nav-menu-user-full');
+      const authDivider = document.getElementById('nav-menu-auth-divider');
       const btn = document.getElementById('btn-logout');
       if (badge) {
         if (authNickname) {
           badge.innerText = '👤 ' + authNickname;
-          badge.style.display = 'inline-flex';
+          badge.style.display = 'inline-block';
         } else {
           badge.style.display = 'none';
         }
       }
-      if (btn) btn.style.display = authNickname ? '' : 'none';
+      if (userFull) {
+        if (authNickname) {
+          userFull.innerText = '👤 ' + authNickname;
+          userFull.style.display = 'block';
+        } else {
+          userFull.style.display = 'none';
+        }
+      }
+      if (authDivider) authDivider.style.display = authNickname ? 'block' : 'none';
+      if (btn) btn.style.display = authNickname ? 'flex' : 'none';
     }
 
     async function doAuth(mode) {
@@ -3269,7 +3468,8 @@
       btnRewind.style.display = (rw.available && !requestedBy) ? 'inline-flex' : 'none';
       if (iRequested) {
         reqLabel.style.display = 'inline-flex';
-        reqLabel.textContent = '↩ 巻き戻し要求中…（相手の合意待ち）';
+        reqLabel.textContent = '↩ 要求中…';
+        reqLabel.title = '巻き戻し要求中…（相手の合意待ち）';
       } else {
         reqLabel.style.display = 'none';
       }
@@ -6629,11 +6829,13 @@
       const btn = document.getElementById('bgm-toggle-btn');
       if (!btn) return;
       if (bgmEnabled) {
-        btn.innerText = '🔊 BGM';
+        btn.innerText = '🔊';
         btn.style.borderColor = '#38bdf8';
+        btn.title = 'BGM ON（クリックでミュート）';
       } else {
-        btn.innerText = '🔇 OFF';
+        btn.innerText = '🔇';
         btn.style.borderColor = '';
+        btn.title = 'BGM OFF（クリックで再生）';
       }
     }
 

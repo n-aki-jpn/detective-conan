@@ -25,18 +25,20 @@ test.describe('認証フロー E2E', () => {
     await page.fill('#login-nickname', uniqueNick);
     await page.click('button:has-text("新規登録")');
 
-    // オーバーレイが消え、ニックネームバッジとログアウトボタンが出る
+    // オーバーレイが消え、メニューボタン上のニックネームバッジが表示される
     await expect(page.locator('#login-overlay')).toBeHidden();
     const badge = page.locator('#auth-nickname-badge');
     await expect(badge).toBeVisible();
     await expect(badge).toContainText(uniqueNick);
-    await expect(page.locator('#btn-logout')).toBeVisible();
 
     // トークンが localStorage に保存されている
     const token = await page.evaluate(() => localStorage.getItem('conan_auth_token'));
     expect(token).toBeTruthy();
 
-    // ログアウト
+    // メニューを開いてログアウト
+    await page.click('#nav-menu-btn');
+    await expect(page.locator('#nav-menu-popover')).toBeVisible();
+    await expect(page.locator('#btn-logout')).toBeVisible();
     await page.click('#btn-logout');
     await expect(page.locator('#login-overlay')).toBeVisible();
     const tokenAfter = await page.evaluate(() => localStorage.getItem('conan_auth_token'));

@@ -1,8 +1,6 @@
 import { test, expect } from '@playwright/test';
-import path from 'path';
 
-const SCREENSHOT_PATH =
-  'C:/Users/ugust/.gemini/antigravity/brain/1d3e4275-d816-4298-9b64-41394000a001/pwa-verified.png';
+const SCREENSHOT_DIR = 'test-results';
 
 test.describe('PWA 統合検証 E2E', () => {
   test('マニフェスト・アイコン・Service Worker・オフラインページが正しく提供される', async ({
@@ -124,7 +122,7 @@ test.describe('PWA 統合検証 E2E', () => {
 
     // 対戦画面とナビゲーション表示のスクリーンショットを撮影
     await page.screenshot({
-      path: path.resolve(SCREENSHOT_PATH),
+      path: `${SCREENSHOT_DIR}/pwa-desktop.png`,
       fullPage: false,
     });
 
@@ -140,5 +138,67 @@ test.describe('PWA 統合検証 E2E', () => {
 
     expect(consoleErrors).toEqual([]);
     expect(pageErrors).toEqual([]);
+  });
+
+  test('上部ナビゲーションバーがデスクトップ・モバイルともに1行に収まりメニューポップオーバーが動作する', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+
+    const nick = `Nav確認${Date.now().toString().slice(-6)}`;
+    await page.fill('#login-nickname', nick);
+    await page.click('button:has-text("新規登録")');
+    await expect(page.locator('#login-overlay')).toBeHidden();
+
+    // デスクトップ (1280x720) 検証
+    await page.setViewportSize({ width: 1280, height: 720 });
+    const desktopMetrics = await page.evaluate(() => {
+      const nav = document.querySelector('.nav-bar') as HTMLElement;
+      return {
+        height: nav.getBoundingClientRect().height,
+        scrollWidth: nav.scrollWidth,
+        clientWidth: nav.clientWidth,
+      };
+    });
+    expect(desktopMetrics.height).toBeLessThanOrEqual(56);
+    expect(desktopMetrics.scrollWidth).toBeLessThanOrEqual(desktopMetrics.clientWidth);
+
+    // メニューポップオーバー開閉検証
+    await page.click('#nav-menu-btn');
+    const pop = page.locator('#nav-menu-popover');
+    await expect(pop).toBeVisible();
+    await expect(page.locator('#nav-menu-user-full')).toContainText(nick);
+    await expect(page.locator('#bgm-volume-slider')).toBeVisible();
+    await expect(page.locator('#btn-reset-match')).toBeVisible();
+    await expect(page.locator('#btn-copy-board')).toBeVisible();
+    await expect(page.locator('#btn-logout')).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(pop).toBeHidden();
+
+    // モバイル (390x844) 検証
+    await page.setViewportSize({ width: 390, height: 844 });
+    const mobileMetrics = await page.evaluate(() => {
+      const nav = document.querySelector('.nav-bar') as HTMLElement;
+      return {
+        height: nav.getBoundingClientRect().height,
+        scrollWidth: nav.scrollWidth,
+        clientWidth: nav.clientWidth,
+      };
+    });
+    expect(mobileMetrics.height).toBeLessThanOrEqual(56);
+    expect(mobileMetrics.scrollWidth).toBeLessThanOrEqual(mobileMetrics.clientWidth);
+
+    await page.click('#nav-menu-btn');
+    await expect(pop).toBeVisible();
+    await expect(page.locator('#bgm-volume-slider')).toBeVisible();
+    await page.screenshot({
+      path: `${SCREENSHOT_DIR}/pwa-mobile-menu.png`,
+      fullPage: false,
+    });
+    await page.keyboard.press('Escape');
+    await expect(pop).toBeHidden();
   });
 });
