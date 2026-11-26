@@ -2079,6 +2079,11 @@ fn test_b04048_declare_specifies_card_name_and_searches_top_2() {
 
     assert!(engine.players["p1"].hand.iter().any(|c| c.instance_id == "d_top1"), "安室透を手札に加えていること");
     assert_eq!(engine.players["p1"].deck.len(), 2, "残りがデッキの下へ移っていること");
+    assert_eq!(
+        engine.pending_decision.as_ref().and_then(|d| d["kind"].as_str()),
+        Some("mainAction"),
+        "B04048 宣言効果が二重実行されず mainAction に戻ること"
+    );
 }
 
 #[test]
@@ -2144,5 +2149,22 @@ fn test_b11038_specify_char_name_and_search_top_4() {
     assert_eq!(revealed.len(), 4);
     let kid = revealed.iter().find(|c| c["instanceId"] == "d4").unwrap();
     assert_eq!(kid["selectable"], true);
+
+    let dec_ds_id = dec_ds["decisionId"].as_str().unwrap().to_string();
+    engine
+        .submit_decision(
+            "p1",
+            &serde_json::json!({
+                "decisionId": dec_ds_id,
+                "revision": engine.revision,
+                "value": { "chosenCardIds": [], "actorId": "b11038" }
+            }),
+        )
+        .unwrap();
+    assert_eq!(
+        engine.pending_decision.as_ref().and_then(|d| d["kind"].as_str()),
+        Some("mainAction"),
+        "B11038 登場時効果が二重実行されず mainAction に戻ること"
+    );
 }
 

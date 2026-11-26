@@ -845,8 +845,27 @@ pub fn parse_effect_steps(
     }
 
     // fallback: 1文に「〜を見る。その中から〜」がまとまっていたが上で捕捉済み以外の場合
+    let already_has_deck_op = plan.immediate_before.iter().any(|op| {
+        matches!(
+            op,
+            ImmediateOp::SpecifyCardNameForDeckSearch { .. }
+                | ImmediateOp::B09033RevealDeploy { .. }
+                | ImmediateOp::RevealDeckUntil { .. }
+        )
+    }) || plan.post_target_ops.iter().any(|op| {
+        matches!(
+            op,
+            ImmediateOp::SpecifyCardNameForDeckSearch { .. }
+                | ImmediateOp::B09033RevealDeploy { .. }
+                | ImmediateOp::RevealDeckUntil { .. }
+        )
+    });
     let unquoted_body = strip_quoted_text(effect_body);
-    if plan.deck_search.is_none() && unquoted_body.contains("デッキのカードを上から") && !unquoted_body.contains("1枚ずつ公開") {
+    if plan.deck_search.is_none()
+        && !already_has_deck_op
+        && unquoted_body.contains("デッキのカードを上から")
+        && !unquoted_body.contains("1枚ずつ公開")
+    {
         if let Some(search_n) = parse_deck_look_count(&unquoted_body) {
             let search_scope = extract_deck_search_scope(effect_body);
             plan.deck_search = Some(parse_deck_search_step(search_n, search_scope, dynamic_level));
