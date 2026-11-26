@@ -427,7 +427,16 @@ pub enum ImmediateOp {
     CutinBuffByRemovedApThousand(i32),
     MassSelfTraitApBuff { trait_name: String, buff: i32 },
     DrawPerOppStun { if_zero_clause: Option<String> },
-    InvestigateAndCheckName { count: usize, then_clause: String },
+    InvestigateAndCheckName {
+        count: usize,
+        then_clause: String,
+        #[serde(default)]
+        requires_name: bool,
+        #[serde(default)]
+        min_level: Option<i32>,
+        #[serde(default)]
+        max_level: Option<i32>,
+    },
     RegisterNextOppEvidenceRemovedTrigger(String),
     ConditionalClause { condition: String, then_clause: String, else_clause: Option<String> },
     RevealDeckUntil { filter: TargetFilter, add_to_hand: bool, if_found_clause: Option<String> },

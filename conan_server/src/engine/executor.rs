@@ -1571,45 +1571,69 @@ impl MatchEngine {
                         self.enqueue_mode_clauses(player_id, actor_id, actor_name, None, &[zc.clone()], &[], resume_context);
                     }
                 }
-                ImmediateOp::InvestigateAndCheckName { count, then_clause } => {
-                    let opp_id = self.opponent_id_of(player_id);
-                    let mut name_options: Vec<String> = Vec::new();
-                    if let Some(opp_ps) = self.players.get(&opp_id) {
-                        for c in opp_ps.deck.iter().chain(opp_ps.field.iter()).chain(opp_ps.remove.iter()) {
-                            let n = self.card_name_by_def(&c.definition_id);
-                            if !name_options.contains(&n) && name_options.len() < 8 {
-                                name_options.push(n);
+                ImmediateOp::InvestigateAndCheckName {
+                    count,
+                    then_clause,
+                    requires_name,
+                    min_level,
+                    max_level,
+                } => {
+                    if *requires_name {
+                        let opp_id = self.opponent_id_of(player_id);
+                        let mut name_options: Vec<String> = Vec::new();
+                        if let Some(opp_ps) = self.players.get(&opp_id) {
+                            for c in opp_ps.deck.iter().chain(opp_ps.field.iter()).chain(opp_ps.remove.iter()) {
+                                let n = self.card_name_by_def(&c.definition_id);
+                                if !name_options.contains(&n) && name_options.len() < 8 {
+                                    name_options.push(n);
+                                }
                             }
                         }
-                    }
-                    for default_n in ["江戸川コナン", "毛利蘭", "工藤新一", "灰原哀", "服部平次", "怪盗キッド", "安室透", "赤井秀一"] {
-                        if !name_options.iter().any(|x| x == default_n) && name_options.len() < 12 {
-                            name_options.push(default_n.to_string());
+                        for default_n in ["江戸川コナン", "毛利蘭", "工藤新一", "灰原哀", "服部平次", "怪盗キッド", "安室透", "赤井秀一"] {
+                            if !name_options.iter().any(|x| x == default_n) && name_options.len() < 12 {
+                                name_options.push(default_n.to_string());
+                            }
+                        }
+                        self.enqueue_continuation_from_ops(player_id, actor_id, actor_name, &ops[idx + 1..], evidence_source_inst_id, follow_up_target, follow_up_deck_search, pending_clause_plan, resume_context);
+                        let dec_id = self.generate_decision_id();
+                        self.pending_decision = Some(json!({
+                            "decisionId": dec_id,
+                            "revision": self.revision,
+                            "playerId": player_id,
+                            "kind": "modeSelect",
+                            "options": {
+                                "specialKind": "INVESTIGATE_NAME_SELECT",
+                                "allowFreeText": true,
+                                "charOnly": false,
+                                "actorId": actor_id,
+                                "actorName": actor_name,
+                                "count": count,
+                                "thenClause": then_clause,
+                                "minPick": 1,
+                                "maxPick": 1,
+                                "modes": name_options,
+                                "resumeContext": resume_context,
+                                "title": format!("[{}] 〚捜査{}〛で指定するカード名を選んでください", actor_name, count)
+                            }
+                        }));
+                        return true;
+                    } else {
+                        self.enqueue_continuation_from_ops(player_id, actor_id, actor_name, &ops[idx + 1..], evidence_source_inst_id, follow_up_target, follow_up_deck_search, pending_clause_plan, resume_context);
+                        if self.resolve_investigate(
+                            player_id,
+                            actor_id,
+                            actor_name,
+                            None,
+                            *count,
+                            None,
+                            *min_level,
+                            *max_level,
+                            then_clause,
+                            resume_context,
+                        ) {
+                            return true;
                         }
                     }
-                    self.enqueue_continuation_from_ops(player_id, actor_id, actor_name, &ops[idx + 1..], evidence_source_inst_id, follow_up_target, follow_up_deck_search, pending_clause_plan, resume_context);
-                    let dec_id = self.generate_decision_id();
-                    self.pending_decision = Some(json!({
-                        "decisionId": dec_id,
-                        "revision": self.revision,
-                        "playerId": player_id,
-                        "kind": "modeSelect",
-                        "options": {
-                            "specialKind": "INVESTIGATE_NAME_SELECT",
-                            "allowFreeText": true,
-                            "charOnly": false,
-                            "actorId": actor_id,
-                            "actorName": actor_name,
-                            "count": count,
-                            "thenClause": then_clause,
-                            "minPick": 1,
-                            "maxPick": 1,
-                            "modes": name_options,
-                            "resumeContext": resume_context,
-                            "title": format!("[{}] 〚捜査{}〛で指定するカード名を選んでください", actor_name, count)
-                        }
-                    }));
-                    return true;
                 }
                 ImmediateOp::RegisterNextOppEvidenceRemovedTrigger(body) => {
                     self.next_opp_evidence_remove_triggers.push((

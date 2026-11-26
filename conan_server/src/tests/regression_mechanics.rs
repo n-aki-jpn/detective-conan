@@ -2237,3 +2237,145 @@ fn test_b06090_and_hirameki_cannot_target_self_in_remove_area() {
     }
 }
 
+#[test]
+fn test_b06084_declare_draws_one_then_investigates_without_name_prompt() {
+    let catalog = load_test_catalog();
+
+    // 1) 公開カードがLv4(<=7)の場合: 1枚引き + 捜査1(カード名指定プロンプトなし) + 発見で手札1枚リムーブ
+    {
+        let mut engine = MatchEngine::new(catalog.clone());
+        engine.turn = 11;
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.partner = Some(test_inst("p1_p", "B01079", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+        ps1.case = Some(test_inst("p1_c", "PR115", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        ps1.field.push(test_inst("b06084", "B06084", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        ps1.hand.push(test_inst("h_1", "B06092", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        ps1.deck.push(test_inst("d1", "B09077", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        ps1.deck.push(test_inst("d2", "B09077", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        ps2.partner = Some(test_inst("p2_p", "B01060", "p2", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+        ps2.case = Some(test_inst("p2_c", "B11099", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        // 相手山札トップに Lv4 (B09078)
+        ps2.deck.push(test_inst("opp_d_bot", "B06092", "p2", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        ps2.deck.push(test_inst("opp_d_top", "B09078", "p2", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        engine.prompt_main_action("p1");
+        let pd = engine.pending_decision.clone().unwrap();
+        let dec_id = pd["decisionId"].as_str().unwrap().to_string();
+        engine
+            .submit_decision(
+                "p1",
+                &serde_json::json!({
+                    "decisionId": dec_id,
+                    "revision": engine.revision,
+                    "value": {"type": "DECLARE", "actorId": "b06084"}
+                }),
+            )
+            .unwrap();
+
+        // 先に1枚ドローが実行され、手札が1枚->2枚になっていること
+        assert_eq!(engine.players["p1"].hand.len(), 2, "B06084の宣言で先にカードを1枚引くこと");
+        assert_eq!(engine.players["p1"].deck.len(), 1);
+
+        // カード名指定(modeSelect)ではなく、直接 VIEW_SOUSAKU_CARDS が提示されること
+        let dec_view = engine.pending_decision.clone().expect("VIEW_SOUSAKU_CARDS が提示されるはず");
+        assert_eq!(dec_view["kind"], "targetSelect");
+        assert_eq!(dec_view["options"]["effectType"], "VIEW_SOUSAKU_CARDS");
+        assert_eq!(dec_view["options"]["sousakuFound"], true, "Lv4(<=7)が発見扱いになること");
+
+        let dec_view_id = dec_view["decisionId"].as_str().unwrap().to_string();
+        engine
+            .submit_decision(
+                "p1",
+                &serde_json::json!({
+                    "decisionId": dec_view_id,
+                    "revision": engine.revision,
+                    "value": { "targetIds": [], "actorId": "b06084", "effectType": "VIEW_SOUSAKU_CARDS" }
+                }),
+            )
+            .unwrap();
+
+        // Lv7以下が発見されたので、手札を1枚リムーブする選択(DISCARD_HAND)が提示されること
+        let dec_discard = engine.pending_decision.clone().expect("手札1枚リムーブの選択が出ること");
+        assert_eq!(dec_discard["kind"], "targetSelect");
+        assert_eq!(dec_discard["options"]["effectType"], "DISCARD_HAND");
+        let dec_discard_id = dec_discard["decisionId"].as_str().unwrap().to_string();
+        engine
+            .submit_decision(
+                "p1",
+                &serde_json::json!({
+                    "decisionId": dec_discard_id,
+                    "revision": engine.revision,
+                    "value": { "targetIds": ["h_1"], "actorId": "b06084", "effectType": "DISCARD_HAND" }
+                }),
+            )
+            .unwrap();
+        assert_eq!(engine.players["p1"].hand.len(), 1, "発見時は手札1枚リムーブが実行されること");
+    }
+
+    // 2) 公開カードがLv8(>7)の場合: 1枚引きは実行されるが、未発見のため手札リムーブは実行されないこと
+    {
+        let mut engine = MatchEngine::new(catalog);
+        engine.turn = 11;
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn_player_id = "p1".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.partner = Some(test_inst("p1_p", "B01079", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+        ps1.case = Some(test_inst("p1_c", "PR115", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        ps1.field.push(test_inst("b06084", "B06084", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+        ps1.hand.push(test_inst("h_1", "B06092", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+        ps1.deck.push(test_inst("d1", "B09077", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        ps1.deck.push(test_inst("d2", "B09077", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        ps2.partner = Some(test_inst("p2_p", "B01060", "p2", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+        ps2.case = Some(test_inst("p2_c", "B11099", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        // 相手山札トップに Lv9 (B06084)
+        ps2.deck.push(test_inst("opp_d_bot", "B06092", "p2", models::Zone::DECK, models::CardOrientation::ACTIVE));
+        ps2.deck.push(test_inst("opp_d_top", "B06084", "p2", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        engine.prompt_main_action("p1");
+        let pd = engine.pending_decision.clone().unwrap();
+        let dec_id = pd["decisionId"].as_str().unwrap().to_string();
+        engine
+            .submit_decision(
+                "p1",
+                &serde_json::json!({
+                    "decisionId": dec_id,
+                    "revision": engine.revision,
+                    "value": {"type": "DECLARE", "actorId": "b06084"}
+                }),
+            )
+            .unwrap();
+
+        let dec_view = engine.pending_decision.clone().unwrap();
+        assert_eq!(dec_view["options"]["sousakuFound"], false, "Lv9(>7)は未発見扱いになること");
+        let dec_view_id = dec_view["decisionId"].as_str().unwrap().to_string();
+        engine
+            .submit_decision(
+                "p1",
+                &serde_json::json!({
+                    "decisionId": dec_view_id,
+                    "revision": engine.revision,
+                    "value": { "targetIds": [], "actorId": "b06084", "effectType": "VIEW_SOUSAKU_CARDS" }
+                }),
+            )
+            .unwrap();
+
+        assert_eq!(engine.players["p1"].hand.len(), 2, "未発見時は1ドロー分が増えて手札2枚のままになること");
+    }
+}
+

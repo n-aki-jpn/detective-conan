@@ -505,13 +505,34 @@ pub fn parse_effect_steps(
             }
         }
 
-        // 捜査（「カード名を1つ指定し、〚捜査N〛...」 + 発見時効果）（B01095）
+        // 捜査（「カード名を1つ指定し、〚捜査N〛...」 / 「カードを1枚引き、〚捜査N〛...」 + 発見時効果）（B01095, B06084, B01084 等）
         if sentence.contains("捜査") {
+            if let Some(sidx) = sentence.find("〚捜査").or_else(|| sentence.find("捜査")) {
+                let prefix = sentence[..sidx].trim().trim_end_matches('、').trim();
+                if !prefix.is_empty() && !prefix.contains("カード名を1つ指定") && !prefix.contains("特徴") {
+                    for pre_op in parse_immediate_ops(prefix) {
+                        push_op_or_extra(&mut plan, seen_target_or_search, pre_op);
+                    }
+                }
+            }
             let inv_n = extract_count_around(sentence, "捜査", "〛").max(1);
+            let requires_name = sentence.contains("カード名を1つ指定");
+            let mut min_level = None;
+            let mut max_level = None;
             let mut then_clause = String::new();
             if let Some(next_s) = sentences.get(i + 1) {
-                if next_s.contains("指定したカード名のカードが発見された場合、") {
-                    if let Some((_, body)) = next_s.split_once("発見された場合、") {
+                if next_s.contains("発見された場合、") {
+                    if let Some((cond_part, body)) = next_s.split_once("発見された場合、") {
+                        min_level = crate::effects::text_utils::extract_number_before(
+                            cond_part,
+                            "レベル",
+                            "以上",
+                        );
+                        max_level = crate::effects::text_utils::extract_number_before(
+                            cond_part,
+                            "レベル",
+                            "以下",
+                        );
                         then_clause = format!("{}。", body.trim());
                         skip_indices.push(i + 1);
                     }
@@ -520,8 +541,12 @@ pub fn parse_effect_steps(
             let op = ImmediateOp::InvestigateAndCheckName {
                 count: inv_n,
                 then_clause,
+                requires_name,
+                min_level,
+                max_level,
             };
             push_op_or_extra(&mut plan, seen_target_or_search, op);
+            seen_target_or_search = true;
             continue;
         }
 
