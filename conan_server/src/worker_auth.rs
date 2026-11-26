@@ -2,14 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use worker::*;
 
-const PRESET_DECKS: &[(&str, &str)] = &[
-    ("preset_black", include_str!("../../data/dummy/decks/preset_black.json")),
-    ("preset_blue_white", include_str!("../../data/dummy/decks/preset_blue_white.json")),
-    ("preset_green", include_str!("../../data/dummy/decks/preset_green.json")),
-    ("preset_green_red", include_str!("../../data/dummy/decks/preset_green_red.json")),
-    ("preset_red", include_str!("../../data/dummy/decks/preset_red.json")),
-    ("preset_yellow", include_str!("../../data/dummy/decks/preset_yellow.json")),
-];
+include!(concat!(env!("OUT_DIR"), "/preset_decks_gen.rs"));
 
 pub fn find_preset_deck_json(id: &str) -> Option<&'static str> {
     let norm = id.strip_suffix(".json").unwrap_or(id);
