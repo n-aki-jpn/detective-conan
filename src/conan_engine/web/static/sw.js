@@ -1,4 +1,4 @@
-const SHELL_CACHE = 'conan-tcg-shell-v1';
+const SHELL_CACHE = 'conan-tcg-shell-v2';
 const IMAGE_CACHE = 'conan-tcg-images-v1';
 const MAX_IMAGE_ENTRIES = 300;
 
@@ -7,6 +7,7 @@ const APP_SHELL_URLS = [
   '/index.html',
   '/manifest.webmanifest',
   '/pwa.js',
+  '/cardSE.js',
   '/offline.html',
   '/icons/icon-192.png',
   '/icons/icon-512.png',

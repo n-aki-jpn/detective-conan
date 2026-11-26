@@ -142,7 +142,7 @@ fn test_index_html_pwa_tags() {
 #[test]
 fn test_sw_and_pwa_js_syntax() {
     let base = static_dir();
-    for file in ["sw.js", "pwa.js"] {
+    for file in ["sw.js", "pwa.js", "cardSE.js"] {
         let path = base.join(file);
         assert!(path.exists(), "{} must exist", path.display());
         let out = std::process::Command::new("node")

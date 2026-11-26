@@ -170,10 +170,59 @@ test.describe('PWA 統合検証 E2E', () => {
     const pop = page.locator('#nav-menu-popover');
     await expect(pop).toBeVisible();
     await expect(page.locator('#nav-menu-user-full')).toContainText(nick);
+    await expect(page.locator('#bgm-menu-toggle-btn')).toBeVisible();
     await expect(page.locator('#bgm-volume-slider')).toBeVisible();
+    await expect(page.locator('#se-toggle-btn')).toBeVisible();
+    await expect(page.locator('#se-volume-slider')).toBeVisible();
     await expect(page.locator('#btn-reset-match')).toBeVisible();
     await expect(page.locator('#btn-copy-board')).toBeVisible();
     await expect(page.locator('#btn-logout')).toBeVisible();
+
+    // CardGameSE インスタンス及びメソッドの存在確認
+    const seMethodsOk = await page.evaluate(() => {
+      const s = (window as unknown as { se?: Record<string, unknown> }).se;
+      if (!s) return false;
+      return ['draw', 'place', 'shuffle', 'tap', 'panel', 'turnStart', 'resolve'].every(
+        (m) => typeof s[m] === 'function',
+      );
+    });
+    expect(seMethodsOk).toBe(true);
+
+    // BGM と SE の音量が独立して調整・永続化されること
+    await page.locator('#bgm-volume-slider').evaluate((el: HTMLInputElement) => {
+      el.value = '0.2';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await page.locator('#se-volume-slider').evaluate((el: HTMLInputElement) => {
+      el.value = '0.85';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    const audioState = await page.evaluate(() => ({
+      bgmStorage: localStorage.getItem('conan_bgm_volume'),
+      seStorage: localStorage.getItem('conan_se_volume'),
+      seVol: (window as unknown as { se?: { volume: number; muted: boolean } }).se?.volume,
+      bgmLabel: document.getElementById('bgm-volume-val')?.textContent,
+      seLabel: document.getElementById('se-volume-val')?.textContent,
+    }));
+    expect(audioState.bgmStorage).toBe('0.2');
+    expect(audioState.seStorage).toBe('0.85');
+    expect(audioState.seVol).toBe(0.85);
+    expect(audioState.bgmLabel).toBe('20%');
+    expect(audioState.seLabel).toBe('85%');
+
+    // SE ミュート切り替えが BGM に影響しないこと
+    await page.click('#se-toggle-btn');
+    const seMutedState = await page.evaluate(() => ({
+      seEnabled: localStorage.getItem('conan_se_enabled'),
+      bgmEnabled: localStorage.getItem('conan_bgm_enabled'),
+      seMuted: (window as unknown as { se?: { muted: boolean } }).se?.muted,
+      seBtnText: document.getElementById('se-toggle-btn')?.textContent,
+    }));
+    expect(seMutedState.seEnabled).toBe('false');
+    expect(seMutedState.bgmEnabled).toBeNull();
+    expect(seMutedState.seMuted).toBe(true);
+    expect(seMutedState.seBtnText).toContain('🔕');
 
     await page.keyboard.press('Escape');
     await expect(pop).toBeHidden();
@@ -194,6 +243,7 @@ test.describe('PWA 統合検証 E2E', () => {
     await page.click('#nav-menu-btn');
     await expect(pop).toBeVisible();
     await expect(page.locator('#bgm-volume-slider')).toBeVisible();
+    await expect(page.locator('#se-volume-slider')).toBeVisible();
     await page.screenshot({
       path: `${SCREENSHOT_DIR}/pwa-mobile-menu.png`,
       fullPage: false,

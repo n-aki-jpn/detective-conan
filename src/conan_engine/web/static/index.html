@@ -17,6 +17,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
   <script src="/pwa.js" defer></script>
+  <script src="/cardSE.js" defer></script>
   <style>
     :root {
       --bg-color: #0b1120;
@@ -155,7 +156,7 @@
       border: 1px solid var(--border-color);
       border-radius: 10px;
       padding: 8px;
-      min-width: 224px;
+      min-width: 244px;
       max-width: min(272px, calc(100dvw - 16px));
       box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
       color: var(--text);
@@ -208,6 +209,27 @@
       align-items: center;
       gap: 8px;
       padding: 6px 10px;
+    }
+
+    .nav-audio-toggle-btn {
+      min-width: 66px;
+      min-height: 28px;
+      padding: 3px 6px;
+      font-size: 0.72rem;
+      white-space: nowrap;
+      justify-content: center;
+    }
+
+    .nav-audio-toggle-btn.is-muted {
+      opacity: 0.55;
+    }
+
+    .nav-audio-val {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      min-width: 30px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
     }
 
     .nav-menu-divider {
@@ -1992,9 +2014,20 @@
       <div id="nav-menu-popover" class="nav-menu-popover" popover="auto">
         <div id="nav-menu-user-full" class="nav-menu-user-full" style="display:none;"></div>
         <div class="nav-menu-section-row">
-          <label for="bgm-volume-slider" style="font-size:0.75rem; color:var(--text-muted); white-space:nowrap;">🔊 音量</label>
+          <button type="button" id="bgm-menu-toggle-btn" class="btn btn-secondary nav-audio-toggle-btn"
+            onclick="toggleBgm()" aria-label="BGMのON/OFF" title="BGM ON/OFF">🎵 BGM</button>
           <input id="bgm-volume-slider" type="range" min="0" max="1" step="0.05" value="0.35"
-            oninput="setBgmVolume(this.value)" style="flex:1; accent-color:#38bdf8; cursor:pointer;" title="BGM音量">
+            oninput="setBgmVolume(this.value)" aria-label="BGM音量"
+            style="flex:1; min-width:0; accent-color:#38bdf8; cursor:pointer;" title="BGM音量">
+          <span id="bgm-volume-val" class="nav-audio-val">35%</span>
+        </div>
+        <div class="nav-menu-section-row">
+          <button type="button" id="se-toggle-btn" class="btn btn-secondary nav-audio-toggle-btn"
+            onclick="toggleSe()" aria-label="SEのON/OFF" title="SE ON/OFF">🔔 SE</button>
+          <input id="se-volume-slider" type="range" min="0" max="1" step="0.05" value="0.7"
+            oninput="setSeVolume(this.value)" onchange="playSe('tap')" aria-label="SE音量"
+            style="flex:1; min-width:0; accent-color:#38bdf8; cursor:pointer;" title="SE音量">
+          <span id="se-volume-val" class="nav-audio-val">70%</span>
         </div>
         <div class="nav-menu-divider"></div>
         <button type="button" id="btn-reset-match" class="btn nav-menu-item" onclick="closeNavMenu(); resetMatch();">🔄 対戦をリセット</button>
@@ -2890,6 +2923,7 @@
 
     // ========== NAVIGATION ==========
     function switchTab(tab) {
+      playSe('tap');
       document.getElementById('tab-battle').classList.toggle('active', tab === 'battle');
       document.getElementById('tab-deck').classList.toggle('active', tab === 'deck');
       document.getElementById('screen-battle').classList.toggle('active', tab === 'battle');
@@ -2908,6 +2942,7 @@
 
     // ========== ROOM MODAL & MATCHING ==========
     function showRoomModal() {
+      playSe('panel');
       document.getElementById('current-room-display').innerText = currentRoomId;
       document.getElementById('current-player-display').innerText = currentViewingPlayer;
       if (currentRoomId !== 'default') {
@@ -3479,6 +3514,7 @@
 
     function showCardModal(card) {
       if (!card) return;
+      playSe('panel');
       const baseName = card.title || card.name || card.dummyName || card.definitionId;
       const name = card.tempNameOverride ? `${card.tempNameOverride}（元: ${baseName}）` : baseName;
       const typeLabelMap = { PARTNER: 'パートナー', CASE: '事件', CHARACTER: 'キャラ', EVENT: 'イベント' };
@@ -3545,6 +3581,7 @@
       if (!lastObs) return;
       const ps = who === 'me' ? lastObs.me : lastObs.opponent;
       if (!ps) return;
+      playSe('panel');
       const whoLabel = who === 'me' ? `自分 (${ps.playerId})` : `相手 (${ps.playerId})`;
       const titleEl = document.getElementById('zone-modal-title');
       const subEl = document.getElementById('zone-modal-subtitle');
@@ -3860,6 +3897,7 @@
         let armed = false;
         b.onclick = () => {
           if (cmd.confirmText && !armed) {
+            playSe('tap');
             armed = true;
             b.classList.add('action-cmd-confirming');
             titleEl.innerText = cmd.confirmText;
@@ -3874,6 +3912,7 @@
             }
             return;
           }
+          playSe('tap');
           closeCardActionMenu();
           cmd.onClick();
         };
@@ -3942,15 +3981,18 @@
       const mode = window.pendingBoardMode;
       if (mode && mode.revision === obs.revision) {
         if (mode.type === 'ACTION_TARGET' && (mode.validTargetIds || []).includes(card.instanceId)) {
+          playSe('tap');
           window.pendingBoardMode = null;
           submitDecision({ type: 'ACTION', actorId: mode.actorId, targetId: card.instanceId });
           return;
         }
         if (mode.type === 'DISGUISE_TARGET' && (mode.validTargetIds || []).includes(card.instanceId)) {
+          playSe('tap');
           window.pendingBoardMode = null;
           submitDecision({ type: 'DISGUISE', cardId: mode.cardId, targetId: card.instanceId });
           return;
         }
+        playSe('tap');
         window.pendingBoardMode = null;
         render(obs);
         return;
@@ -3961,6 +4003,7 @@
         const maxSel = Number(pd.options.maxSelect || 1);
         const isCand = (pd.options.candidates || []).some(c => c.instanceId === card.instanceId);
         if (maxSel === 1 && isCand) {
+          playSe('tap');
           submitDecision({
             targetId: card.instanceId,
             targetIds: [card.instanceId],
@@ -3973,6 +4016,7 @@
 
       const cmds = getBoardCardCommands(card, zoneInfo, obs);
       if (cmds.length > 0) {
+        playSe('tap');
         openCardActionMenu(card, cmds, anchorRect);
       } else if (zoneInfo && zoneInfo.zone === 'EXTRA_PARTNER') {
         showCardModal(card);
@@ -4288,6 +4332,7 @@
 
     function toggleDecisionOverlay(forceShow = null) {
       window.decisionOverlayHidden = (typeof forceShow === 'boolean') ? !forceShow : !window.decisionOverlayHidden;
+      playSe(window.decisionOverlayHidden ? 'tap' : 'panel');
       syncDecisionOverlayVisibility();
     }
 
@@ -4630,8 +4675,11 @@
       window.prevRemoveIds = curRemoveIdSet;
 
       const curLogs = obs.logs || [];
+      const newLogsForSe = (window.prevLogCountForNotice !== null && curLogs.length > window.prevLogCountForNotice)
+        ? curLogs.slice(window.prevLogCountForNotice)
+        : [];
       if (window.prevLogCountForNotice !== null && curLogs.length > window.prevLogCountForNotice) {
-        const newLogs = curLogs.slice(window.prevLogCountForNotice);
+        const newLogs = newLogsForSe;
         const evHitLog = [...newLogs].reverse().find(l => String(l).includes('証拠から ['));
         if (evHitLog && window.removeToastQueue.length === 0 && !window.removeToastPlaying) {
           const m = String(evHitLog).match(/証拠から \[([^\]]+)\]/);
@@ -4651,13 +4699,16 @@
       window.prevLogCountForNotice = curLogs.length;
       const curFieldCards = [...(obs.me?.field || []), ...(obs.opponent?.field || [])];
       const curFieldIdSet = new Set(curFieldCards.map(c => c.instanceId));
+      let hasNewlyEnteredField = false;
       if (window.prevFieldIds !== null) {
         const newlyEntered = curFieldCards.find(c => c && c.instanceId && !window.prevFieldIds.has(c.instanceId));
         if (newlyEntered) {
+          hasNewlyEnteredField = true;
           showCardPlayCutin(newlyEntered);
         }
       }
       window.prevFieldIds = curFieldIdSet;
+      triggerGameStateSe(obs, newLogsForSe, hasNewlyEnteredField);
       renderDecisionActorCard(null);
       if (window.pendingBoardMode && (window.pendingBoardMode.revision !== obs.revision || !obs.pendingDecision || obs.pendingDecision.kind !== 'mainAction')) {
         window.pendingBoardMode = null;
@@ -4890,6 +4941,7 @@
             item.appendChild(cardEl);
             item.onclick = (e) => {
               e.stopPropagation();
+              playSe('tap');
               if (selectedMulliganIds.has(cid)) {
                 selectedMulliganIds.delete(cid);
                 item.classList.remove('selected');
@@ -4913,7 +4965,15 @@
           btnConfirm.id = 'mulligan-confirm-btn';
           btnConfirm.style.flex = '1';
           syncMulliganConfirmBtn(btnConfirm);
-          btnConfirm.onclick = () => submitDecision({ cardIds: Array.from(selectedMulliganIds) });
+          btnConfirm.onclick = () => {
+            if (selectedMulliganIds.size > 0) {
+              playSe('shuffle');
+              setTimeout(() => playSe('draw'), 240);
+            } else {
+              playSe('tap');
+            }
+            submitDecision({ cardIds: Array.from(selectedMulliganIds) });
+          };
           btnRow.appendChild(btnConfirm);
 
           const btnReturnAll = document.createElement('button');
@@ -4922,7 +4982,11 @@
           btnReturnAll.style.flex = '1';
           btnReturnAll.innerText = '🔄 すべて戻す';
           btnReturnAll.disabled = handCardIds.length === 0;
-          btnReturnAll.onclick = () => submitDecision({ cardIds: handCardIds.slice() });
+          btnReturnAll.onclick = () => {
+            playSe('shuffle');
+            setTimeout(() => playSe('draw'), 240);
+            submitDecision({ cardIds: handCardIds.slice() });
+          };
           btnRow.appendChild(btnReturnAll);
 
           decActs.appendChild(btnRow);
@@ -4960,6 +5024,7 @@
                 bCancel.className = 'btn btn-secondary';
                 bCancel.innerText = '✖ キャンセル';
                 bCancel.onclick = () => {
+                  playSe('tap');
                   window.pendingBoardMode = null;
                   render(window.latestObs);
                 };
@@ -4997,7 +5062,7 @@
                   const b = document.createElement('button');
                   b.className = 'btn btn-secondary';
                   b.innerText = '⏭ ターン終了';
-                  b.onclick = () => submitDecision({ type: 'END_TURN' });
+                  b.onclick = () => { playSe('tap'); submitDecision({ type: 'END_TURN' }); };
                   wrap.appendChild(b);
                 }
               }
@@ -5042,7 +5107,7 @@
               const btnPass = document.createElement('button');
               btnPass.className = 'btn btn-secondary';
               btnPass.innerText = 'スルー';
-              btnPass.onclick = () => submitDecision({ guardCardId: null });
+              btnPass.onclick = () => { playSe('tap'); submitDecision({ guardCardId: null }); };
               wrap.appendChild(btnPass);
             }
 
@@ -5099,7 +5164,7 @@
               const btnPass = document.createElement('button');
               btnPass.className = 'btn btn-secondary';
               btnPass.innerText = '⏭ スキップ';
-              btnPass.onclick = () => submitDecision({ cardId: null });
+              btnPass.onclick = () => { playSe('tap'); submitDecision({ cardId: null }); };
               wrap.appendChild(btnPass);
             },
             {
@@ -5228,6 +5293,7 @@
                 chip.style.cssText = 'padding:4px 8px; font-size:0.75rem; min-height:28px; background:#1e293b; border:1px solid #475569; color:#e2e8f0;';
                 chip.innerText = name;
                 chip.onclick = () => {
+                  playSe('tap');
                   input.value = name;
                   submitBtn.disabled = false;
                   renderSuggestions(name);
@@ -6923,7 +6989,7 @@
 
     // 初期化と起動（認証完了後、startApp() 経由で実行される）
 
-    // ========== BGM CONTROL ==========
+    // ========== BGM & SE CONTROL ==========
     const bgmAudio = document.getElementById('battle-bgm');
     const bgmTracks = {
       battle: document.getElementById('battle-bgm'),
@@ -6934,6 +7000,7 @@
     let bgmEnabled = localStorage.getItem('conan_bgm_enabled') !== 'false';
     let bgmVolume = parseFloat(localStorage.getItem('conan_bgm_volume') || '0.35');
     if (isNaN(bgmVolume)) bgmVolume = 0.35;
+    bgmVolume = Math.max(0, Math.min(1, bgmVolume));
 
     if (bgmAudio) {
       bgmAudio.volume = bgmVolume;
@@ -6948,15 +7015,32 @@
 
     function updateBgmUi() {
       const btn = document.getElementById('bgm-toggle-btn');
-      if (!btn) return;
-      if (bgmEnabled) {
-        btn.innerText = '🔊';
-        btn.style.borderColor = '#38bdf8';
-        btn.title = 'BGM ON（クリックでミュート）';
-      } else {
-        btn.innerText = '🔇';
-        btn.style.borderColor = '';
-        btn.title = 'BGM OFF（クリックで再生）';
+      if (btn) {
+        if (bgmEnabled) {
+          btn.innerText = '🔊';
+          btn.style.borderColor = '#38bdf8';
+          btn.title = 'BGM ON（クリックでミュート）';
+        } else {
+          btn.innerText = '🔇';
+          btn.style.borderColor = '';
+          btn.title = 'BGM OFF（クリックで再生）';
+        }
+      }
+      const menuBtn = document.getElementById('bgm-menu-toggle-btn');
+      if (menuBtn) {
+        menuBtn.innerText = bgmEnabled ? '🎵 BGM' : '🔇 BGM';
+        menuBtn.classList.toggle('is-muted', !bgmEnabled);
+        menuBtn.style.borderColor = bgmEnabled ? '#38bdf8' : '';
+        menuBtn.setAttribute('aria-pressed', bgmEnabled ? 'true' : 'false');
+        menuBtn.title = bgmEnabled ? 'BGM ON（クリックでミュート）' : 'BGM OFF（クリックで再生）';
+      }
+      const bgmValEl = document.getElementById('bgm-volume-val');
+      if (bgmValEl) {
+        bgmValEl.innerText = `${Math.round(bgmVolume * 100)}%`;
+      }
+      const bgmSliderEl = document.getElementById('bgm-volume-slider');
+      if (bgmSliderEl && Number(bgmSliderEl.value) !== bgmVolume) {
+        bgmSliderEl.value = bgmVolume;
       }
     }
 
@@ -7025,14 +7109,172 @@
     }
 
     function setBgmVolume(val) {
-      bgmVolume = parseFloat(val);
+      const parsed = parseFloat(val);
+      if (isNaN(parsed)) return;
+      bgmVolume = Math.max(0, Math.min(1, parsed));
       localStorage.setItem('conan_bgm_volume', String(bgmVolume));
       Object.values(bgmTracks).forEach(audio => {
         if (audio) audio.volume = bgmVolume;
       });
+      updateBgmUi();
+    }
+
+    // ========== SE CONTROL ==========
+    let seEnabled = localStorage.getItem('conan_se_enabled') !== 'false';
+    let seVolume = parseFloat(localStorage.getItem('conan_se_volume') || '0.7');
+    if (isNaN(seVolume)) seVolume = 0.7;
+    seVolume = Math.max(0, Math.min(1, seVolume));
+
+    function syncSeEngine() {
+      const engine = (typeof window !== 'undefined' && window.se) ? window.se : null;
+      if (!engine) return;
+      if (typeof engine.setMuted === 'function') {
+        engine.setMuted(!seEnabled);
+      } else {
+        engine.muted = !seEnabled;
+      }
+      if (typeof engine.setVolume === 'function') {
+        engine.setVolume(seVolume);
+      } else {
+        engine.volume = seVolume;
+      }
+    }
+
+    function playSe(name) {
+      syncSeEngine();
+      if (!seEnabled || seVolume <= 0) return;
+      const engine = (typeof window !== 'undefined' && window.se) ? window.se : null;
+      if (!engine || typeof engine[name] !== 'function') return;
+      try {
+        engine[name]();
+      } catch (_e) { /* ignore Web Audio errors in restricted/headless contexts */ }
+    }
+
+    function updateSeUi() {
+      const btn = document.getElementById('se-toggle-btn');
+      if (btn) {
+        btn.innerText = seEnabled ? '🔔 SE' : '🔕 SE';
+        btn.classList.toggle('is-muted', !seEnabled);
+        btn.style.borderColor = seEnabled ? '#38bdf8' : '';
+        btn.setAttribute('aria-pressed', seEnabled ? 'true' : 'false');
+        btn.title = seEnabled ? 'SE ON（クリックでミュート）' : 'SE OFF（クリックで有効化）';
+      }
+      const seSliderEl = document.getElementById('se-volume-slider');
+      if (seSliderEl && Number(seSliderEl.value) !== seVolume) {
+        seSliderEl.value = seVolume;
+      }
+      const seValEl = document.getElementById('se-volume-val');
+      if (seValEl) {
+        seValEl.innerText = `${Math.round(seVolume * 100)}%`;
+      }
+    }
+
+    function toggleSe() {
+      seEnabled = !seEnabled;
+      localStorage.setItem('conan_se_enabled', seEnabled ? 'true' : 'false');
+      syncSeEngine();
+      updateSeUi();
+      if (seEnabled) {
+        playSe('tap');
+      }
+    }
+
+    function setSeVolume(val) {
+      const parsed = parseFloat(val);
+      if (isNaN(parsed)) return;
+      seVolume = Math.max(0, Math.min(1, parsed));
+      localStorage.setItem('conan_se_volume', String(seVolume));
+      syncSeEngine();
+      updateSeUi();
+    }
+
+    window.prevSeSnapshot = null;
+    function triggerGameStateSe(obs, newLogs, hasNewlyEnteredField) {
+      if (!obs) return;
+      const me = obs.me || {};
+      const opp = obs.opponent || {};
+      const curRoom = obs.roomId || currentRoomId || 'default';
+      const meId = obs.viewingPlayerId || me.playerId || currentViewingPlayer;
+      const meHandCount = Array.isArray(me.hand) ? me.hand.length : Number(me.handCount || 0);
+      const meEvidenceCount = Number(me.evidenceCount ?? (Array.isArray(me.evidence) ? me.evidence.length : 0));
+      const oppEvidenceCount = Number(opp.evidenceCount ?? (Array.isArray(opp.evidence) ? opp.evidence.length : 0));
+      const meFileCount = Number(me.fileCount || 0);
+      const oppFileCount = Number(opp.fileCount || 0);
+
+      const nextSnapshot = {
+        roomId: curRoom,
+        revision: Number(obs.revision || 0),
+        turn: Number(obs.turn || 0),
+        turnPlayerId: obs.turnPlayerId || '',
+        decisionPlayerId: obs.decisionPlayerId || '',
+        meHandCount,
+        meEvidenceCount,
+        oppEvidenceCount,
+        meFileCount,
+        oppFileCount,
+      };
+
+      const prev = window.prevSeSnapshot;
+      window.prevSeSnapshot = nextSnapshot;
+
+      if (!prev || prev.roomId !== nextSnapshot.roomId || nextSnapshot.revision <= prev.revision) {
+        return;
+      }
+
+      const logsText = (newLogs || []).map(l => String(l)).join('\n');
+      const isTurnStartForMe = nextSnapshot.turn >= 1
+        && nextSnapshot.turnPlayerId === meId
+        && (prev.turnPlayerId !== meId || nextSnapshot.turn > prev.turn);
+
+      const hasDrawLog = /カードを引きました|枚引きました|手札に加え/.test(logsText);
+      const isMulliganRedraw = /引き直しました/.test(logsText);
+
+      if (isTurnStartForMe) {
+        playSe('turnStart');
+        if (hasDrawLog) {
+          setTimeout(() => playSe('draw'), 180);
+        }
+        return;
+      }
+
+      const evidenceGained = nextSnapshot.meEvidenceCount > prev.meEvidenceCount
+        || nextSnapshot.oppEvidenceCount > prev.oppEvidenceCount;
+      const hasResolveLog = evidenceGained || /推理|証拠を|ヒラメキ|【宣言】|誘発効果|解決編|事件解決|カットイン/.test(logsText);
+
+      const fileIncreased = nextSnapshot.meFileCount > prev.meFileCount
+        || nextSnapshot.oppFileCount > prev.oppFileCount;
+      const hasPlaceLog = Boolean(hasNewlyEnteredField)
+        || /を登場させました|イベント \[|アシスト/.test(logsText)
+        || (fileIncreased && nextSnapshot.turn === prev.turn);
+
+      if (hasPlaceLog) {
+        playSe('place');
+      }
+      if (hasResolveLog) {
+        if (hasPlaceLog) {
+          setTimeout(() => playSe('resolve'), 120);
+        } else {
+          playSe('resolve');
+        }
+      }
+
+      if (!isMulliganRedraw && (nextSnapshot.meHandCount > prev.meHandCount || hasDrawLog)) {
+        if (hasPlaceLog || hasResolveLog) {
+          setTimeout(() => playSe('draw'), 160);
+        } else {
+          playSe('draw');
+        }
+      }
     }
 
     updateBgmUi();
+    syncSeEngine();
+    updateSeUi();
+    document.addEventListener('DOMContentLoaded', () => {
+      syncSeEngine();
+      updateSeUi();
+      updateBgmUi();
+    });
     // 初回のユーザー操作（クリック・タップ）で自動的にBGM再生を開始
     document.addEventListener('pointerdown', function onFirstInteract() {
       syncBgm();

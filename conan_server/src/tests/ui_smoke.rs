@@ -357,6 +357,19 @@ assert.equal(fieldCmds.length, 2);
 assert.ok(fieldCmds[0].className.includes('btn-danger'));
 assert.ok(fieldCmds[1].cssText.includes('#059669'));
 assert.ok(Boolean(fieldCmds[0].subLabel) && Boolean(fieldCmds[1].subLabel));
+
+// BGM・SE 独立音量調整と AudioContext 非存在時の安全フォールバック検証
+setBgmVolume('0.5');
+assert.equal(getEl('bgm-volume-val').innerText, '50%');
+setSeVolume('0.8');
+assert.equal(getEl('se-volume-val').innerText, '80%');
+playSe('tap');
+toggleSe();
+assert.equal(getEl('se-toggle-btn').innerText, '🔕 SE');
+assert.equal(getEl('se-toggle-btn').classList.contains('is-muted'), true);
+toggleSe();
+assert.equal(getEl('se-toggle-btn').innerText, '🔔 SE');
+assert.equal(getEl('se-toggle-btn').classList.contains('is-muted'), false);
 "#,
         js = js_code
     );
