@@ -1901,6 +1901,23 @@ impl MatchEngine {
         resume_context: &str,
         evidence_source_inst_id: Option<&str>,
     ) -> bool {
+        let mut adjusted_plan_owned;
+        let effective_plan = if evidence_source_inst_id.is_some() {
+            adjusted_plan_owned = plan.clone();
+            if let Some(ref mut ts) = adjusted_plan_owned.target_step {
+                if ts.filter.zone == TargetZone::Remove {
+                    ts.filter.exclude_self = true;
+                }
+            }
+            if let Some(ref mut ft) = adjusted_plan_owned.follow_up_target {
+                if ft.filter.zone == TargetZone::Remove {
+                    ft.filter.exclude_self = true;
+                }
+            }
+            &adjusted_plan_owned
+        } else {
+            plan
+        };
         let prev_executing = self.is_executing_clause_plan;
         self.is_executing_clause_plan = true;
         let res = self.execute_clause_plan_inner(
@@ -1908,7 +1925,7 @@ impl MatchEngine {
             actor_id,
             actor_name,
             source_level,
-            plan,
+            effective_plan,
             resume_context,
             evidence_source_inst_id,
         );

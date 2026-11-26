@@ -1734,7 +1734,7 @@ impl MatchEngine {
 
     /// 証拠をリムーブし、該当カードの【ヒラメキ】を発動する
     /// 戻り値: (opened_pending_ui, opponent_blocked_evidence_gain)
-    pub(super) fn remove_evidence_and_trigger_hirameki(
+    pub(crate) fn remove_evidence_and_trigger_hirameki(
         &mut self,
         victim_id: &str,
         count: usize,

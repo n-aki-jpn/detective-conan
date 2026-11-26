@@ -2168,3 +2168,72 @@ fn test_b11038_specify_char_name_and_search_top_4() {
     );
 }
 
+#[test]
+fn test_b06090_and_hirameki_cannot_target_self_in_remove_area() {
+    let catalog = load_test_catalog();
+
+    // 1) リムーブエリアに他の喫茶ポアロキャラがいない場合、B06090のヒラメキで自分自身を拾えないこと
+    {
+        let mut engine = MatchEngine::new(catalog.clone());
+        engine.turn = 4;
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn_player_id = "p2".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.partner = Some(test_inst("p1_p", "B01079", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+        ps1.case = Some(test_inst("p1_c", "PR115", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        ps1.evidence.push(test_inst("ev_azusa", "B06090", "p1", models::Zone::EVIDENCE, models::CardOrientation::ACTIVE));
+
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        ps2.partner = Some(test_inst("p2_p", "B01060", "p2", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+        ps2.case = Some(test_inst("p2_c", "B11099", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        let (opened_ui, _) = engine.remove_evidence_and_trigger_hirameki("p1", 1, "MAIN");
+        assert!(!opened_ui, "他に有効な対象がいないため選択UIが開かないこと");
+        assert!(engine.pending_decision.is_none());
+        assert!(engine.players["p1"].hand.is_empty(), "B06090自身が手札に加わらないこと");
+        assert!(
+            engine.players["p1"].remove.iter().any(|c| c.instance_id == "ev_azusa"),
+            "B06090はリムーブエリアに留まること"
+        );
+    }
+
+    // 2) リムーブエリアに別の喫茶ポアロキャラ(B06092)がいる場合、B06092のみが候補になりB06090自身は除外されること
+    {
+        let mut engine = MatchEngine::new(catalog);
+        engine.turn = 4;
+        engine.phase = models::MatchPhase::MAIN;
+        engine.turn_player_id = "p2".to_string();
+        engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+        let mut ps1 = engine::PlayerState::new("p1".to_string());
+        ps1.partner = Some(test_inst("p1_p", "B01079", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+        ps1.case = Some(test_inst("p1_c", "PR115", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+        ps1.evidence.push(test_inst("ev_azusa", "B06090", "p1", models::Zone::EVIDENCE, models::CardOrientation::ACTIVE));
+        ps1.remove.push(test_inst("rem_kanemaru", "B06092", "p1", models::Zone::REMOVE, models::CardOrientation::ACTIVE));
+
+        let mut ps2 = engine::PlayerState::new("p2".to_string());
+        ps2.partner = Some(test_inst("p2_p", "B01060", "p2", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+        ps2.case = Some(test_inst("p2_c", "B11099", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+
+        engine.players.insert("p1".to_string(), ps1);
+        engine.players.insert("p2".to_string(), ps2);
+
+        let (opened_ui, _) = engine.remove_evidence_and_trigger_hirameki("p1", 1, "MAIN");
+        assert!(opened_ui, "別の喫茶ポアロキャラ(B06092)が候補にいるため選択UIが開くこと");
+        let dec = engine.pending_decision.as_ref().unwrap();
+        let cand_ids: Vec<&str> = dec["options"]["candidates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|c| c["instanceId"].as_str())
+            .collect();
+        assert!(cand_ids.contains(&"rem_kanemaru"), "B06092は候補に含まれること");
+        assert!(!cand_ids.contains(&"ev_azusa"), "ヒラメキ発動中のB06090自身は候補に含まれないこと");
+    }
+}
+
