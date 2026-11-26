@@ -117,7 +117,10 @@ fn run_cpu_turns(engine: &mut MatchEngine, rec: &mut RoomStateRecord) -> bool {
         crate::agent::CpuDifficulty::Normal,
     );
     let mut changed = false;
-    for step in 0..30 {
+    let mut last_decision_id = String::new();
+    let mut same_count = 0usize;
+
+    for _step in 0..30 {
         let Some(pd) = engine.pending_decision.clone() else {
             break;
         };
@@ -126,8 +129,27 @@ fn run_cpu_turns(engine: &mut MatchEngine, rec: &mut RoomStateRecord) -> bool {
         }
         let decision_id = pd.get("decisionId").and_then(|v| v.as_str()).unwrap_or("");
         let revision = pd.get("revision").and_then(|v| v.as_u64()).unwrap_or(0);
-        let dec_type = pd.get("type").and_then(|v| v.as_str()).unwrap_or("");
-        engine.logs.push(format!("🤖 CPU思考開始(step={}, dec={})", step, dec_type));
+
+        if decision_id == last_decision_id {
+            same_count += 1;
+            if same_count >= 2 {
+                // 同じdecisionIdで停滞した場合は即座にEND_TURNを試みて抜ける
+                let fallback = json!({
+                    "decisionId": decision_id,
+                    "revision": revision,
+                    "value": { "type": "END_TURN" }
+                });
+                if engine.submit_decision("player2", &fallback).is_ok() {
+                    rec.decisions.push(("player2".to_string(), fallback));
+                    changed = true;
+                }
+                break;
+            }
+        } else {
+            last_decision_id = decision_id.to_string();
+            same_count = 0;
+        }
+
         let val = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             agent.choose_action_with_engine(engine, &pd)
         })) {
@@ -154,7 +176,7 @@ fn run_cpu_turns(engine: &mut MatchEngine, rec: &mut RoomStateRecord) -> bool {
                     "revision": revision,
                     "value": { "type": "END_TURN" }
                 });
-                engine.logs.push(format!("⚠️ CPU思考エラー(step={}, dec={}, act={}): {}", step, dec_type, act_type, e));
+                engine.logs.push(format!("⚠️ CPU思考エラー(act={}): {}", act_type, e));
                 if engine.submit_decision("player2", &fallback).is_ok() {
                     rec.decisions.push(("player2".to_string(), fallback));
                     changed = true;
