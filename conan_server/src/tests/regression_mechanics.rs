@@ -1923,3 +1923,226 @@ fn test_pr291_auto_skip_first_target_moves_to_partner_and_deploys_once() {
     assert!(engine.players.get("p1").unwrap().field.iter().any(|c| c.instance_id == "white_lv2"));
 }
 
+#[test]
+fn test_b04048_on_play_draws_to_7_and_returns_same_count_shuffled_to_deck_bottom() {
+    let catalog = load_test_catalog();
+    let mut engine = MatchEngine::new(catalog);
+    engine.turn = 4;
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    // パートナー赤(B01060)の状態で B04048(Lv5)を登場させる。手札は B04048 以外に5枚 -> 7枚になるまで2枚引き、2枚選んで山札下へ
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    ps1.partner = Some(test_inst("p1_p", "B01060", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps1.case = Some(test_inst("p1_c", "B11099", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    for i in 0..5 {
+        ps1.file.push(test_inst(&format!("f_{}", i), "B04048", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+    }
+    ps1.hand.push(test_inst("b04048", "B04048", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+    for i in 0..5 {
+        ps1.hand.push(test_inst(&format!("h_{}", i), "B06092", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+    }
+    for i in 0..5 {
+        ps1.deck.push(test_inst(&format!("d_{}", i), "B09077", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    }
+
+    let mut ps2 = engine::PlayerState::new("p2".to_string());
+    ps2.partner = Some(test_inst("p2_p", "B01079", "p2", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps2.case = Some(test_inst("p2_c", "PR115", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), ps2);
+
+    engine.prompt_main_action("p1");
+    let pd = engine.pending_decision.clone().unwrap();
+    let dec_id = pd["decisionId"].as_str().unwrap().to_string();
+    engine
+        .submit_decision(
+            "p1",
+            &serde_json::json!({
+                "decisionId": dec_id,
+                "revision": engine.revision,
+                "value": {"type": "HAND_PLAY", "cardId": "b04048"}
+            }),
+        )
+        .unwrap();
+
+    // 7枚になるまで2枚引いた後、2枚を選んで山札下へ戻す targetSelect が提示される
+    assert_eq!(engine.players["p1"].hand.len(), 7, "7枚になるまで2枚引いていること");
+    assert_eq!(engine.players["p1"].deck.len(), 3, "山札から2枚引かれていること");
+
+    let dec2 = engine.pending_decision.clone().expect("山札下へ戻す手札選択が出ること");
+    assert_eq!(dec2["kind"], "targetSelect");
+    assert_eq!(dec2["options"]["effectType"], "RETURN_HAND_TO_DECK_BOTTOM_SHUFFLED");
+    assert_eq!(dec2["options"]["maxSelect"], 2);
+    assert_eq!(dec2["options"]["optional"], false);
+
+    let dec2_id = dec2["decisionId"].as_str().unwrap().to_string();
+    engine
+        .submit_decision(
+            "p1",
+            &serde_json::json!({
+                "decisionId": dec2_id,
+                "revision": engine.revision,
+                "value": {
+                    "targetIds": ["h_0", "h_1"],
+                    "actorId": "b04048",
+                    "effectType": "RETURN_HAND_TO_DECK_BOTTOM_SHUFFLED"
+                }
+            }),
+        )
+        .unwrap();
+
+    assert_eq!(engine.players["p1"].hand.len(), 5, "2枚戻して手札が5枚になること");
+    assert_eq!(engine.players["p1"].deck.len(), 5, "山札下へ2枚戻って山札が5枚になること");
+}
+
+#[test]
+fn test_b04048_declare_specifies_card_name_and_searches_top_2() {
+    let catalog = load_test_catalog();
+    let mut engine = MatchEngine::new(catalog);
+    engine.turn = 4;
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    ps1.partner = Some(test_inst("p1_p", "B01060", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps1.case = Some(test_inst("p1_c", "B11099", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    ps1.field.push(test_inst("b04048", "B04048", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+    // 山札上2枚(末尾2つ): 1枚目は榎本梓(B06090)、1番上は安室透(B09077)
+    ps1.deck.push(test_inst("d_bot", "B06092", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    ps1.deck.push(test_inst("d_top2", "B06090", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    ps1.deck.push(test_inst("d_top1", "B09077", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+    let mut ps2 = engine::PlayerState::new("p2".to_string());
+    ps2.partner = Some(test_inst("p2_p", "B01079", "p2", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps2.case = Some(test_inst("p2_c", "PR115", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), ps2);
+
+    engine.prompt_main_action("p1");
+    let pd = engine.pending_decision.clone().unwrap();
+    let dec_id = pd["decisionId"].as_str().unwrap().to_string();
+    engine
+        .submit_decision(
+            "p1",
+            &serde_json::json!({
+                "decisionId": dec_id,
+                "revision": engine.revision,
+                "value": {"type": "DECLARE", "actorId": "b04048"}
+            }),
+        )
+        .unwrap();
+
+    // 1. まずカード名指定の modeSelect(SPECIFY_CARD_NAME, allowFreeText: true) が出ること
+    let dec_name = engine.pending_decision.clone().expect("カード名指定プロンプトが出ること");
+    assert_eq!(dec_name["kind"], "modeSelect");
+    assert_eq!(dec_name["options"]["specialKind"], "SPECIFY_CARD_NAME");
+    assert_eq!(dec_name["options"]["allowFreeText"], true);
+
+    let dec_name_id = dec_name["decisionId"].as_str().unwrap().to_string();
+    engine
+        .submit_decision(
+            "p1",
+            &serde_json::json!({
+                "decisionId": dec_name_id,
+                "revision": engine.revision,
+                "value": { "cardName": "安室透", "modeIndex": 0 }
+            }),
+        )
+        .unwrap();
+
+    // 2. 山札上2枚がめくられ、「安室透」(d_top1) のみが selectable: true になっていること
+    let dec_ds = engine.pending_decision.clone().expect("deckSearch が提示されること");
+    assert_eq!(dec_ds["kind"], "deckSearch");
+    let revealed = dec_ds["options"]["revealedCards"].as_array().unwrap();
+    assert_eq!(revealed.len(), 2);
+    let amuro = revealed.iter().find(|c| c["instanceId"] == "d_top1").unwrap();
+    let azusa = revealed.iter().find(|c| c["instanceId"] == "d_top2").unwrap();
+    assert_eq!(amuro["selectable"], true, "指定カード名「安室透」が選択可能であること");
+    assert_eq!(azusa["selectable"], false, "指定外の「榎本梓」は選択不可であること");
+
+    let dec_ds_id = dec_ds["decisionId"].as_str().unwrap().to_string();
+    engine
+        .submit_decision(
+            "p1",
+            &serde_json::json!({
+                "decisionId": dec_ds_id,
+                "revision": engine.revision,
+                "value": { "chosenCardIds": ["d_top1"], "actorId": "b04048" }
+            }),
+        )
+        .unwrap();
+
+    assert!(engine.players["p1"].hand.iter().any(|c| c.instance_id == "d_top1"), "安室透を手札に加えていること");
+    assert_eq!(engine.players["p1"].deck.len(), 2, "残りがデッキの下へ移っていること");
+}
+
+#[test]
+fn test_b11038_specify_char_name_and_search_top_4() {
+    let catalog = load_test_catalog();
+    let mut engine = MatchEngine::new(catalog);
+    engine.turn = 4;
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    ps1.partner = Some(test_inst("p1_p", "B01042", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps1.case = Some(test_inst("p1_c", "B01059", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    for i in 0..5 {
+        ps1.file.push(test_inst(&format!("f_{}", i), "B01049", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+    }
+    ps1.hand.push(test_inst("b11038", "B11038", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+    ps1.deck.push(test_inst("d1", "B06090", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    ps1.deck.push(test_inst("d2", "B06092", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    ps1.deck.push(test_inst("d3", "B09077", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    ps1.deck.push(test_inst("d4", "B01049", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+    let mut ps2 = engine::PlayerState::new("p2".to_string());
+    ps2.partner = Some(test_inst("p2_p", "B01079", "p2", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps2.case = Some(test_inst("p2_c", "PR115", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), ps2);
+
+    engine.prompt_main_action("p1");
+    let pd = engine.pending_decision.clone().unwrap();
+    let dec_id = pd["decisionId"].as_str().unwrap().to_string();
+    engine
+        .submit_decision(
+            "p1",
+            &serde_json::json!({
+                "decisionId": dec_id,
+                "revision": engine.revision,
+                "value": {"type": "HAND_PLAY", "cardId": "b11038"}
+            }),
+        )
+        .unwrap();
+
+    let dec_name = engine.pending_decision.clone().expect("B11038 でキャラカード名指定が出ること");
+    assert_eq!(dec_name["options"]["specialKind"], "SPECIFY_CARD_NAME");
+    assert_eq!(dec_name["options"]["charOnly"], true);
+
+    let dec_name_id = dec_name["decisionId"].as_str().unwrap().to_string();
+    engine
+        .submit_decision(
+            "p1",
+            &serde_json::json!({
+                "decisionId": dec_name_id,
+                "revision": engine.revision,
+                "value": { "cardName": "怪盗キッド", "modeIndex": 0 }
+            }),
+        )
+        .unwrap();
+
+    let dec_ds = engine.pending_decision.clone().expect("山札上4枚めくりが出ること");
+    let revealed = dec_ds["options"]["revealedCards"].as_array().unwrap();
+    assert_eq!(revealed.len(), 4);
+    let kid = revealed.iter().find(|c| c["instanceId"] == "d4").unwrap();
+    assert_eq!(kid["selectable"], true);
+}
+

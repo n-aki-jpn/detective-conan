@@ -5139,13 +5139,113 @@
           const actorName = pd.options.actorName || '効果';
           const modeActorCard = findActorCardForPrompt(obs, pd.options);
           const modes = pd.options.modes || [];
+          const allowFreeText = !!pd.options.allowFreeText;
+          const charOnly = !!pd.options.charOnly;
           const maxPick = Number(pd.options.maxPick || 1);
           const minPick = Number(pd.options.minPick ?? 1);
           const modePromptDesc = pd.options.title || (maxPick > 1 ? `発動する効果を${minPick}〜${maxPick}つ選んでください` : '発動する効果を1つ選んでください');
-          document.getElementById('decision-title').innerText = `💡 モード選択: ${actorName}`;
+          document.getElementById('decision-title').innerText = allowFreeText ? `🏷️ カード名指定: ${actorName}` : `💡 モード選択: ${actorName}`;
           document.getElementById('decision-desc').innerText = modePromptDesc;
           renderDecisionActorCard(modeActorCard, actorName);
-          if (maxPick > 1) {
+          if (allowFreeText) {
+            const nameSet = new Set();
+            (Array.isArray(catalogData) ? catalogData : []).forEach(c => {
+              if (!c) return;
+              if (charOnly && c.cardType !== 'CHARACTER') return;
+              const nm = (c.title || c.name || '').trim();
+              if (nm) nameSet.add(nm);
+            });
+            modes.forEach(m => {
+              const nm = String(m || '').trim();
+              if (nm) nameSet.add(nm);
+            });
+            const allCardNames = Array.from(nameSet).sort((a, b) => a.localeCompare(b, 'ja'));
+
+            const wrap = document.createElement('div');
+            wrap.style.cssText = 'display:flex; flex-direction:column; gap:8px; width:100%;';
+
+            const inputRow = document.createElement('div');
+            inputRow.style.cssText = 'display:flex; gap:6px; width:100%;';
+
+            const input = document.createElement('input');
+            input.id = 'card-name-suggest-input';
+            input.type = 'text';
+            input.autocomplete = 'off';
+            input.placeholder = charOnly ? 'キャラのカード名を入力して検索…' : 'カード名を入力して検索…';
+            input.style.cssText = 'flex:1; min-width:0; background:#0f172a; border:1px solid #38bdf8; border-radius:6px; padding:8px 10px; color:#f8fafc; font-size:0.85rem;';
+            inputRow.appendChild(input);
+
+            const submitBtn = document.createElement('button');
+            submitBtn.id = 'card-name-suggest-submit';
+            submitBtn.type = 'button';
+            submitBtn.className = 'btn';
+            submitBtn.innerText = '決定';
+            submitBtn.disabled = true;
+            submitBtn.onclick = () => {
+              const chosen = input.value.trim();
+              if (!chosen) return;
+              submitDecision({ cardName: chosen, modeIndex: 0, modes: [0] });
+            };
+            inputRow.appendChild(submitBtn);
+            wrap.appendChild(inputRow);
+
+            const suggestBox = document.createElement('div');
+            suggestBox.id = 'card-name-suggest-list';
+            suggestBox.style.cssText = 'display:flex; flex-wrap:wrap; gap:5px; max-height:170px; overflow-y:auto; padding:6px; background:rgba(15,23,42,0.85); border:1px solid #334155; border-radius:6px;';
+            wrap.appendChild(suggestBox);
+
+            const renderSuggestions = (query) => {
+              const q = (query || '').trim().toLowerCase();
+              submitBtn.disabled = !q;
+              suggestBox.innerHTML = '';
+              let filtered;
+              if (!q) {
+                const seen = new Set();
+                filtered = [];
+                modes.forEach(m => {
+                  const s = String(m || '').trim();
+                  if (s && !seen.has(s)) { seen.add(s); filtered.push(s); }
+                });
+                allCardNames.forEach(n => {
+                  if (filtered.length < 30 && !seen.has(n)) { seen.add(n); filtered.push(n); }
+                });
+              } else {
+                const prefixMatches = allCardNames.filter(n => n.toLowerCase().startsWith(q));
+                const partialMatches = allCardNames.filter(n => !n.toLowerCase().startsWith(q) && n.toLowerCase().includes(q));
+                filtered = prefixMatches.concat(partialMatches).slice(0, 40);
+              }
+              if (filtered.length === 0) {
+                const emptyMsg = document.createElement('span');
+                emptyMsg.style.cssText = 'font-size:0.75rem; color:#94a3b8; padding:2px 4px;';
+                emptyMsg.innerText = '一致するカード名候補がありません（そのまま「決定」で指定可能）';
+                suggestBox.appendChild(emptyMsg);
+                return;
+              }
+              filtered.forEach(name => {
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.className = 'btn btn-secondary';
+                chip.style.cssText = 'padding:4px 8px; font-size:0.75rem; min-height:28px; background:#1e293b; border:1px solid #475569; color:#e2e8f0;';
+                chip.innerText = name;
+                chip.onclick = () => {
+                  input.value = name;
+                  submitBtn.disabled = false;
+                  renderSuggestions(name);
+                };
+                suggestBox.appendChild(chip);
+              });
+            };
+
+            input.addEventListener('input', () => renderSuggestions(input.value));
+            input.addEventListener('keydown', (e) => {
+              if (e.key === 'Enter' && input.value.trim()) {
+                e.preventDefault();
+                submitBtn.click();
+              }
+            });
+            renderSuggestions('');
+            decActs.appendChild(wrap);
+          } else if (maxPick > 1) {
             const selectedModes = [];
             const btnConfirm = document.createElement('button');
             btnConfirm.className = 'btn';

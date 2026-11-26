@@ -1063,6 +1063,140 @@ impl MatchEngine {
                         actor_name, ban_name
                     ));
                 }
+                ImmediateOp::DrawUntilHand {
+                    target_hand,
+                    return_drawn_to_deck_bottom_shuffled,
+                } => {
+                    let before_len = self.players.get(player_id).map(|p| p.hand.len()).unwrap_or(0);
+                    let need = target_hand.saturating_sub(before_len);
+                    if need > 0 {
+                        self.draw_cards(player_id, need);
+                        let after_len = self.players.get(player_id).map(|p| p.hand.len()).unwrap_or(0);
+                        let drawn = after_len.saturating_sub(before_len);
+                        if drawn > 0 {
+                            self.log(format!(
+                                "✨ [{}] の効果で手札が{}枚になるまでカードを {} 枚引きました",
+                                actor_name, target_hand, drawn
+                            ));
+                        }
+                        if self.phase == MatchPhase::FINISHED {
+                            return true;
+                        }
+                        if *return_drawn_to_deck_bottom_shuffled && drawn > 0 {
+                            let hand_cands = self.build_filtered_candidates(
+                                player_id,
+                                Some(actor_id),
+                                &TargetFilter {
+                                    owner: OwnerScope::SelfOnly,
+                                    zone: TargetZone::Hand,
+                                    count: drawn,
+                                    ..Default::default()
+                                },
+                            );
+                            let actual_ret = drawn.min(hand_cands.len());
+                            if actual_ret > 0 {
+                                let remaining = &ops[idx + 1..];
+                                let dec_id = self.generate_decision_id();
+                                self.pending_decision = Some(json!({
+                                    "decisionId": dec_id,
+                                    "revision": self.revision,
+                                    "playerId": player_id,
+                                    "kind": "targetSelect",
+                                    "options": {
+                                        "actorId": actor_id,
+                                        "actorName": actor_name,
+                                        "sourceLevel": None::<i32>,
+                                        "effectType": "RETURN_HAND_TO_DECK_BOTTOM_SHUFFLED",
+                                        "targetZone": "HAND",
+                                        "maxSelect": actual_ret,
+                                        "apDelta": 0,
+                                        "rushTarget": null,
+                                        "followUpOps": remaining,
+                                        "condFollowUp": null,
+                                        "followUpTarget": follow_up_target,
+                                        "followUpDeckSearch": follow_up_deck_search,
+                                        "pendingClausePlan": pending_clause_plan,
+                                        "afterHintLevel": after_hint_level,
+                                        "resumeContext": resume_context,
+                                        "title": format!("手札から {} 枚選び、シャッフルしてデッキの下に移してください", actual_ret),
+                                        "candidates": hand_cands,
+                                        "optional": false,
+                                        "abortOnSkip": false
+                                    }
+                                }));
+                                return true;
+                            }
+                        }
+                    } else {
+                        self.log(format!(
+                            "ℹ️ [{}] の効果: 既に手札が{}枚以上あるため引きませんでした",
+                            actor_name, target_hand
+                        ));
+                    }
+                }
+                ImmediateOp::SpecifyCardNameForDeckSearch {
+                    ds,
+                    char_only,
+                    count_from_field_named,
+                } => {
+                    let mut name_options: Vec<String> = Vec::new();
+                    if let Some(ps) = self.players.get(player_id) {
+                        for c in ps.deck.iter().chain(ps.field.iter()).chain(ps.hand.iter()) {
+                            if *char_only {
+                                let is_char = self
+                                    .catalog
+                                    .get(&c.definition_id)
+                                    .map(|d| d.card_type == CardType::CHARACTER)
+                                    .unwrap_or(false);
+                                if !is_char {
+                                    continue;
+                                }
+                            }
+                            let n = self.card_name_by_def(&c.definition_id);
+                            if !name_options.contains(&n) && name_options.len() < 8 {
+                                name_options.push(n);
+                            }
+                        }
+                    }
+                    for default_n in ["江戸川コナン", "毛利蘭", "工藤新一", "灰原哀", "服部平次", "怪盗キッド", "安室透", "赤井秀一"] {
+                        if !name_options.iter().any(|x| x == default_n) && name_options.len() < 12 {
+                            name_options.push(default_n.to_string());
+                        }
+                    }
+                    self.enqueue_continuation_from_ops(
+                        player_id,
+                        actor_id,
+                        actor_name,
+                        &ops[idx + 1..],
+                        evidence_source_inst_id,
+                        follow_up_target,
+                        follow_up_deck_search,
+                        pending_clause_plan,
+                        resume_context,
+                    );
+                    let dec_id = self.generate_decision_id();
+                    self.pending_decision = Some(json!({
+                        "decisionId": dec_id,
+                        "revision": self.revision,
+                        "playerId": player_id,
+                        "kind": "modeSelect",
+                        "options": {
+                            "specialKind": "SPECIFY_CARD_NAME",
+                            "allowFreeText": true,
+                            "charOnly": char_only,
+                            "countFromFieldNamed": count_from_field_named,
+                            "deckSearchSpec": ds,
+                            "actorId": actor_id,
+                            "actorName": actor_name,
+                            "minPick": 1,
+                            "maxPick": 1,
+                            "modes": name_options,
+                            "resumeContext": resume_context,
+                            "title": format!("[{}] 指定するカード名を入力または選択してください", actor_name)
+                        }
+                    }));
+                    return true;
+                }
                 ImmediateOp::DiscardHandTo(target_cnt) => {
                     let cur_len = self.players.get(player_id).map(|p| p.hand.len()).unwrap_or(0);
                     if cur_len > *target_cnt {
@@ -1462,6 +1596,8 @@ impl MatchEngine {
                         "kind": "modeSelect",
                         "options": {
                             "specialKind": "INVESTIGATE_NAME_SELECT",
+                            "allowFreeText": true,
+                            "charOnly": false,
                             "actorId": actor_id,
                             "actorName": actor_name,
                             "count": count,

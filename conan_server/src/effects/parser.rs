@@ -448,6 +448,63 @@ pub fn parse_effect_steps(
             }
         }
 
+        // 「自分の手札がN枚になるまでカードを引く」（B04048 羽田秀𠮷, B08047 沖矢昴）
+        if sentence.contains("手札が") && sentence.contains("枚になるまでカードを引く") {
+            let target_hand = extract_count_around(sentence, "手札が", "枚になるまで");
+            let mut return_drawn = false;
+            if let Some(next_s) = sentences.get(i + 1) {
+                if next_s.contains("引いた枚数と同じ数") && next_s.contains("デッキの下に移す") {
+                    return_drawn = true;
+                    skip_indices.push(i + 1);
+                }
+            }
+            if target_hand > 0 {
+                let op = ImmediateOp::DrawUntilHand {
+                    target_hand,
+                    return_drawn_to_deck_bottom_shuffled: return_drawn,
+                };
+                push_op_or_extra(&mut plan, seen_target_or_search, op);
+                if return_drawn {
+                    seen_target_or_search = true;
+                }
+                continue;
+            }
+        }
+
+        // 「カード名を1つ指定し、...自分のデッキのカードを上からN枚見る...」（B04048, B11038, B09112）
+        if sentence.contains("カード名を1つ指定し、") && !sentence.contains("捜査") {
+            let look_from = sentences[i..].join("。");
+            if look_from.contains("デッキのカードを上から") && look_from.contains("その中から") {
+                let char_only = sentence.contains("キャラのカード名を1つ指定");
+                let count_from_field_named =
+                    sentence.contains("自分の現場にいる指定したカード名のキャラ1枚につき");
+                let search_n = parse_deck_look_count(sentence)
+                    .or_else(|| parse_deck_look_count(&look_from))
+                    .unwrap_or(1);
+                let search_scope = extract_deck_search_scope(&look_from);
+                let ds = parse_deck_search_step(search_n, search_scope, dynamic_level);
+                for j in (i + 1)..sentences.len() {
+                    let s_j = sentences[j];
+                    if s_j.contains("その中から")
+                        || s_j.contains("デッキの下に移す")
+                        || s_j.contains("デッキのカードを上から")
+                    {
+                        skip_indices.push(j);
+                    } else {
+                        break;
+                    }
+                }
+                let op = ImmediateOp::SpecifyCardNameForDeckSearch {
+                    ds,
+                    char_only,
+                    count_from_field_named,
+                };
+                push_op_or_extra(&mut plan, seen_target_or_search, op);
+                seen_target_or_search = true;
+                continue;
+            }
+        }
+
         // 捜査（「カード名を1つ指定し、〚捜査N〛...」 + 発見時効果）（B01095）
         if sentence.contains("捜査") {
             let inv_n = extract_count_around(sentence, "捜査", "〛").max(1);

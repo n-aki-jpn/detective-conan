@@ -449,6 +449,15 @@ pub enum ImmediateOp {
     ReviveSelfFromRemove { sleep: bool },
     PlaySelfFromHand { sleep: bool },
     BanNameThisTurn(String),
+    DrawUntilHand {
+        target_hand: usize,
+        return_drawn_to_deck_bottom_shuffled: bool,
+    },
+    SpecifyCardNameForDeckSearch {
+        ds: DeckSearchStep,
+        char_only: bool,
+        count_from_field_named: bool,
+    },
 }
 
 /// 対象選択ステップ
@@ -469,7 +478,7 @@ pub struct TargetStep {
 }
 
 /// デッキサーチステップ
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeckSearchStep {
     pub search_count: usize,
     pub pick_action: DeckPickAction,

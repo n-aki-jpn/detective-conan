@@ -586,8 +586,84 @@ impl MatchEngine {
                 self.resume_after_decision(player_id, &resume_context);
                 return;
             }
+            "SPECIFY_CARD_NAME" => {
+                let raw_name = val
+                    .get("cardName")
+                    .and_then(|v| v.as_str())
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string())
+                    .or_else(|| modes.get(single_idx).cloned())
+                    .unwrap_or_default();
+                if raw_name.is_empty() {
+                    if self.drain_pending_clause_queue() {
+                        return;
+                    }
+                    self.resume_after_decision(player_id, &resume_context);
+                    return;
+                }
+                self.log(format!("🏷️ [{}] カード名「{}」を指定しました", actor_name, raw_name));
+                if let Ok(mut ds) = serde_json::from_value::<DeckSearchStep>(
+                    opts.get("deckSearchSpec").cloned().unwrap_or(json!(null)),
+                ) {
+                    let count_from_field_named = opts
+                        .get("countFromFieldNamed")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    if count_from_field_named {
+                        let matched_field_cnt = self
+                            .players
+                            .get(player_id)
+                            .map(|ps| {
+                                ps.field
+                                    .iter()
+                                    .filter(|c| {
+                                        self.catalog
+                                            .get(&c.definition_id)
+                                            .map(|def| has_instance_name_match(c, def, &raw_name))
+                                            .unwrap_or(false)
+                                    })
+                                    .count()
+                            })
+                            .unwrap_or(0);
+                        ds.search_count = matched_field_cnt;
+                    }
+                    if ds.filter.branches.is_empty() {
+                        ds.filter.branches.push(crate::effects::TargetBranch::default());
+                    }
+                    for br in &mut ds.filter.branches {
+                        br.name_req = Some(raw_name.clone());
+                    }
+                    if ds.search_count > 0
+                        && self.prompt_deck_search_step(
+                            player_id,
+                            &actor_id,
+                            &actor_name,
+                            source_level,
+                            &ds,
+                            None,
+                            &resume_context,
+                            None,
+                        )
+                    {
+                        return;
+                    }
+                }
+                if self.drain_pending_clause_queue() {
+                    return;
+                }
+                self.resume_after_decision(player_id, &resume_context);
+                return;
+            }
             "INVESTIGATE_NAME_SELECT" => {
-                let guessed_name = modes.get(single_idx).cloned().unwrap_or_default();
+                let guessed_name = val
+                    .get("cardName")
+                    .and_then(|v| v.as_str())
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string())
+                    .or_else(|| modes.get(single_idx).cloned())
+                    .unwrap_or_default();
                 let count = opts.get("count").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
                 let then_clause = opts.get("thenClause").and_then(|v| v.as_str()).unwrap_or("").to_string();
                 let opp_id = self.opponent_id_of(player_id);
@@ -963,6 +1039,38 @@ impl MatchEngine {
             }
             self.resolve_b08068_remove(player_id, &actor_id, revealed_count);
             return;
+        } else if effect_type == "RETURN_HAND_TO_DECK_BOTTOM_SHUFFLED" {
+            if valid_chosen.is_empty() {
+                self.log(format!("{} は手札をデッキの下に戻しませんでした", player_id));
+            } else {
+                let mut returned_cards = Vec::new();
+                if let Some(ps) = self.players.get_mut(player_id) {
+                    for cid in &valid_chosen {
+                        if let Some(pos) = ps.hand.iter().position(|c| &c.instance_id == cid) {
+                            let mut c = ps.hand.remove(pos);
+                            c.zone = Zone::DECK;
+                            c.face_up = false;
+                            c.orientation = CardOrientation::ACTIVE;
+                            returned_cards.push(c);
+                        }
+                    }
+                }
+                if !returned_cards.is_empty() {
+                    applied = true;
+                    let ret_len = returned_cards.len();
+                    use rand::seq::SliceRandom;
+                    returned_cards.shuffle(&mut self.rng);
+                    if let Some(ps) = self.players.get_mut(player_id) {
+                        for c in returned_cards {
+                            ps.deck.insert(0, c);
+                        }
+                    }
+                    self.log(format!(
+                        "📚 [{}] の効果で {} が手札 {} 枚をシャッフルしてデッキの下に移しました",
+                        actor_name, player_id, ret_len
+                    ));
+                }
+            }
         } else if effect_type == "DISCARD_HAND" {
             let reveal_only = opts.get("revealOnly").and_then(|v| v.as_bool()).unwrap_or(false);
             let also_orient = opts.get("alsoOrientActor").and_then(|v| v.as_str());
