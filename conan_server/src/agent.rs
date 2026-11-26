@@ -98,6 +98,7 @@ impl Default for CpuWeights {
 }
 
 impl CpuWeights {
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn load_or_default(path: &str) -> Self {
         if let Ok(content) = std::fs::read_to_string(path) {
             if let Ok(w) = serde_json::from_str::<Self>(&content) {
@@ -107,12 +108,23 @@ impl CpuWeights {
         Self::default()
     }
 
+    #[cfg(target_arch = "wasm32")]
+    pub fn load_or_default(_path: &str) -> Self {
+        Self::default()
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn save(&self, path: &str) -> std::io::Result<()> {
         if let Some(parent) = std::path::Path::new(path).parent() {
             let _ = std::fs::create_dir_all(parent);
         }
         let s = serde_json::to_string_pretty(self).unwrap_or_else(|_| "{}".to_string());
         std::fs::write(path, s)
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn save(&self, _path: &str) -> std::io::Result<()> {
+        Ok(())
     }
 
     /// SPSA 用に連続パラメータを固定長ベクトルへ変換

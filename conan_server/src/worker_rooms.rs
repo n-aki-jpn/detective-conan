@@ -108,72 +108,14 @@ async fn save_room(room_id: &str, rec: &RoomStateRecord, env: &Env) -> Result<()
     Ok(())
 }
 
-fn pick_best_action(opts: &[Value]) -> Value {
-    // 優先順位: PLAY_CHAR > ASSIST > DEDUCE > CONTACT/CASE/EVENT > その他 > END_TURN
-    let priority = |v: &Value| -> u8 {
-        match v.get("type").and_then(|t| t.as_str()).unwrap_or("") {
-            "PLAY_CHAR" => 0,
-            "ASSIST" => 1,
-            "DEDUCE" => 2,
-            "EVENT" | "PLAY_EVENT" => 3,
-            "CONTACT" | "ATTACK" | "CASE_ACTION" | "RESOLVE_CASE" => 4,
-            "END_TURN" | "PASS" => 9,
-            _ => 5,
-        }
-    };
-    opts.iter()
-        .min_by_key(|v| priority(v))
-        .cloned()
-        .unwrap_or_else(|| json!({ "type": "END_TURN" }))
-}
-
-fn build_cpu_decision(engine: &MatchEngine, pd: &Value) -> Value {
-    let decision_id = pd.get("decisionId").and_then(|v| v.as_str()).unwrap_or("");
-    let revision = pd.get("revision").and_then(|v| v.as_u64()).unwrap_or(0);
-    let decision_type = pd.get("type").and_then(|v| v.as_str()).unwrap_or("");
-
-    let mut val = json!({ "type": "END_TURN" });
-    if decision_type == "MAIN_ACTION" {
-        if let Some(ps) = engine.players.get("player2") {
-            let file_count = ps.file.len() as i32;
-            // 1. FILE数以下のキャラがいれば登場
-            let playable_char = ps.hand.iter().find(|c| {
-                engine
-                    .catalog
-                    .get(&c.definition_id)
-                    .map(|d| d.card_type == crate::models::CardType::CHARACTER && d.level <= file_count)
-                    .unwrap_or(false)
-            });
-            if let Some(c) = playable_char {
-                val = json!({ "type": "PLAY_CHAR", "cardId": c.instance_id });
-            } else if let Some(partner) = ps.partner.as_ref() {
-                if partner.orientation == crate::models::CardOrientation::ACTIVE {
-                    val = json!({ "type": "DEDUCE", "actorId": partner.instance_id });
-                }
-            }
-        }
-    } else if let Some(opts) = pd
-        .get("options")
-        .or_else(|| pd.get("actions"))
-        .and_then(|v| v.as_array())
-    {
-        if !opts.is_empty() {
-            val = pick_best_action(opts);
-        }
-    } else if decision_type == "MULLIGAN" {
-        val = json!({ "discardIds": [] });
-    }
-    json!({
-        "decisionId": decision_id,
-        "revision": revision,
-        "value": val
-    })
-}
-
 fn run_cpu_turns(engine: &mut MatchEngine, rec: &mut RoomStateRecord) -> bool {
     if !rec.is_cpu {
         return false;
     }
+    let mut agent = crate::agent::RandomAgent::with_difficulty(
+        "player2",
+        crate::agent::CpuDifficulty::Strongest,
+    );
     let mut changed = false;
     for _ in 0..30 {
         let Some(pd) = engine.pending_decision.clone() else {
@@ -182,15 +124,20 @@ fn run_cpu_turns(engine: &mut MatchEngine, rec: &mut RoomStateRecord) -> bool {
         if pd.get("playerId").and_then(|v| v.as_str()) != Some("player2") {
             break;
         }
-        let dec = build_cpu_decision(engine, &pd);
+        let decision_id = pd.get("decisionId").and_then(|v| v.as_str()).unwrap_or("");
+        let revision = pd.get("revision").and_then(|v| v.as_u64()).unwrap_or(0);
+        let val = agent.choose_action_with_engine(engine, &pd);
+        let dec = json!({
+            "decisionId": decision_id,
+            "revision": revision,
+            "value": val
+        });
         match engine.submit_decision("player2", &dec) {
             Ok(_) => {
                 rec.decisions.push(("player2".to_string(), dec));
                 changed = true;
             }
             Err(e) => {
-                let decision_id = pd.get("decisionId").and_then(|v| v.as_str()).unwrap_or("");
-                let revision = pd.get("revision").and_then(|v| v.as_u64()).unwrap_or(0);
                 let fallback = json!({
                     "decisionId": decision_id,
                     "revision": revision,

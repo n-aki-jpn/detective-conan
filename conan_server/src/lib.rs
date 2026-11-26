@@ -1,6 +1,7 @@
 //! Cloudflare Workers (workers-rs) エントリーポイント。
 //! ネイティブビルド（ローカルサーバー / `cargo test`）時は `main.rs` が使用されます。
 
+pub mod agent;
 pub mod catalog;
 pub mod effects;
 pub mod engine;
