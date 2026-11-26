@@ -228,6 +228,17 @@ struct OpponentProfile {
     blocker_bypass_risk: bool,
 }
 
+#[cfg(target_arch = "wasm32")]
+fn wasm_safe_rng() -> StdRng {
+    let seed = worker::Date::now().as_millis();
+    StdRng::seed_from_u64(seed)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn wasm_safe_rng() -> StdRng {
+    StdRng::from_entropy()
+}
+
 #[derive(Debug)]
 pub struct RandomAgent {
     pub player_id: String,
@@ -260,7 +271,7 @@ impl Clone for RandomAgent {
             opp_cutin_used_count: AtomicUsize::new(
                 self.opp_cutin_used_count.load(Ordering::Relaxed),
             ),
-            rng: Mutex::new(StdRng::from_entropy()),
+            rng: Mutex::new(wasm_safe_rng()),
         }
     }
 }
@@ -276,7 +287,7 @@ impl RandomAgent {
             last_hint_skipped: AtomicBool::new(false),
             opp_no_cutin_observations: AtomicUsize::new(0),
             opp_cutin_used_count: AtomicUsize::new(0),
-            rng: Mutex::new(StdRng::from_entropy()),
+            rng: Mutex::new(wasm_safe_rng()),
         }
     }
 
@@ -305,7 +316,7 @@ impl RandomAgent {
             last_hint_skipped: AtomicBool::new(false),
             opp_no_cutin_observations: AtomicUsize::new(0),
             opp_cutin_used_count: AtomicUsize::new(0),
-            rng: Mutex::new(StdRng::from_entropy()),
+            rng: Mutex::new(wasm_safe_rng()),
         }
     }
 
@@ -319,7 +330,7 @@ impl RandomAgent {
             last_hint_skipped: AtomicBool::new(false),
             opp_no_cutin_observations: AtomicUsize::new(0),
             opp_cutin_used_count: AtomicUsize::new(0),
-            rng: Mutex::new(StdRng::from_entropy()),
+            rng: Mutex::new(wasm_safe_rng()),
         }
     }
 
