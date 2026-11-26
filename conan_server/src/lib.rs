@@ -100,14 +100,14 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .post_async("/api/rooms/join", |req, ctx| async move {
             worker_rooms::join_room(req, ctx.env).await
         })
-        .post_async("/api/rewind", |req, _ctx| async move {
-            worker_rooms::rewind_stub(req).await
+        .post_async("/api/rewind", |req, ctx| async move {
+            worker_rooms::request_rewind(req, ctx.env, CARDS_JSON).await
         })
-        .post_async("/api/rewind/accept", |req, _ctx| async move {
-            worker_rooms::rewind_stub(req).await
+        .post_async("/api/rewind/accept", |req, ctx| async move {
+            worker_rooms::accept_rewind(req, ctx.env, CARDS_JSON).await
         })
-        .post_async("/api/rewind/reject", |req, _ctx| async move {
-            worker_rooms::rewind_stub(req).await
+        .post_async("/api/rewind/reject", |req, ctx| async move {
+            worker_rooms::reject_rewind(req, ctx.env, CARDS_JSON).await
         })
         .post_async("/api/images/upload", |req, ctx| async move {
             worker_images::upload_image(req, ctx.env).await

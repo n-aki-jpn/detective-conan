@@ -22,6 +22,14 @@ struct RoomStateRecord {
     cached_obs_p1: Option<Value>,
     #[serde(default)]
     cached_obs_p2: Option<Value>,
+    #[serde(default)]
+    snapshot_decision_len: Option<usize>,
+    #[serde(default)]
+    snapshot_actor: Option<String>,
+    #[serde(default)]
+    others_decided_since_snapshot: usize,
+    #[serde(default)]
+    rewind_request: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -38,7 +46,57 @@ fn json_err(msg: &str, status: u16) -> Result<Response> {
     Ok(res)
 }
 
-fn build_engine(catalog_json: &str, state: &RoomStateRecord) -> std::result::Result<MatchEngine, String> {
+#[derive(Default)]
+struct RewindTrack {
+    snapshot_decision_len: Option<usize>,
+    snapshot_actor: Option<String>,
+    others_decided_since_snapshot: usize,
+}
+
+fn track_before_decision(engine: &MatchEngine, track: &mut RewindTrack, decision_idx: usize) {
+    let (kind, actor) = engine
+        .pending_decision
+        .as_ref()
+        .map(|d| {
+            (
+                d.get("kind").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                d.get("playerId").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            )
+        })
+        .unwrap_or_default();
+
+    if kind == "mainAction" || kind == "hintPlay" {
+        track.snapshot_decision_len = Some(decision_idx);
+        track.snapshot_actor = Some(actor);
+        track.others_decided_since_snapshot = 0;
+    } else if track.snapshot_actor.as_deref() == Some(actor.as_str()) {
+        // 同プレイヤーの応答系（対象選択等）は隠情報を開示しないためカウントしない
+    } else if track.snapshot_actor.is_some() {
+        track.others_decided_since_snapshot += 1;
+    }
+}
+
+fn apply_track_to_record(rec: &mut RoomStateRecord, track: RewindTrack) {
+    rec.snapshot_decision_len = track.snapshot_decision_len;
+    rec.snapshot_actor = track.snapshot_actor;
+    rec.others_decided_since_snapshot = track.others_decided_since_snapshot;
+}
+
+fn reset_rewind_fields(rec: &mut RoomStateRecord) {
+    rec.snapshot_decision_len = None;
+    rec.snapshot_actor = None;
+    rec.others_decided_since_snapshot = 0;
+    rec.rewind_request = None;
+}
+
+fn can_rewind_by(engine: &MatchEngine, rec: &RoomStateRecord, requester: &str) -> bool {
+    rec.snapshot_decision_len.is_some()
+        && engine.winner_id.is_none()
+        && rec.snapshot_actor.as_deref() == Some(requester)
+        && rec.others_decided_since_snapshot == 0
+}
+
+fn build_engine(catalog_json: &str, state: &mut RoomStateRecord) -> std::result::Result<MatchEngine, String> {
     let catalog = CardCatalog::load_from_str(catalog_json).map_err(|e| e.to_string())?;
     let default_deck: DeckDefinition = serde_json::from_str(DEFAULT_DECK_JSON).map_err(|e| e.to_string())?;
     let p1_deck: DeckDefinition = state
@@ -55,9 +113,12 @@ fn build_engine(catalog_json: &str, state: &RoomStateRecord) -> std::result::Res
     engine.add_player("player1", &p1_deck);
     engine.add_player("player2", &p2_deck);
     engine.start_match();
-    for (pid, dec) in &state.decisions {
+    let mut track = RewindTrack::default();
+    for (idx, (pid, dec)) in state.decisions.iter().enumerate() {
+        track_before_decision(&engine, &mut track, idx);
         let _ = engine.submit_decision(pid, dec);
     }
+    apply_track_to_record(state, track);
     Ok(engine)
 }
 
@@ -85,6 +146,10 @@ async fn load_or_create_room(room_id: &str, env: &Env) -> Result<RoomStateRecord
         p2_deck_json: None,
         cached_obs_p1: None,
         cached_obs_p2: None,
+        snapshot_decision_len: None,
+        snapshot_actor: None,
+        others_decided_since_snapshot: 0,
+        rewind_request: None,
     };
     save_room(room_id, &rec, env).await?;
     Ok(rec)
@@ -130,6 +195,11 @@ fn run_cpu_turns(engine: &mut MatchEngine, rec: &mut RoomStateRecord) -> bool {
         let decision_id = pd.get("decisionId").and_then(|v| v.as_str()).unwrap_or("");
         let revision = pd.get("revision").and_then(|v| v.as_u64()).unwrap_or(0);
 
+        let mut track = RewindTrack {
+            snapshot_decision_len: rec.snapshot_decision_len,
+            snapshot_actor: rec.snapshot_actor.clone(),
+            others_decided_since_snapshot: rec.others_decided_since_snapshot,
+        };
         if decision_id == last_decision_id {
             same_count += 1;
             if same_count >= 2 {
@@ -139,8 +209,10 @@ fn run_cpu_turns(engine: &mut MatchEngine, rec: &mut RoomStateRecord) -> bool {
                     "revision": revision,
                     "value": { "type": "END_TURN" }
                 });
+                track_before_decision(engine, &mut track, rec.decisions.len());
                 if engine.submit_decision("player2", &fallback).is_ok() {
                     rec.decisions.push(("player2".to_string(), fallback));
+                    apply_track_to_record(rec, track);
                     changed = true;
                 }
                 break;
@@ -163,9 +235,16 @@ fn run_cpu_turns(engine: &mut MatchEngine, rec: &mut RoomStateRecord) -> bool {
                 })
             }
         };
+        let mut step_track = RewindTrack {
+            snapshot_decision_len: rec.snapshot_decision_len,
+            snapshot_actor: rec.snapshot_actor.clone(),
+            others_decided_since_snapshot: rec.others_decided_since_snapshot,
+        };
+        track_before_decision(engine, &mut step_track, rec.decisions.len());
         match engine.submit_decision("player2", &ans) {
             Ok(_) => {
                 rec.decisions.push(("player2".to_string(), ans));
+                apply_track_to_record(rec, step_track);
                 changed = true;
             }
             Err(e) => {
@@ -175,8 +254,15 @@ fn run_cpu_turns(engine: &mut MatchEngine, rec: &mut RoomStateRecord) -> bool {
                     "value": { "type": "END_TURN" }
                 });
                 engine.logs.push(format!("⚠️ CPU思考エラー: {}", e));
+                let mut fb_track = RewindTrack {
+                    snapshot_decision_len: rec.snapshot_decision_len,
+                    snapshot_actor: rec.snapshot_actor.clone(),
+                    others_decided_since_snapshot: rec.others_decided_since_snapshot,
+                };
+                track_before_decision(engine, &mut fb_track, rec.decisions.len());
                 if engine.submit_decision("player2", &fallback).is_ok() {
                     rec.decisions.push(("player2".to_string(), fallback));
+                    apply_track_to_record(rec, fb_track);
                     changed = true;
                 } else {
                     break;
@@ -196,10 +282,16 @@ fn build_obs_for(engine: &MatchEngine, player_id: &str, room_id: &str, rec: &Roo
         obj.insert("p1Connected".to_string(), json!(true));
         obj.insert("p2Connected".to_string(), json!(rec.p2_joined));
         obj.insert("waitingForPlayer2".to_string(), json!(!rec.is_cpu && !rec.p2_joined));
+        let can_rewind = can_rewind_by(engine, rec, player_id);
+        let requested_by = rec.rewind_request.clone();
+        let can_accept = requested_by
+            .as_deref()
+            .map(|req| req != player_id && can_rewind_by(engine, rec, req))
+            .unwrap_or(false);
         obj.insert("rewind".to_string(), json!({
-            "available": false,
-            "requestedBy": Value::Null,
-            "canAccept": false
+            "available": can_rewind,
+            "requestedBy": requested_by,
+            "canAccept": can_accept
         }));
     }
     obs
@@ -245,7 +337,7 @@ pub async fn get_state(req: Request, env: Env, catalog_json: &str) -> Result<Res
         return state_response_from_rec(&player_id, &rec);
     }
 
-    let mut engine = match build_engine(catalog_json, &rec) {
+    let mut engine = match build_engine(catalog_json, &mut rec) {
         Ok(e) => e,
         Err(e) => return json_err(&format!("エンジン初期化エラー: {}", e), 500),
     };
@@ -275,8 +367,9 @@ pub async fn submit_decision(mut req: Request, env: Env, catalog_json: &str) -> 
 
     let mut rec = load_or_create_room(&room_id, &env).await?;
     rec.decisions.push((player_id.clone(), body));
+    rec.rewind_request = None;
 
-    let mut engine = match build_engine(catalog_json, &rec) {
+    let mut engine = match build_engine(catalog_json, &mut rec) {
         Ok(e) => e,
         Err(e) => return json_err(&format!("エンジンエラー: {}", e), 500),
     };
@@ -354,8 +447,12 @@ pub async fn reset_room(mut req: Request, env: Env, catalog_json: &str) -> Resul
         p2_deck_json,
         cached_obs_p1: None,
         cached_obs_p2: None,
+        snapshot_decision_len: None,
+        snapshot_actor: None,
+        others_decided_since_snapshot: 0,
+        rewind_request: None,
     };
-    let mut engine = match build_engine(catalog_json, &rec) {
+    let mut engine = match build_engine(catalog_json, &mut rec) {
         Ok(e) => e,
         Err(e) => return json_err(&format!("リセットエラー: {}", e), 500),
     };
@@ -388,6 +485,10 @@ pub async fn create_room(_req: Request, env: Env) -> Result<Response> {
         p2_deck_json: None,
         cached_obs_p1: None,
         cached_obs_p2: None,
+        snapshot_decision_len: None,
+        snapshot_actor: None,
+        others_decided_since_snapshot: 0,
+        rewind_request: None,
     };
     save_room(&room_id, &rec, &env).await?;
     Response::from_json(&json!({
@@ -414,6 +515,121 @@ pub async fn join_room(mut req: Request, env: Env) -> Result<Response> {
     }))
 }
 
-pub async fn rewind_stub(_req: Request) -> Result<Response> {
-    Response::from_json(&json!({ "success": false, "error": "巻き戻しは現在準備中です" }))
+fn parse_rewind_req(body: &Value) -> (String, String) {
+    let room_id = body
+        .get("roomId")
+        .or_else(|| body.get("room_id"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("default")
+        .to_string();
+    let player_id = body
+        .get("playerId")
+        .or_else(|| body.get("player_id"))
+        .and_then(|v| v.as_str())
+        .map(|s| match s {
+            "p1" => "player1",
+            "p2" => "player2",
+            other => other,
+        })
+        .unwrap_or("player1")
+        .to_string();
+    (room_id, player_id)
+}
+
+fn apply_rewind_on_record(
+    rec: &mut RoomStateRecord,
+    room_id: &str,
+    catalog_json: &str,
+) -> std::result::Result<MatchEngine, String> {
+    let snap_len = rec
+        .snapshot_decision_len
+        .ok_or_else(|| "スナップショットがありません".to_string())?;
+    rec.decisions.truncate(snap_len);
+    reset_rewind_fields(rec);
+    let mut engine = build_engine(catalog_json, rec)?;
+    engine.log("↩️ 1手巻き戻しました".to_string());
+    update_cached_obs(&engine, room_id, rec);
+    Ok(engine)
+}
+
+pub async fn request_rewind(mut req: Request, env: Env, catalog_json: &str) -> Result<Response> {
+    let body: Value = req.json().await.unwrap_or_else(|_| json!({}));
+    let (room_id, player_id) = parse_rewind_req(&body);
+
+    let mut rec = load_or_create_room(&room_id, &env).await?;
+    let engine = match build_engine(catalog_json, &mut rec) {
+        Ok(e) => e,
+        Err(e) => return json_err(&format!("エンジンエラー: {}", e), 500),
+    };
+
+    if !can_rewind_by(&engine, &rec, &player_id) {
+        return json_err(
+            "現在は巻き戻しできません（既に相手の応答が出ているか、自分の手ではありません）",
+            400,
+        );
+    }
+
+    rec.rewind_request = Some(player_id.clone());
+    let auto_applied = if rec.is_cpu && player_id == "player1" {
+        if let Err(e) = apply_rewind_on_record(&mut rec, &room_id, catalog_json) {
+            return json_err(&e, 400);
+        }
+        true
+    } else {
+        update_cached_obs(&engine, &room_id, &mut rec);
+        false
+    };
+
+    save_room(&room_id, &rec, &env).await?;
+    Response::from_json(&json!({
+        "status": "ok",
+        "autoApplied": auto_applied
+    }))
+}
+
+pub async fn accept_rewind(mut req: Request, env: Env, catalog_json: &str) -> Result<Response> {
+    let body: Value = req.json().await.unwrap_or_else(|_| json!({}));
+    let (room_id, acceptor) = parse_rewind_req(&body);
+
+    let mut rec = load_or_create_room(&room_id, &env).await?;
+    let Some(requester) = rec.rewind_request.clone() else {
+        return json_err("巻き戻し要求はありません", 400);
+    };
+    if acceptor == requester {
+        return json_err("相手側の同意が必要です", 400);
+    }
+
+    let engine = match build_engine(catalog_json, &mut rec) {
+        Ok(e) => e,
+        Err(e) => return json_err(&format!("エンジンエラー: {}", e), 500),
+    };
+
+    if !can_rewind_by(&engine, &rec, &requester) {
+        rec.rewind_request = None;
+        update_cached_obs(&engine, &room_id, &mut rec);
+        save_room(&room_id, &rec, &env).await?;
+        return json_err("巻き戻し条件が満たされなくなりました", 400);
+    }
+
+    if let Err(e) = apply_rewind_on_record(&mut rec, &room_id, catalog_json) {
+        return json_err(&e, 400);
+    }
+
+    save_room(&room_id, &rec, &env).await?;
+    Response::from_json(&json!({ "status": "ok" }))
+}
+
+pub async fn reject_rewind(mut req: Request, env: Env, catalog_json: &str) -> Result<Response> {
+    let body: Value = req.json().await.unwrap_or_else(|_| json!({}));
+    let (room_id, _rejector) = parse_rewind_req(&body);
+
+    let mut rec = load_or_create_room(&room_id, &env).await?;
+    rec.rewind_request = None;
+    let engine = match build_engine(catalog_json, &mut rec) {
+        Ok(e) => e,
+        Err(e) => return json_err(&format!("エンジンエラー: {}", e), 500),
+    };
+    update_cached_obs(&engine, &room_id, &mut rec);
+    save_room(&room_id, &rec, &env).await?;
+    Response::from_json(&json!({ "status": "ok" }))
 }
