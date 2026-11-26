@@ -316,3 +316,62 @@ pub async fn select_deck(id: &str, req: Request, env: Env) -> Result<Response> {
 
     Response::from_json(&json!({ "success": true, "deckId": id }))
 }
+
+pub async fn migrate_decks(mut req: Request, env: Env) -> Result<Response> {
+    let Some((uid, _)) = resolve_user_id(&req, &env).await else {
+        return json_err("未ログインです", 401);
+    };
+    let body: Value = match req.json().await {
+        Ok(v) => v,
+        Err(_) => return json_err("リクエストJSONが不正です", 400),
+    };
+    let decks = body
+        .get("decks")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    let db = env.d1("DB")?;
+    let mut migrated = 0usize;
+    for mut d in decks {
+        let deck_id = d
+            .get("deckId")
+            .or_else(|| d.get("fileId"))
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| format!("deck_{}", gen_token()));
+        let deck_name = d
+            .get("deckName")
+            .and_then(|v| v.as_str())
+            .unwrap_or("移行デッキ")
+            .to_string();
+        if let Some(obj) = d.as_object_mut() {
+            obj.insert("deckId".to_string(), json!(deck_id));
+        }
+        let deck_json = serde_json::to_string(&d).unwrap_or_else(|_| "{}".to_string());
+        if db
+            .prepare(
+                "INSERT INTO decks (id, user_id, deck_name, deck_json, is_active, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, 0, datetime('now'))
+                 ON CONFLICT(id) DO UPDATE SET
+                   deck_name = excluded.deck_name,
+                   deck_json = excluded.deck_json,
+                   updated_at = datetime('now')",
+            )
+            .bind(&[
+                deck_id.as_str().into(),
+                uid.as_str().into(),
+                deck_name.as_str().into(),
+                deck_json.as_str().into(),
+            ])?
+            .run()
+            .await
+            .is_ok()
+        {
+            migrated += 1;
+        }
+    }
+
+    Response::from_json(&json!({ "success": true, "migrated": migrated }))
+}

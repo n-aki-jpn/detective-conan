@@ -72,6 +72,9 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .post_async("/api/save_deck", |req, ctx| async move {
             worker_auth::save_deck(req, ctx.env).await
         })
+        .post_async("/api/decks/migrate", |req, ctx| async move {
+            worker_auth::migrate_decks(req, ctx.env).await
+        })
         .get_async("/api/state", |req, ctx| async move {
             worker_rooms::get_state(req, ctx.env, CARDS_JSON).await
         })
