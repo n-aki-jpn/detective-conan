@@ -150,24 +150,22 @@ fn run_cpu_turns(engine: &mut MatchEngine, rec: &mut RoomStateRecord) -> bool {
             same_count = 0;
         }
 
-        let val = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let ans = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             agent.choose_action_with_engine(engine, &pd)
         })) {
             Ok(v) => v,
             Err(_) => {
                 engine.logs.push("⚠️ CPU思考パニック捕捉: END_TURNへフォールバック".to_string());
-                json!({ "type": "END_TURN" })
+                json!({
+                    "decisionId": decision_id,
+                    "revision": revision,
+                    "value": { "type": "END_TURN" }
+                })
             }
         };
-        let act_type = val.get("type").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
-        let dec = json!({
-            "decisionId": decision_id,
-            "revision": revision,
-            "value": val
-        });
-        match engine.submit_decision("player2", &dec) {
+        match engine.submit_decision("player2", &ans) {
             Ok(_) => {
-                rec.decisions.push(("player2".to_string(), dec));
+                rec.decisions.push(("player2".to_string(), ans));
                 changed = true;
             }
             Err(e) => {
@@ -176,7 +174,7 @@ fn run_cpu_turns(engine: &mut MatchEngine, rec: &mut RoomStateRecord) -> bool {
                     "revision": revision,
                     "value": { "type": "END_TURN" }
                 });
-                engine.logs.push(format!("⚠️ CPU思考エラー(act={}): {}", act_type, e));
+                engine.logs.push(format!("⚠️ CPU思考エラー: {}", e));
                 if engine.submit_decision("player2", &fallback).is_ok() {
                     rec.decisions.push(("player2".to_string(), fallback));
                     changed = true;
