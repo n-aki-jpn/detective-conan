@@ -146,7 +146,7 @@
       box-shadow: 0 0 6px rgba(56, 189, 248, 0.8);
     }
 
-    .nav-bar:has(#pwa-install-btn:not([hidden])) .nav-menu-dot {
+    .nav-bar:has(#pwa-install-btn[data-install-ready="true"]) .nav-menu-dot {
       display: block;
     }
 
@@ -2033,7 +2033,7 @@
         <button type="button" id="btn-reset-match" class="btn nav-menu-item" onclick="closeNavMenu(); resetMatch();">🔄 対戦をリセット</button>
         <button type="button" id="btn-copy-board" class="btn nav-menu-item" onclick="closeNavMenu(); copyBoardState();"
           title="現在の盤面・ログをコピー">🐛 盤面・ログをコピー</button>
-        <button type="button" id="pwa-install-btn" class="btn nav-menu-item" hidden
+        <button type="button" id="pwa-install-btn" class="btn nav-menu-item"
           title="ホーム画面・アプリとしてインストール">📲 アプリを追加</button>
         <div id="nav-menu-auth-divider" class="nav-menu-divider" style="display:none;"></div>
         <button type="button" id="btn-logout" class="btn nav-menu-item nav-menu-item-danger" onclick="closeNavMenu(); logout();"
@@ -2601,6 +2601,24 @@
 
       <div class="modal-footer" style="justify-content:flex-end; margin-top:10px;">
         <button type="button" class="btn btn-secondary" onclick="closeDeckShareModal()" style="padding:5px 14px; font-size:0.8rem; min-height:30px;">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PWA Install Guide Modal -->
+  <div id="pwa-install-guide-modal" class="card-modal-backdrop" role="dialog" aria-modal="true"
+    aria-labelledby="pwa-install-guide-title">
+    <div class="card-modal-content" style="max-width:400px;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <span id="pwa-install-guide-title" class="modal-title">📲 アプリを追加</span>
+        <span class="card-badge" style="font-size:0.72rem; background:#0284c7; color:#fff;">PWAガイド</span>
+      </div>
+      <div id="pwa-install-guide-body" class="modal-body"
+        style="font-size:0.82rem; line-height:1.65; color:#e2e8f0; display:flex; flex-direction:column; gap:10px;">
+      </div>
+      <div class="modal-footer" style="justify-content:flex-end; margin-top:14px;">
+        <button type="button" id="pwa-install-guide-close" class="btn btn-secondary"
+          style="padding:6px 14px; font-size:0.8rem; min-height:32px;">閉じる</button>
       </div>
     </div>
   </div>

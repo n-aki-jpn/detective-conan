@@ -176,6 +176,7 @@ test.describe('PWA 統合検証 E2E', () => {
     await expect(page.locator('#se-volume-slider')).toBeVisible();
     await expect(page.locator('#btn-reset-match')).toBeVisible();
     await expect(page.locator('#btn-copy-board')).toBeVisible();
+    await expect(page.locator('#pwa-install-btn')).toBeVisible();
     await expect(page.locator('#btn-logout')).toBeVisible();
 
     // CardGameSE インスタンス及びメソッドの存在確認
@@ -250,5 +251,47 @@ test.describe('PWA 統合検証 E2E', () => {
     });
     await page.keyboard.press('Escape');
     await expect(pop).toBeHidden();
+  });
+
+  test('beforeinstallprompt 非対応環境（iOS Safari 等）でもアプリ追加ボタンから手順ガイドモーダルが開く', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({
+      userAgent:
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+      viewport: { width: 390, height: 844 },
+    });
+    const page = await context.newPage();
+    await page.addInitScript(() => {
+      window.addEventListener(
+        'beforeinstallprompt',
+        (e) => {
+          e.stopImmediatePropagation();
+        },
+        true,
+      );
+    });
+
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+
+    const nick = `iOS案内${Date.now().toString().slice(-6)}`;
+    await page.fill('#login-nickname', nick);
+    await page.click('button:has-text("新規登録")');
+    await expect(page.locator('#login-overlay')).toBeHidden();
+
+    await page.click('#nav-menu-btn');
+    await expect(page.locator('#nav-menu-popover')).toBeVisible();
+    await expect(page.locator('#pwa-install-btn')).toBeVisible();
+
+    await page.click('#pwa-install-btn');
+    const guideModal = page.locator('#pwa-install-guide-modal');
+    await expect(guideModal).toBeVisible();
+    await expect(page.locator('#pwa-install-guide-body')).toContainText('ホーム画面に追加');
+
+    await page.click('#pwa-install-guide-close');
+    await expect(guideModal).toBeHidden();
+    await context.close();
   });
 });
