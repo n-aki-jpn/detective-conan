@@ -127,7 +127,16 @@ fn run_cpu_turns(engine: &mut MatchEngine, rec: &mut RoomStateRecord) -> bool {
         let decision_id = pd.get("decisionId").and_then(|v| v.as_str()).unwrap_or("");
         let revision = pd.get("revision").and_then(|v| v.as_u64()).unwrap_or(0);
         let dec_type = pd.get("type").and_then(|v| v.as_str()).unwrap_or("");
-        let val = agent.choose_action_with_engine(engine, &pd);
+        engine.logs.push(format!("🤖 CPU思考開始(step={}, dec={})", step, dec_type));
+        let val = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            agent.choose_action_with_engine(engine, &pd)
+        })) {
+            Ok(v) => v,
+            Err(_) => {
+                engine.logs.push("⚠️ CPU思考パニック捕捉: END_TURNへフォールバック".to_string());
+                json!({ "type": "END_TURN" })
+            }
+        };
         let act_type = val.get("type").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
         let dec = json!({
             "decisionId": decision_id,
