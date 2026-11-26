@@ -3,15 +3,18 @@ use crate::models::DeckDefinition;
 use crate::observation::build_player_observation;
 use crate::room::{sanitize_deck, MatchRoom, SharedState};
 use axum::{
+    body::Body,
     extract::{ConnectInfo, FromRequestParts, Path as AxumPath, Query, State},
-    http::{request::Parts, StatusCode},
-    response::IntoResponse,
+    http::{header, HeaderName, HeaderValue, request::Parts, StatusCode},
+    response::{IntoResponse, Response},
     routing::{delete, get, post},
     Json,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::path::PathBuf;
+use tower_http::services::ServeDir;
 
 // ─── Request / Response Types ──────────────────────────────────────────────────
 
@@ -835,4 +838,71 @@ pub fn build_api_router(state: SharedState) -> axum::Router {
         .route("/api/rewind/accept", post(handle_rewind_accept))
         .route("/api/rewind/reject", post(handle_rewind_reject))
         .with_state(state)
+}
+
+/// 指定された静的ファイルをカスタムヘッダー付きで配信する。
+async fn serve_static_with_headers(
+    path: PathBuf,
+    content_type: &'static str,
+    cache_control: &'static str,
+    service_worker_allowed: Option<&'static str>,
+) -> Response {
+    match tokio::fs::read(&path).await {
+        Ok(bytes) => {
+            let mut builder = Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, HeaderValue::from_static(content_type))
+                .header(header::CACHE_CONTROL, HeaderValue::from_static(cache_control));
+            if let Some(scope) = service_worker_allowed {
+                builder = builder.header(
+                    HeaderName::from_static("service-worker-allowed"),
+                    HeaderValue::from_static(scope),
+                );
+            }
+            builder.body(Body::from(bytes)).unwrap_or_else(|_| {
+                (StatusCode::INTERNAL_SERVER_ERROR, "Failed to build response").into_response()
+            })
+        }
+        Err(_) => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+/// API ルーターと静的ファイル配信（PWA 用ヘッダー付与を含む）を統合したアプリルーターを構築する。
+/// main.rs と統合テストの両方から利用される。
+pub fn build_app_router(state: SharedState, static_dir: PathBuf) -> axum::Router {
+    let manifest_path = static_dir.join("manifest.webmanifest");
+    let sw_path = static_dir.join("sw.js");
+
+    build_api_router(state)
+        .route(
+            "/manifest.webmanifest",
+            get(move || {
+                let path = manifest_path.clone();
+                async move {
+                    serve_static_with_headers(
+                        path,
+                        "application/manifest+json; charset=utf-8",
+                        "no-cache",
+                        None,
+                    )
+                    .await
+                }
+            }),
+        )
+        .route(
+            "/sw.js",
+            get(move || {
+                let path = sw_path.clone();
+                async move {
+                    serve_static_with_headers(
+                        path,
+                        "application/javascript; charset=utf-8",
+                        "no-cache",
+                        Some("/"),
+                    )
+                    .await
+                }
+            }),
+        )
+        .fallback_service(ServeDir::new(static_dir))
 }

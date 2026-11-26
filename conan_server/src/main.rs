@@ -1,7 +1,6 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use tower_http::services::ServeDir;
 
 mod agent;
 mod catalog;
@@ -159,8 +158,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let static_dir = PathBuf::from("src/conan_engine/web/static");
 
-    let app = handlers::build_api_router(shared_state)
-        .fallback_service(ServeDir::new(&static_dir));
+    let app = handlers::build_app_router(shared_state, static_dir);
 
     let port: u16 = std::env::args()
         .nth(1)

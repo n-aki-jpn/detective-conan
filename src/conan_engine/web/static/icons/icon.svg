@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#0b1120" />
+    </linearGradient>
+    <linearGradient id="accent-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7dd3fc" />
+      <stop offset="50%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+    <linearGradient id="card-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="46%" r="44%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.28" />
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <!-- 背景 -->
+  <rect width="512" height="512" rx="108" fill="url(#bg-grad)" />
+  <rect x="10" y="10" width="492" height="492" rx="98" fill="none" stroke="#1e293b" stroke-width="4" />
+  <circle cx="256" cy="240" r="210" fill="url(#glow)" />
+
+  <!-- 外周の推理コンパスリング -->
+  <circle cx="256" cy="256" r="196" fill="none" stroke="#38bdf8" stroke-opacity="0.16" stroke-width="2" stroke-dasharray="10 10" />
+
+  <!-- 背面カード -->
+  <g transform="translate(256 256) rotate(-11) translate(-256 -256)">
+    <rect x="150" y="108" width="212" height="296" rx="22" fill="#0f172a" stroke="#38bdf8" stroke-opacity="0.38" stroke-width="5" />
+    <rect x="166" y="124" width="180" height="264" rx="14" fill="none" stroke="#38bdf8" stroke-opacity="0.18" stroke-width="2" />
+  </g>
+
+  <!-- 前面カード -->
+  <g transform="translate(256 256) rotate(4) translate(-256 -256)">
+    <rect x="150" y="108" width="212" height="296" rx="22" fill="url(#card-grad)" stroke="url(#accent-grad)" stroke-width="7" />
+    <rect x="168" y="126" width="176" height="260" rx="14" fill="none" stroke="#38bdf8" stroke-opacity="0.35" stroke-width="2" />
+
+    <!-- カード四隅のダイヤモンド装飾 -->
+    <polygon points="184,142 190,148 184,154 178,148" fill="#38bdf8" opacity="0.85" />
+    <polygon points="328,358 334,364 328,370 322,364" fill="#38bdf8" opacity="0.85" />
+  </g>
+
+  <!-- 推理エンブレム（虫眼鏡＋鍵穴） -->
+  <g transform="translate(248 246)">
+    <!-- ハンドル -->
+    <line x1="46" y1="46" x2="96" y2="96" stroke="#0b1120" stroke-width="28" stroke-linecap="round" />
+    <line x1="46" y1="46" x2="96" y2="96" stroke="url(#accent-grad)" stroke-width="18" stroke-linecap="round" />
+
+    <!-- レンズ外枠 -->
+    <circle cx="0" cy="0" r="68" fill="#0b1120" stroke="url(#accent-grad)" stroke-width="14" />
+    <circle cx="0" cy="0" r="52" fill="#0f172a" stroke="#7dd3fc" stroke-opacity="0.45" stroke-width="2" />
+
+    <!-- 鍵穴モチーフ -->
+    <circle cx="0" cy="-12" r="15" fill="#38bdf8" />
+    <path d="M-8,-4 L8,-4 L13,28 L-13,28 Z" fill="#38bdf8" />
+
+    <!-- レンズのハイライト -->
+    <path d="M-34,-26 A42,42 0 0,1 -6,-40" fill="none" stroke="#e0f2fe" stroke-width="5" stroke-linecap="round" opacity="0.85" />
+  </g>
+</svg>

@@ -6,6 +6,17 @@
   <meta name="viewport"
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>名探偵コナンTCG モバイルWeb対戦 & デッキ構築</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="description" content="名探偵コナンTCGの対戦Webアプリおよびデッキ構築ツール">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="コナンTCG">
+  <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
+  <script src="/pwa.js" defer></script>
   <style>
     :root {
       --bg-color: #0b1120;
@@ -47,6 +58,7 @@
       background: rgba(15, 23, 42, 0.98);
       backdrop-filter: blur(10px);
       padding: 6px 12px;
+      padding-top: calc(6px + env(safe-area-inset-top, 0px));
       border-bottom: 1px solid var(--border-color);
       display: flex;
       justify-content: space-between;
@@ -91,6 +103,7 @@
     @media (max-width: 520px) {
       .nav-bar {
         padding: 4px 6px;
+        padding-top: calc(4px + env(safe-area-inset-top, 0px));
         gap: 4px;
       }
       .nav-tabs, .nav-actions {
@@ -1750,6 +1763,48 @@
       82% { opacity: 1; transform: translate(-50%, 0); }
       100% { opacity: 0; transform: translate(-50%, -6px); }
     }
+
+    /* PWA Banners & Accessibility */
+    .pwa-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 14px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .pwa-banner[hidden] {
+      display: none !important;
+    }
+    .pwa-banner-offline {
+      background: rgba(127, 29, 29, 0.92);
+      color: #fecaca;
+      border-bottom-color: rgba(248, 113, 113, 0.4);
+    }
+    .pwa-banner-update {
+      background: rgba(15, 23, 42, 0.96);
+      color: #e0f2fe;
+      border-bottom-color: rgba(56, 189, 248, 0.45);
+    }
+    .pwa-banner-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .pwa-sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
   </style>
 </head>
 
@@ -1781,10 +1836,23 @@
         style="display:none; padding:4px 8px; font-size:0.75rem; min-height:28px;">✕ 拒否</button>
       <span id="auth-nickname-badge"
         style="display:none; padding:4px 8px; font-size:0.75rem; color:#7dd3fc; border:1px solid rgba(56,189,248,0.4); border-radius:6px; min-height:28px; align-items:center; white-space:nowrap;"></span>
+      <button type="button" id="pwa-install-btn" class="btn btn-secondary" hidden
+        style="padding:4px 8px; font-size:0.75rem; min-height:28px;" title="ホーム画面・アプリとしてインストール">📲 アプリ追加</button>
       <button type="button" id="btn-logout" class="btn btn-secondary" onclick="logout()"
         style="display:none; padding:4px 8px; font-size:0.75rem; min-height:28px;">ログアウト</button>
     </div>
   </nav>
+  <div id="pwa-offline-banner" class="pwa-banner pwa-banner-offline" hidden role="status" aria-live="polite">
+    <span>⚠️ オフラインです。オンライン対戦や最新の同期にはネットワーク接続が必要です。</span>
+  </div>
+  <div id="pwa-update-banner" class="pwa-banner pwa-banner-update" hidden role="status" aria-live="polite">
+    <span>✨ 新しいバージョンが利用可能です。</span>
+    <div class="pwa-banner-actions">
+      <button type="button" id="pwa-update-btn" class="btn" style="padding:4px 10px; font-size:0.75rem; min-height:26px;">更新</button>
+      <button type="button" id="pwa-update-dismiss" class="btn btn-secondary" style="padding:4px 10px; font-size:0.75rem; min-height:26px;">あとで</button>
+    </div>
+  </div>
+  <div id="pwa-install-status" class="pwa-sr-only" role="status" aria-live="polite"></div>
   <audio id="battle-bgm" src="/audio/battle.mp3" loop preload="auto"></audio>
   <audio id="deck-bgm" src="/audio/deck.mp3" loop preload="auto"></audio>
   <audio id="win-bgm" src="/audio/win.mp3" loop preload="auto"></audio>
