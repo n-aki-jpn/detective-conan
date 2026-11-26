@@ -74,6 +74,16 @@ for entry in raw.get('data', []):
     except Exception:
         sameid_limit = 3
 
+    pkg_name = entry.get('package') or ''
+    if pkg_name == 'PRカード':
+        pack_code = 'PR'
+    elif pkg_name == 'SPカード':
+        pack_code = 'SP'
+    elif pkg_name.startswith('CT-') and ' ' in pkg_name:
+        pack_code = pkg_name.split(' ', 1)[0]
+    else:
+        pack_code = pkg_name
+
     card = {
         "definitionId": definition_id,
         "canonicalId": str(canonical_id),
@@ -88,6 +98,9 @@ for entry in raw.get('data', []):
         "lp": lp,
         "description": desc,
         "caseLevels": case_levels,
+        "package": pkg_name,
+        "packCode": pack_code,
+        "releaseDate": entry.get('release_date'),
         "mainThumb": entry.get('main_thumb',''),
         "mainPath": entry.get('main_path',''),
         "subThumb": entry.get('sub_thumb',''),

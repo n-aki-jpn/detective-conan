@@ -1,9 +1,95 @@
 use crate::models::{CardDefinition, CardType};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
+
+const EMBEDDED_PACK_RESTRICTIONS_JSON: &str =
+    include_str!("../../data/dummy/pack_restrictions.json");
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackRestrictionsConfig {
+    #[serde(default)]
+    pub unreleased_packs: Vec<String>,
+    #[serde(default)]
+    pub restrict_pr: bool,
+    #[serde(default)]
+    pub restricted_card_ids: Vec<String>,
+}
+
+impl PackRestrictionsConfig {
+    pub fn load_default() -> Self {
+        let mut cfg: Self = serde_json::from_str(EMBEDDED_PACK_RESTRICTIONS_JSON).unwrap_or_default();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if let Ok(raw) = std::fs::read_to_string("data/dummy/pack_restrictions.json") {
+                if let Ok(disk_cfg) = serde_json::from_str::<Self>(&raw) {
+                    cfg = disk_cfg;
+                }
+            }
+            if let Ok(val) = std::env::var("UNRELEASED_PACKS") {
+                for item in val.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+                    if !cfg.unreleased_packs.iter().any(|x| x == item) {
+                        cfg.unreleased_packs.push(item.to_string());
+                    }
+                }
+            }
+            if let Ok(val) = std::env::var("RESTRICT_PR") {
+                let lower = val.trim().to_ascii_lowercase();
+                if lower == "true" || lower == "1" {
+                    cfg.restrict_pr = true;
+                }
+            }
+            if let Ok(val) = std::env::var("RESTRICTED_CARD_IDS") {
+                for item in val.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+                    if !cfg.restricted_card_ids.iter().any(|x| x == item) {
+                        cfg.restricted_card_ids.push(item.to_string());
+                    }
+                }
+            }
+        }
+        cfg
+    }
+
+    pub fn is_card_restricted(&self, card: &Value) -> bool {
+        let def_id = card
+            .get("definitionId")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        if !def_id.is_empty() && self.restricted_card_ids.iter().any(|id| id == def_id) {
+            return true;
+        }
+        let pack_code = card.get("packCode").and_then(|v| v.as_str()).unwrap_or("");
+        let package_name = card.get("package").and_then(|v| v.as_str()).unwrap_or("");
+        let is_pr = pack_code == "PR" || package_name == "PRカード" || def_id.starts_with("PR");
+        if self.restrict_pr && is_pr {
+            return true;
+        }
+        if self
+            .unreleased_packs
+            .iter()
+            .any(|p| (!pack_code.is_empty() && p == pack_code) || (!package_name.is_empty() && p == package_name))
+        {
+            return true;
+        }
+        false
+    }
+}
+
+pub fn apply_pack_restrictions(raw_json: &mut Value, config: &PackRestrictionsConfig) {
+    if let Some(cards_val) = raw_json.get_mut("cards").and_then(|v| v.as_array_mut()) {
+        for card in cards_val.iter_mut() {
+            let restricted = config.is_card_restricted(card);
+            card["isRestricted"] = Value::Bool(restricted);
+        }
+    }
+    if let Ok(cfg_val) = serde_json::to_value(config) {
+        raw_json["packRestrictions"] = cfg_val;
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct CardCatalog {
@@ -217,6 +303,9 @@ impl CardCatalog {
                 definitions.insert(def_id, c_def);
             }
         }
+
+        let pack_restrictions = PackRestrictionsConfig::load_default();
+        apply_pack_restrictions(&mut raw_json, &pack_restrictions);
 
         Ok(CardCatalog {
             catalog_version,

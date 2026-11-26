@@ -125,3 +125,36 @@ fn audit_unparsed_card_effects() {
         missing_total, empty_total
     );
 }
+
+#[test]
+fn test_catalog_cards_have_pack_metadata_and_restrictions_apply() {
+    let mut cat = load_test_catalog();
+    let cards = cat.raw_json["cards"].as_array().expect("cards array");
+    assert!(!cards.is_empty());
+    for c in cards {
+        let def_id = c["definitionId"].as_str().unwrap_or("");
+        let pkg = c["package"].as_str().unwrap_or("");
+        let code = c["packCode"].as_str().unwrap_or("");
+        assert!(!pkg.is_empty(), "card {} must have package", def_id);
+        assert!(!code.is_empty(), "card {} must have packCode", def_id);
+    }
+
+    let cfg = crate::catalog::PackRestrictionsConfig {
+        unreleased_packs: vec!["CT-P11".to_string()],
+        restrict_pr: true,
+        restricted_card_ids: vec!["B01001".to_string()],
+    };
+    crate::catalog::apply_pack_restrictions(&mut cat.raw_json, &cfg);
+    let updated = cat.raw_json["cards"].as_array().unwrap();
+    let p11_card = updated.iter().find(|c| c["packCode"] == "CT-P11").unwrap();
+    assert_eq!(p11_card["isRestricted"], true);
+    let pr_card = updated.iter().find(|c| c["packCode"] == "PR").unwrap();
+    assert_eq!(pr_card["isRestricted"], true);
+    let specific = updated.iter().find(|c| c["definitionId"] == "B01001").unwrap();
+    assert_eq!(specific["isRestricted"], true);
+    let normal_p01 = updated
+        .iter()
+        .find(|c| c["packCode"] == "CT-P01" && c["definitionId"] != "B01001")
+        .unwrap();
+    assert_eq!(normal_p01["isRestricted"], false);
+}

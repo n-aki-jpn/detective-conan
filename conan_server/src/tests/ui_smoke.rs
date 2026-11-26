@@ -422,6 +422,17 @@ assert.equal(dsConfirmBtn.innerText, '決定（1/2枚）');
 // イベントは追加でき 2/2 になること
 dsBtnE1.onclick();
 assert.equal(dsConfirmBtn.innerText, '決定（2/2枚）');
+
+// デッキ構築の収録弾フィルタ＆未発売・PR制限の検証
+catalogData.push(
+  {{ definitionId: 'B01099', canonicalId: 'C_P01', title: '第1弾キャラ', cardType: 'CHARACTER', level: 2, ap: 2000, lp: 1, colors: ['青'], package: 'CT-P01 Case-Booster 01', packCode: 'CT-P01', isRestricted: false }},
+  {{ definitionId: 'B11099', canonicalId: 'C_P11', title: '未発売キャラ', cardType: 'CHARACTER', level: 3, ap: 3000, lp: 1, colors: ['赤'], package: 'CT-P11 Case-Booster 11', packCode: 'CT-P11', isRestricted: true }},
+  {{ definitionId: 'PR999', canonicalId: 'C_PR', title: '限定PRキャラ', cardType: 'CHARACTER', level: 1, ap: 1000, lp: 1, colors: ['黄'], package: 'PRカード', packCode: 'PR', isRestricted: false }}
+);
+packRestrictionsData = {{ unreleasedPacks: ['CT-P11'], restrictPr: true, restrictedCardIds: [] }};
+assert.equal(isCardDeckRestricted(catalogData.find(c => c.definitionId === 'B01099')), false);
+assert.equal(isCardDeckRestricted(catalogData.find(c => c.definitionId === 'B11099')), true);
+assert.equal(isCardDeckRestricted(catalogData.find(c => c.definitionId === 'PR999')), true);
 "#,
         js = js_code
     );

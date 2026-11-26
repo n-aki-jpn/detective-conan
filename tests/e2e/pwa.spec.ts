@@ -131,6 +131,13 @@ test.describe('PWA 統合検証 E2E', () => {
     await expect(deckTabBtn).toBeVisible();
     await deckTabBtn.click();
 
+    // 収録弾フィルタが表示され、選択肢に CT-P01 などが含まれること
+    const packSelect = page.locator('#pack-filter-select');
+    await expect(packSelect).toBeVisible();
+    await expect(packSelect).toContainText('CT-P01');
+    await packSelect.selectOption('CT-P01');
+    await expect(packSelect).toHaveValue('CT-P01');
+
     // 対戦タブに戻れるか確認
     const battleTabBtn = page.locator('button, a').filter({ hasText: '対戦' }).first();
     await expect(battleTabBtn).toBeVisible();

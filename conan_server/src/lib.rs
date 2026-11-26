@@ -37,9 +37,71 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
                 "runtime": "cloudflare-workers"
             }))
         })
-        .get("/api/catalog", |_req, _ctx| {
+        .get_async("/api/catalog", |_req, ctx| async move {
             match catalog::CardCatalog::load_from_str(CARDS_JSON) {
-                Ok(cat) => Response::from_json(&cat.raw_json),
+                Ok(mut cat) => {
+                    let mut cfg = catalog::PackRestrictionsConfig::load_default();
+                    if let Ok(v) = ctx.env.var("UNRELEASED_PACKS") {
+                        for item in v.to_string().split(',').map(str::trim).filter(|s| !s.is_empty()) {
+                            if !cfg.unreleased_packs.iter().any(|x| x == item) {
+                                cfg.unreleased_packs.push(item.to_string());
+                            }
+                        }
+                    }
+                    if let Ok(v) = ctx.env.var("RESTRICT_PR") {
+                        let lower = v.to_string().trim().to_ascii_lowercase();
+                        if lower == "true" || lower == "1" {
+                            cfg.restrict_pr = true;
+                        }
+                    }
+                    if let Ok(v) = ctx.env.var("RESTRICTED_CARD_IDS") {
+                        for item in v.to_string().split(',').map(str::trim).filter(|s| !s.is_empty()) {
+                            if !cfg.restricted_card_ids.iter().any(|x| x == item) {
+                                cfg.restricted_card_ids.push(item.to_string());
+                            }
+                        }
+                    }
+                    if let Ok(db) = ctx.env.d1("DB") {
+                        if let Ok(res) = db
+                            .prepare("SELECT pack_code FROM pack_restrictions WHERE is_restricted = 1")
+                            .all()
+                            .await
+                        {
+                            #[derive(serde::Deserialize)]
+                            struct PackRow {
+                                pack_code: String,
+                            }
+                            if let Ok(rows) = res.results::<PackRow>() {
+                                for r in rows {
+                                    if r.pack_code == "PR" || r.pack_code == "PRカード" {
+                                        cfg.restrict_pr = true;
+                                    } else if !cfg.unreleased_packs.iter().any(|x| x == &r.pack_code) {
+                                        cfg.unreleased_packs.push(r.pack_code);
+                                    }
+                                }
+                            }
+                        }
+                        if let Ok(res) = db
+                            .prepare("SELECT definition_id FROM card_restrictions WHERE is_restricted = 1")
+                            .all()
+                            .await
+                        {
+                            #[derive(serde::Deserialize)]
+                            struct CardRow {
+                                definition_id: String,
+                            }
+                            if let Ok(rows) = res.results::<CardRow>() {
+                                for r in rows {
+                                    if !cfg.restricted_card_ids.iter().any(|x| x == &r.definition_id) {
+                                        cfg.restricted_card_ids.push(r.definition_id);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catalog::apply_pack_restrictions(&mut cat.raw_json, &cfg);
+                    Response::from_json(&cat.raw_json)
+                }
                 Err(e) => Response::error(format!("カタログ読み込みエラー: {}", e), 500),
             }
         })

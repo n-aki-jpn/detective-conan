@@ -2472,6 +2472,10 @@
           <button class="level-pill type-pill active" data-type="" onclick="setTypeFilter('')">全種別</button>
           <button class="level-pill type-pill" data-type="CHARACTER" onclick="setTypeFilter('CHARACTER')">キャラ</button>
           <button class="level-pill type-pill" data-type="EVENT" onclick="setTypeFilter('EVENT')">イベント</button>
+          <select id="pack-filter-select" onchange="setPackFilter(this.value)" aria-label="収録弾フィルタ"
+            style="margin-left:auto; max-width:220px; background:#0f172a; color:#e2e8f0; border:1px solid var(--border-color); border-radius:6px; padding:3px 6px; font-size:0.72rem; cursor:pointer;">
+            <option value="">📦 収録弾: すべて</option>
+          </select>
         </div>
 
         <!-- Level Filter & Per-Level Deck Count Pills -->
@@ -5844,6 +5848,10 @@
           const catRes = await api('/api/catalog');
           const catJson = await catRes.json();
           catalogData = catJson.cards || [];
+          packRestrictionsData = catJson.packRestrictions || { unreleasedPacks: [], restrictPr: false, restrictedCardIds: [] };
+          populatePackFilterOptions();
+        } else {
+          populatePackFilterOptions();
         }
 
         // サーバー側のユーザーデッキをlocalStorageへ復元（新規デバイスでのログイン引き継ぎ）
@@ -6029,6 +6037,78 @@
     let selectedColorFilter = ''; // '' or '青', '緑', etc.
     let selectedLevelFilter = ''; // '' or '1'..'8', '9+'
     let selectedTypeFilter = ''; // '' or 'CHARACTER' or 'EVENT'
+    let selectedPackFilter = ''; // '' or 'CT-P01', 'CT-D01', 'PR', 'SP'
+    let packRestrictionsData = { unreleasedPacks: [], restrictPr: false, restrictedCardIds: [] };
+
+    function getCardPackCode(c) {
+      if (!c) return '';
+      if (c.packCode) return c.packCode;
+      const pkg = String(c.package || '');
+      if (!pkg) return '';
+      if (pkg === 'PRカード') return 'PR';
+      if (pkg === 'SPカード') return 'SP';
+      const m = pkg.match(/^(CT-[PD]\d{2})\b/);
+      return m ? m[1] : pkg;
+    }
+
+    function isCardDeckRestricted(c) {
+      if (!c) return false;
+      if (c.isRestricted === true) return true;
+      const cfg = packRestrictionsData || {};
+      const defId = String(c.definitionId || '');
+      if (Array.isArray(cfg.restrictedCardIds) && cfg.restrictedCardIds.includes(defId)) {
+        return true;
+      }
+      const code = getCardPackCode(c);
+      const pkg = String(c.package || '');
+      const isPr = code === 'PR' || pkg === 'PRカード' || defId.startsWith('PR');
+      if (cfg.restrictPr && isPr) {
+        return true;
+      }
+      if (Array.isArray(cfg.unreleasedPacks)) {
+        if (cfg.unreleasedPacks.some(p => (code && p === code) || (pkg && p === pkg))) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function populatePackFilterOptions() {
+      const sel = document.getElementById('pack-filter-select');
+      if (!sel) return;
+      const packMap = new Map();
+      (Array.isArray(catalogData) ? catalogData : []).forEach(c => {
+        if (isCardDeckRestricted(c)) return;
+        const code = getCardPackCode(c);
+        if (!code) return;
+        if (!packMap.has(code)) {
+          packMap.set(code, c.package || code);
+        }
+      });
+      const rank = (code) => {
+        if (code.startsWith('CT-P')) return `0_${999 - Number(code.slice(4) || 0)}_${code}`;
+        if (code.startsWith('CT-D')) return `1_${999 - Number(code.slice(4) || 0)}_${code}`;
+        if (code === 'PR') return '2_PR';
+        if (code === 'SP') return '3_SP';
+        return `4_${code}`;
+      };
+      const entries = Array.from(packMap.entries()).sort((a, b) => rank(a[0]).localeCompare(rank(b[0])));
+      const prev = selectedPackFilter;
+      sel.innerHTML = '<option value="">📦 収録弾: すべて</option>';
+      entries.forEach(([code, pkg]) => {
+        const opt = document.createElement('option');
+        opt.value = code;
+        const shortLabel = pkg.startsWith(code + ' ') ? `${code}: ${pkg.slice(code.length + 1)}` : pkg;
+        opt.textContent = `📦 ${shortLabel}`;
+        sel.appendChild(opt);
+      });
+      if (prev && packMap.has(prev)) {
+        sel.value = prev;
+      } else {
+        selectedPackFilter = '';
+        sel.value = '';
+      }
+    }
 
     function formatCardColors(colors) {
       if (!colors || colors.length === 0) return '無色';
@@ -6149,9 +6229,11 @@
 
       const selectedId = isPartner ? currentDeckDef.partnerId : currentDeckDef.caseId;
       let list = catalogData.filter(c =>
-        isPartner
-          ? (c.cardType === 'PARTNER' || c.cardType === 'パートナー')
-          : (c.cardType === 'CASE' || c.cardType === '事件')
+        !isCardDeckRestricted(c) && (
+          isPartner
+            ? (c.cardType === 'PARTNER' || c.cardType === 'パートナー')
+            : (c.cardType === 'CASE' || c.cardType === '事件')
+        )
       );
 
       if (fixedPickerColor === 'MULTI') {
@@ -6332,6 +6414,14 @@
       renderBuilderCatalog();
     }
 
+    function setPackFilter(packCode) {
+      selectedPackFilter = packCode || '';
+      builderPage = 0;
+      const sel = document.getElementById('pack-filter-select');
+      if (sel && sel.value !== selectedPackFilter) sel.value = selectedPackFilter;
+      renderBuilderCatalog();
+    }
+
     function onSearchInput(val) {
       builderPage = 0;
       renderBuilderCatalog();
@@ -6348,6 +6438,9 @@
       document.querySelectorAll('.type-pill').forEach(btn => {
         btn.classList.toggle('active', btn.getAttribute('data-type') === '');
       });
+      selectedPackFilter = '';
+      const packSel = document.getElementById('pack-filter-select');
+      if (packSel) packSel.value = '';
       setColorFilter('');
     }
 
@@ -6523,13 +6616,16 @@
         sourceCards = mainPool.filter(c => (deckQtyMap[c.definitionId] || 0) > 0);
         sourceCards.sort((a, b) => (a.level - b.level) || a.definitionId.localeCompare(b.definitionId));
       } else {
-        sourceCards = mainPool;
+        sourceCards = mainPool.filter(c => !isCardDeckRestricted(c));
       }
 
       const filtered = sourceCards.filter(c => {
         if (selectedColorFilter) {
           const cols = c.colors || [];
           if (!cols.includes(selectedColorFilter)) return false;
+        }
+        if (selectedPackFilter) {
+          if (getCardPackCode(c) !== selectedPackFilter) return false;
         }
         if (selectedTypeFilter) {
           const t = c.cardType || '';
@@ -6642,7 +6738,8 @@
               </span>
             </div>
             <div class="card-name">${c.title || c.dummyName}</div>
-            <div style="font-size:0.58rem; color:var(--text-muted); margin-bottom:2px;">ID: ${c.canonicalId || c.cardId || '-'} (${c.definitionId})</div>
+            <div style="font-size:0.58rem; color:var(--text-muted); margin-bottom:2px;">ID: ${c.canonicalId || c.cardId || '-'} (${c.definitionId})${getCardPackCode(c) ? ` ・ ${getCardPackCode(c)}` : ''}</div>
+            ${isCardDeckRestricted(c) ? '<div style="font-size:0.58rem; color:#fbbf24; font-weight:bold;">⚠️ 未発売/制限対象</div>' : ''}
             <div class="card-stats">
               <span class="stat-ap">AP${c.ap ?? '-'}</span>
               <span class="stat-lp">LP${c.lp ?? '-'}</span>

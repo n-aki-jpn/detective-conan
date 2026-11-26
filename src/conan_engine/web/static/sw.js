@@ -1,4 +1,4 @@
-const SHELL_CACHE = 'conan-tcg-shell-v3';
+const SHELL_CACHE = 'conan-tcg-shell-v4';
 const IMAGE_CACHE = 'conan-tcg-images-v1';
 const MAX_IMAGE_ENTRIES = 300;
 
