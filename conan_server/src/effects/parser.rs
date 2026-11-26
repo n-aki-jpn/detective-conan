@@ -494,6 +494,7 @@ pub fn parse_effect_steps(
                     prefix.to_string()
                 };
                 if let Some(mut step) = parse_target_step(&normalized_prefix, dynamic_level, source_card_type) {
+                    step.then_abort_if_skipped = true;
                     step.follow_up.push(ImmediateOp::PlaySelfFromHand { sleep: true });
                     plan.target_step = Some(step);
                     seen_target_or_search = true;

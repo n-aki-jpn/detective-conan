@@ -2019,7 +2019,9 @@ impl MatchEngine {
                 return false;
             }
             let mut skipped_follow_ops = ts.follow_up.clone();
-            skipped_follow_ops.extend(plan.post_target_ops.clone());
+            if has_opt_cost_gate {
+                skipped_follow_ops.extend(plan.post_target_ops.clone());
+            }
             if !skipped_follow_ops.is_empty() {
                 if self.execute_immediate_ops_with_continuation(
                     player_id,
@@ -2035,7 +2037,11 @@ impl MatchEngine {
                 ) {
                     return true;
                 }
-            } else if let Some(ref ft) = plan.follow_up_target {
+                if self.phase == MatchPhase::FINISHED {
+                    return true;
+                }
+            }
+            if let Some(ref ft) = plan.follow_up_target {
                 if self.prompt_target_step_with_plan(
                     player_id,
                     actor_id,
@@ -2049,8 +2055,30 @@ impl MatchEngine {
                 ) {
                     return true;
                 }
+                if ft.then_abort_if_skipped {
+                    return false;
+                }
+                if !ft.follow_up.is_empty() {
+                    if self.execute_immediate_ops_with_continuation(
+                        player_id,
+                        actor_id,
+                        actor_name,
+                        &ft.follow_up,
+                        None,
+                        None,
+                        None,
+                        after_target_plan.as_ref(),
+                        resume_context,
+                        None,
+                    ) {
+                        return true;
+                    }
+                    if self.phase == MatchPhase::FINISHED {
+                        return true;
+                    }
+                }
             }
-            if !plan.extra_clauses.is_empty() {
+            if has_opt_cost_gate && !plan.extra_clauses.is_empty() {
                 self.enqueue_mode_clauses(
                     player_id,
                     actor_id,

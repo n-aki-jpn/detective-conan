@@ -1271,7 +1271,7 @@ impl MatchEngine {
         }
 
         // 条件付き追撃 & 後続即時処理
-        if applied {
+        if applied || !abort_on_skip {
             if self.pending_decision.is_some() {
                 if let Ok(follow_ops) = serde_json::from_value::<Vec<ImmediateOp>>(
                     opts.get("followUpOps").cloned().unwrap_or_else(|| json!([])),
@@ -1313,6 +1313,8 @@ impl MatchEngine {
                     return;
                 }
             }
+        }
+        if applied {
             if let Some(cond_val) = opts.get("condFollowUp").filter(|v| !v.is_null()) {
                 if let (Ok(branch), Ok(cops), Some(did)) = (
                     serde_json::from_value::<crate::effects::TargetBranch>(cond_val.get("branch").cloned().unwrap_or_default()),

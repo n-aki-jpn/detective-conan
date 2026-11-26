@@ -1672,3 +1672,254 @@ fn test_cpu_strongest_difficulty_and_four_tier_behaviors() {
     }
 }
 
+#[test]
+fn test_b05102_auto_skip_first_target_still_draws_and_deploys_from_hand() {
+    let catalog = load_test_catalog();
+    let mut engine = MatchEngine::new(catalog);
+    engine.turn = 1;
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    ps1.case_phase = models::CasePhase::INTRO;
+    ps1.partner = Some(test_inst("p1_p", "B01079", "p1", models::Zone::PARTNER, models::CardOrientation::SLEEP));
+    ps1.case = Some(test_inst("p1_c", "PR115", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    ps1.file.push(test_inst("p1_f1", "B06092", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+    ps1.file.push(test_inst("p1_f2", "B06092", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+    ps1.hand.push(test_inst("ev_b05102", "B05102", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+    ps1.hand.push(test_inst("ch_lv2", "B06092", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+    ps1.hand.push(test_inst("ch_lv5", "PR163", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+    ps1.deck.push(test_inst("dk_1", "B09078", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    ps1.deck.push(test_inst("dk_2", "B09078", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    ps1.deck.push(test_inst("dk_3", "B09078", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+    let mut ps2 = engine::PlayerState::new("p2".to_string());
+    ps2.case_phase = models::CasePhase::INTRO;
+    ps2.partner = Some(test_inst("p2_p", "B01060", "p2", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps2.case = Some(test_inst("p2_c", "B11099", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), ps2);
+
+    engine.prompt_main_action("p1");
+    let pd = engine.pending_decision.clone().expect("mainAction があるはず");
+    let dec_id = pd["decisionId"].as_str().unwrap().to_string();
+    let res = engine.submit_decision(
+        "p1",
+        &serde_json::json!({
+            "decisionId": dec_id,
+            "revision": engine.revision,
+            "value": {"type": "HAND_PLAY", "cardId": "ev_b05102"}
+        }),
+    );
+    assert!(res.is_ok(), "B05102 使用が成功すること: {:?}", res);
+
+    // 相手現場0体で第1対象が自動スキップされても、1枚ドロー後に手札登場(PLAY_FROM_HAND)の選択が出ること
+    let dec2 = engine.pending_decision.clone().expect("PLAY_FROM_HAND の targetSelect が提示されるはず");
+    assert_eq!(dec2["kind"], "targetSelect");
+    assert_eq!(dec2["options"]["effectType"], "PLAY_FROM_HAND");
+    assert_eq!(dec2["options"]["targetZone"], "HAND");
+
+    let cand_ids: Vec<&str> = dec2["options"]["candidates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|c| c["instanceId"].as_str())
+        .collect();
+    assert!(cand_ids.contains(&"ch_lv2"), "FILE 2枚以下なので Lv2 の B06092 が候補に含まれること");
+    assert!(!cand_ids.contains(&"ch_lv5"), "Lv5 の PR163 は候補に含まれないこと");
+
+    let dec2_id = dec2["decisionId"].as_str().unwrap().to_string();
+    let res2 = engine.submit_decision(
+        "p1",
+        &serde_json::json!({
+            "decisionId": dec2_id,
+            "revision": engine.revision,
+            "value": {
+                "targetId": "ch_lv2",
+                "targetIds": ["ch_lv2"],
+                "actorId": "ev_b05102",
+                "effectType": "PLAY_FROM_HAND"
+            }
+        }),
+    );
+    assert!(res2.is_ok(), "B06092 の登場選択が成功すること: {:?}", res2);
+
+    let p1_after = engine.players.get("p1").unwrap();
+    assert!(p1_after.field.iter().any(|c| c.instance_id == "ch_lv2"), "B06092 が現場に登場していること");
+    assert_eq!(p1_after.deck.len(), 2, "B05102 の1ドローも解決されていること");
+}
+
+#[test]
+fn test_b05102_manual_skip_first_target_still_draws_and_deploys_from_hand() {
+    let catalog = load_test_catalog();
+    let mut engine = MatchEngine::new(catalog);
+    engine.turn = 1;
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    ps1.case_phase = models::CasePhase::INTRO;
+    ps1.partner = Some(test_inst("p1_p", "B01079", "p1", models::Zone::PARTNER, models::CardOrientation::SLEEP));
+    ps1.case = Some(test_inst("p1_c", "PR115", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    ps1.file.push(test_inst("p1_f1", "B06092", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+    ps1.file.push(test_inst("p1_f2", "B06092", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+    ps1.hand.push(test_inst("ev_b05102", "B05102", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+    ps1.hand.push(test_inst("ch_lv2", "B06092", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+    ps1.deck.push(test_inst("dk_1", "B09078", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    ps1.deck.push(test_inst("dk_2", "B09078", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    ps1.deck.push(test_inst("dk_3", "B09078", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+    let mut ps2 = engine::PlayerState::new("p2".to_string());
+    ps2.case_phase = models::CasePhase::INTRO;
+    ps2.partner = Some(test_inst("p2_p", "B01060", "p2", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps2.case = Some(test_inst("p2_c", "B11099", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    ps2.field.push(test_inst("opp_ch", "B06092", "p2", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), ps2);
+
+    engine.prompt_main_action("p1");
+    let pd = engine.pending_decision.clone().unwrap();
+    let dec_id = pd["decisionId"].as_str().unwrap().to_string();
+    engine
+        .submit_decision(
+            "p1",
+            &serde_json::json!({
+                "decisionId": dec_id,
+                "revision": engine.revision,
+                "value": {"type": "HAND_PLAY", "cardId": "ev_b05102"}
+            }),
+        )
+        .unwrap();
+
+    // 相手現場にキャラがいるため第1対象選択が出る -> 任意スキップする
+    let dec1 = engine.pending_decision.clone().expect("第1対象選択が出るはず");
+    assert_eq!(dec1["kind"], "targetSelect");
+    assert_eq!(dec1["options"]["effectType"], "LEVEL_DELTA");
+    let dec1_id = dec1["decisionId"].as_str().unwrap().to_string();
+    engine
+        .submit_decision(
+            "p1",
+            &serde_json::json!({
+                "decisionId": dec1_id,
+                "revision": engine.revision,
+                "value": {
+                    "targetId": null,
+                    "targetIds": [],
+                    "actorId": "ev_b05102",
+                    "effectType": "LEVEL_DELTA"
+                }
+            }),
+        )
+        .unwrap();
+
+    // スキップしても1枚ドローが実行され、続いて手札登場(PLAY_FROM_HAND)の選択が出ること
+    assert_eq!(
+        engine.players.get("p1").unwrap().deck.len(),
+        2,
+        "第1対象を手動スキップしても1枚ドローが実行されること"
+    );
+    let dec2 = engine.pending_decision.clone().expect("PLAY_FROM_HAND が提示されるはず");
+    assert_eq!(dec2["kind"], "targetSelect");
+    assert_eq!(dec2["options"]["effectType"], "PLAY_FROM_HAND");
+    let dec2_id = dec2["decisionId"].as_str().unwrap().to_string();
+    engine
+        .submit_decision(
+            "p1",
+            &serde_json::json!({
+                "decisionId": dec2_id,
+                "revision": engine.revision,
+                "value": {
+                    "targetId": "ch_lv2",
+                    "targetIds": ["ch_lv2"],
+                    "actorId": "ev_b05102",
+                    "effectType": "PLAY_FROM_HAND"
+                }
+            }),
+        )
+        .unwrap();
+    assert!(engine.players.get("p1").unwrap().field.iter().any(|c| c.instance_id == "ch_lv2"));
+}
+
+#[test]
+fn test_pr291_auto_skip_first_target_moves_to_partner_and_deploys_once() {
+    let catalog = load_test_catalog();
+    let mut engine = MatchEngine::new(catalog);
+    engine.turn = 4;
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn_player_id = "p1".to_string();
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+
+    // PR291: 【パートナー白】【解決編】AP7000以上のキャラを1枚まで選び、リムーブする。
+    //        このカードをパートナーエリアに移す。
+    //        自分の現場に〚カード名［怪盗キッド］〛がいる場合、手札からレベル3以下の【白】のキャラを1枚までスリープ状態で登場させてもよい。
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    ps1.case_phase = models::CasePhase::RESOLUTION;
+    ps1.partner = Some(test_inst("p1_p", "B01042", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps1.case = Some(test_inst("p1_c", "B01059", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    ps1.field.push(test_inst("kid_field", "B02038", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+    ps1.hand.push(test_inst("ev_pr291", "PR291", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+    ps1.hand.push(test_inst("white_lv2", "B01049", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+    for i in 0..5 {
+        ps1.file.push(test_inst(&format!("f_{}", i), "B01049", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+    }
+
+    let mut ps2 = engine::PlayerState::new("p2".to_string());
+    ps2.case_phase = models::CasePhase::RESOLUTION;
+    ps2.partner = Some(test_inst("p2_p", "B01060", "p2", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps2.case = Some(test_inst("p2_c", "B11099", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), ps2);
+
+    engine.prompt_main_action("p1");
+    let pd = engine.pending_decision.clone().unwrap();
+    let dec_id = pd["decisionId"].as_str().unwrap().to_string();
+    engine
+        .submit_decision(
+            "p1",
+            &serde_json::json!({
+                "decisionId": dec_id,
+                "revision": engine.revision,
+                "value": {"type": "HAND_PLAY", "cardId": "ev_pr291"}
+            }),
+        )
+        .unwrap();
+
+    // AP7000以上がいないため第1対象が自動スキップされ、PR291がパートナーエリアへ移動した上で、手札白キャラ登場が1回だけ提示される
+    assert!(
+        engine.players.get("p1").unwrap().extra_partners.iter().any(|c| c.instance_id == "ev_pr291"),
+        "PR291 がパートナーエリアへ移動していること"
+    );
+    let dec2 = engine.pending_decision.clone().expect("白キャラ登場の選択が提示されるはず");
+    assert_eq!(dec2["kind"], "targetSelect");
+    let dec2_id = dec2["decisionId"].as_str().unwrap().to_string();
+    let et = dec2["options"]["effectType"].as_str().unwrap().to_string();
+    engine
+        .submit_decision(
+            "p1",
+            &serde_json::json!({
+                "decisionId": dec2_id,
+                "revision": engine.revision,
+                "value": {
+                    "targetId": "white_lv2",
+                    "targetIds": ["white_lv2"],
+                    "actorId": "ev_pr291",
+                    "effectType": et
+                }
+            }),
+        )
+        .unwrap();
+
+    // 二重発動せず mainAction に戻ること
+    assert_eq!(
+        engine.pending_decision.as_ref().and_then(|d| d["kind"].as_str()),
+        Some("mainAction"),
+        "PR291 の後続が二重発動せず mainAction に戻ること"
+    );
+    assert!(engine.players.get("p1").unwrap().field.iter().any(|c| c.instance_id == "white_lv2"));
+}
+
