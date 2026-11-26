@@ -4867,10 +4867,22 @@
           document.getElementById('decision-title').innerText = `🃏 初期手札マリガン【${turnOrderLabel}】`;
           document.getElementById('decision-desc').innerText = `あなたは【${turnOrderLabel}】です。戻したいカードをタップして選択してください`;
 
+          const handCardIds = pd.options.handCardIds || [];
+          const syncMulliganConfirmBtn = (btn) => {
+            if (!btn) return;
+            if (selectedMulliganIds.size === 0) {
+              btn.className = 'btn btn-success';
+              btn.innerText = '✨ このまま開始';
+            } else {
+              btn.className = 'btn';
+              btn.innerText = `🔄 ${selectedMulliganIds.size}枚戻す`;
+            }
+          };
+
           const mScroll = document.createElement('div');
           mScroll.className = 'mulligan-scroll';
 
-          (pd.options.handCardIds || []).forEach(cid => {
+          handCardIds.forEach(cid => {
             const cardObj = me.hand.find(c => c && c.instanceId === cid);
             const item = document.createElement('div');
             item.className = `mulligan-item ${selectedMulliganIds.has(cid) ? 'selected' : ''}`;
@@ -4885,10 +4897,7 @@
                 selectedMulliganIds.add(cid);
                 item.classList.add('selected');
               }
-              const confirmBtn = document.getElementById('mulligan-confirm-btn');
-              if (confirmBtn) {
-                confirmBtn.innerText = `🔄 ${selectedMulliganIds.size}枚戻す`;
-              }
+              syncMulliganConfirmBtn(document.getElementById('mulligan-confirm-btn'));
             };
             mScroll.appendChild(item);
           });
@@ -4902,18 +4911,19 @@
 
           const btnConfirm = document.createElement('button');
           btnConfirm.id = 'mulligan-confirm-btn';
-          btnConfirm.className = 'btn btn-danger';
           btnConfirm.style.flex = '1';
-          btnConfirm.innerText = `🔄 ${selectedMulliganIds.size}枚戻す`;
+          syncMulliganConfirmBtn(btnConfirm);
           btnConfirm.onclick = () => submitDecision({ cardIds: Array.from(selectedMulliganIds) });
           btnRow.appendChild(btnConfirm);
 
-          const btnPass = document.createElement('button');
-          btnPass.className = 'btn btn-success';
-          btnPass.style.flex = '1';
-          btnPass.innerText = '✨ このまま開始';
-          btnPass.onclick = () => submitDecision({ cardIds: [] });
-          btnRow.appendChild(btnPass);
+          const btnReturnAll = document.createElement('button');
+          btnReturnAll.id = 'mulligan-all-btn';
+          btnReturnAll.className = 'btn btn-danger';
+          btnReturnAll.style.flex = '1';
+          btnReturnAll.innerText = '🔄 すべて戻す';
+          btnReturnAll.disabled = handCardIds.length === 0;
+          btnReturnAll.onclick = () => submitDecision({ cardIds: handCardIds.slice() });
+          btnRow.appendChild(btnReturnAll);
 
           decActs.appendChild(btnRow);
           setDockCommand(
