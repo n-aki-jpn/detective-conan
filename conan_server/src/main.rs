@@ -11,6 +11,7 @@ mod logging;
 mod models;
 mod observation;
 mod official_deck;
+mod official_deck_parser;
 mod rate_limiter;
 mod room;
 mod user;

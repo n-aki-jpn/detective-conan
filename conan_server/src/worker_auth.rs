@@ -404,3 +404,216 @@ pub async fn migrate_decks(mut req: Request, env: Env) -> Result<Response> {
 
     Response::from_json(&json!({ "success": true, "migrated": migrated }))
 }
+
+pub async fn import_official_deck(mut req: Request, env: Env) -> Result<Response> {
+    let Some((uid, _username)) = resolve_user_id(&req, &env).await else {
+        return json_err("未ログインです。ログインしてください。", 401);
+    };
+
+    let body: crate::official_deck_parser::ImportOfficialDeckRequest = match req.json().await {
+        Ok(b) => b,
+        Err(_) => return json_err("リクエスト形式が不正です", 400),
+    };
+
+    let raw_input = body.code.as_deref().or(body.url.as_deref()).unwrap_or("");
+    let code = match crate::official_deck_parser::extract_official_code(raw_input) {
+        Ok(c) => c,
+        Err(msg) => return json_err(&msg, 400),
+    };
+
+    let url = format!(
+        "https://www.takaratomy.co.jp/products/conan-cardgame/deckrecipe/create?d_code={}",
+        code
+    );
+    let mut headers = Headers::new();
+    headers.set("Accept", "text/html,application/xhtml+xml")?;
+    headers.set("Accept-Language", "ja")?;
+    headers.set("User-Agent", "Mozilla/5.0")?;
+
+    let mut init = RequestInit::new();
+    init.with_method(Method::Get).with_headers(headers);
+    let upstream_req = Request::new_with_init(&url, &init)?;
+    let mut upstream_res = match Fetch::Request(upstream_req).send().await {
+        Ok(r) => r,
+        Err(e) => {
+            return json_err(
+                &format!("公式サイトへの通信に失敗しました: {}", e),
+                502,
+            );
+        }
+    };
+
+    let status = upstream_res.status_code();
+    if !(200..300).contains(&status) {
+        return json_err(
+            &format!("公式サイトからエラー応答が返されました (HTTP {})", status),
+            502,
+        );
+    }
+
+    let html = match upstream_res.text().await {
+        Ok(t) => t,
+        Err(e) => return json_err(&format!("HTMLの読み取りに失敗しました: {}", e), 502),
+    };
+
+    let raw_deck = match crate::official_deck_parser::parse_official_deck_html(&html) {
+        Ok(d) => d,
+        Err(e) => return json_err(&e, 400),
+    };
+
+    let imported = crate::official_deck_parser::build_imported_deck(raw_deck);
+    let deck_id = format!("deck_{}", gen_token());
+    let deck_name = body
+        .deck_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| format!("公式デッキ ({})", code));
+
+    let deck_val = json!({
+        "deckId": deck_id,
+        "deckName": deck_name,
+        "partnerId": imported.partner_id,
+        "caseId": imported.case_id,
+        "mainDeck": imported.main_deck,
+        "officialCode": code,
+    });
+    let deck_json = serde_json::to_string(&deck_val).unwrap_or_else(|_| "{}".to_string());
+
+    let db = env.d1("DB")?;
+    db.prepare("UPDATE decks SET is_active = 0 WHERE user_id = ?1")
+        .bind(&[uid.as_str().into()])?
+        .run()
+        .await?;
+
+    db.prepare(
+        "INSERT INTO decks (id, user_id, deck_name, deck_json, is_active, updated_at)
+         VALUES (?1, ?2, ?3, ?4, 1, datetime('now'))",
+    )
+    .bind(&[
+        deck_id.as_str().into(),
+        uid.as_str().into(),
+        deck_name.as_str().into(),
+        deck_json.as_str().into(),
+    ])?
+    .run()
+    .await?;
+
+    Response::from_json(&crate::official_deck_parser::imported_deck_response_json(
+        &code,
+        &imported,
+        true,
+        Some(&deck_id),
+        Some(&deck_name),
+    ))
+}
+
+pub async fn publish_official_deck(mut req: Request, env: Env, catalog_json: &str) -> Result<Response> {
+    if resolve_user_id(&req, &env).await.is_none() {
+        return json_err("未ログインです。ログインしてください。", 401);
+    }
+
+    let body: crate::official_deck_parser::PublishDeckRequest = match req.json().await {
+        Ok(b) => b,
+        Err(_) => return json_err("リクエスト形式が不正です", 400),
+    };
+
+    let p_id = body
+        .partner
+        .and_then(|p| p.into_iter().next())
+        .or(body.partner_id)
+        .unwrap_or_default();
+
+    let inc_id = body
+        .incident
+        .and_then(|i| i.into_iter().next())
+        .or(body.case_id)
+        .unwrap_or_default();
+
+    let mut o_ids = Vec::new();
+    if let Some(other) = body.other {
+        o_ids = other;
+    } else if let Some(items) = body.main_deck {
+        for item in items {
+            for _ in 0..item.count {
+                o_ids.push(item.definition_id.clone());
+            }
+        }
+    }
+
+    if p_id.is_empty() {
+        return json_err("パートナーカードが選択されていません", 400);
+    }
+    if inc_id.is_empty() {
+        return json_err("事件カードが選択されていません", 400);
+    }
+    if o_ids.len() != 40 {
+        return json_err(
+            &format!("メインデッキは40枚である必要があります（現在: {}枚）", o_ids.len()),
+            400,
+        );
+    }
+
+    let color_code = if let Some(c) = body.color.filter(|c| !c.is_empty()) {
+        c
+    } else if let Ok(cat) = crate::catalog::CardCatalog::load_from_str(catalog_json) {
+        if let Some(p_card) = cat.get(&p_id) {
+            crate::official_deck_parser::resolve_color_code(&p_card.colors)
+        } else {
+            "B".to_string()
+        }
+    } else {
+        "B".to_string()
+    };
+
+    let payload = json!({
+        "partner": [p_id],
+        "incident": [inc_id],
+        "other": o_ids,
+    });
+    let deck_json_str = serde_json::to_string(&payload).unwrap_or_default();
+    let endpoint = "https://www.takaratomy.co.jp/products/conan-cardgame/deckrecipe/store";
+    let target_url = match url::Url::parse_with_params(
+        endpoint,
+        &[("color", color_code.as_str()), ("deck", deck_json_str.as_str())],
+    ) {
+        Ok(u) => u.to_string(),
+        Err(e) => return json_err(&format!("URL構築エラー: {}", e), 500),
+    };
+
+    let mut headers = Headers::new();
+    headers.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")?;
+
+    let mut init = RequestInit::new();
+    init.with_method(Method::Get)
+        .with_headers(headers)
+        .with_redirect(RequestRedirect::Manual);
+    let upstream_req = Request::new_with_init(&target_url, &init)?;
+    let response = match Fetch::Request(upstream_req).send().await {
+        Ok(res) => res,
+        Err(e) => return json_err(&format!("公式サイトへの接続に失敗しました: {}", e), 502),
+    };
+
+    let status = response.status_code();
+    let location_header = response.headers().get("Location").ok().flatten();
+
+    let mut full_location = None;
+    let mut d_code = None;
+    if let Some(loc) = &location_header {
+        match crate::official_deck_parser::extract_d_code_from_location(endpoint, loc) {
+            Ok((full, code)) => {
+                full_location = Some(full);
+                d_code = code;
+            }
+            Err(msg) => return json_err(&msg, 500),
+        }
+    }
+
+    Response::from_json(&json!({
+        "status": status,
+        "location": full_location,
+        "code": d_code,
+        "success": d_code.is_some()
+    }))
+}

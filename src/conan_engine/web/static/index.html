@@ -6792,6 +6792,12 @@
         currentDeckDef.partnerId = data.partnerId || null;
         currentDeckDef.caseId = data.caseId || null;
         currentDeckDef.mainDeck = Array.isArray(data.mainDeck) ? data.mainDeck : [];
+        if (data.deckId) currentDeckDef.deckId = data.deckId;
+        if (data.deckName) {
+          currentDeckDef.deckName = data.deckName;
+          const nameInput = document.getElementById('builder-deck-name');
+          if (nameInput) nameInput.value = data.deckName;
+        }
         deckQtyMap = {};
         currentDeckDef.mainDeck.forEach(item => {
           if (item.count > 0) deckQtyMap[item.definitionId] = item.count;
@@ -6799,7 +6805,12 @@
         populateFixedSelects();
         updateBuilderSummary();
         renderBuilderCatalog();
-        alert(`公式コード (${data.code}) からデッキリストを読み込みました！\n必要に応じて「💾 保存」を押してください。`);
+        if (data.saved && typeof loadBattleDecks === 'function') {
+          loadBattleDecks(data.deckId);
+        }
+        alert(data.saved
+          ? `公式コード (${data.code}) からデッキリストを読み込み、アカウントに保存しました！`
+          : `公式コード (${data.code}) からデッキリストを読み込みました！\n必要に応じて「💾 保存」を押してください。`);
       } catch (e) {
         alert(`通信エラー: ${e.message}`);
       } finally {
