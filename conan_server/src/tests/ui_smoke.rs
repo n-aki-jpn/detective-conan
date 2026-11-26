@@ -370,6 +370,58 @@ assert.equal(getEl('se-toggle-btn').classList.contains('is-muted'), true);
 toggleSe();
 assert.equal(getEl('se-toggle-btn').innerText, '🔔 SE');
 assert.equal(getEl('se-toggle-btn').classList.contains('is-muted'), false);
+
+// B09078 filterGroups 付き deckSearch UI: キャラ1枚選択後は2枚目のキャラが選択不可になり、イベントは選択可能
+getEl('decision-actions').children = [];
+render({{
+  revision: 17,
+  turn: 6,
+  turnPlayerId: 'player1',
+  decisionPlayerId: 'player1',
+  viewingPlayerId: 'player1',
+  logs: ['テスト開始'],
+  ...samplePlayers(),
+  pendingDecision: {{
+    decisionId: 'dec_b09078_groups',
+    revision: 17,
+    playerId: 'player1',
+    kind: 'deckSearch',
+    options: {{
+      actorId: 'b09078_1',
+      actorName: '榎本梓(B09078)',
+      maxSelect: 2,
+      pickAction: 'TO_HAND',
+      optional: true,
+      filterGroups: [
+        {{ label: 'キャラ', max: 1 }},
+        {{ label: 'イベント', max: 1 }}
+      ],
+      title: '山札の上から3枚めくりました。キャラを1枚まで・イベントを1枚まで選び手札に加える',
+      revealedCards: [
+        {{ instanceId: 'ds_c1', definitionId: 'B08068P', name: '安室透', cardType: 'CHARACTER', level: 8, ap: 7000, colors: ['黄'], traits: ['喫茶ポアロ'], matchedGroups: [0], selectable: true }},
+        {{ instanceId: 'ds_e1', definitionId: 'D05014', name: 'プライベートアイ', cardType: 'EVENT', level: 1, ap: 0, colors: ['黄'], traits: [], matchedGroups: [1], selectable: true }},
+        {{ instanceId: 'ds_c2', definitionId: 'B06089', name: '安室透', cardType: 'CHARACTER', level: 2, ap: 1000, colors: ['黄'], traits: ['喫茶ポアロ'], matchedGroups: [0], selectable: true }}
+      ]
+    }}
+  }}
+}});
+const dsChildren = getEl('decision-actions').children;
+const dsConfirmBtn = dsChildren[1];
+const dsGrid = dsChildren[2];
+assert.equal(dsGrid.children.length, 3);
+const dsBtnC1 = dsGrid.children[0].children[2];
+const dsBtnE1 = dsGrid.children[1].children[2];
+const dsBtnC2 = dsGrid.children[2].children[2];
+dsBtnC1.onclick();
+assert.equal(dsConfirmBtn.innerText, '決定（1/2枚）');
+assert.equal(dsBtnC2.innerText, '選択不可');
+assert.equal(dsBtnE1.innerText, '選ぶ');
+// 2枚目のキャラをクリックしても増えないこと
+dsBtnC2.onclick();
+assert.equal(dsConfirmBtn.innerText, '決定（1/2枚）');
+// イベントは追加でき 2/2 になること
+dsBtnE1.onclick();
+assert.equal(dsConfirmBtn.innerText, '決定（2/2枚）');
 "#,
         js = js_code
     );

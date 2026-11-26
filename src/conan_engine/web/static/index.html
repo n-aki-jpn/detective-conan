@@ -5634,12 +5634,39 @@
 
           const selectedIds = [];
           const distinctColors = !!pd.options.distinctColors;
+          const filterGroups = Array.isArray(pd.options.filterGroups) ? pd.options.filterGroups : [];
+          const groupCaps = filterGroups.map(g => Math.max(1, Number(g.max || 1)));
+          const canAssignDeckFilterGroups = (cardsGroups, caps) => {
+            if (!caps || caps.length === 0) return true;
+            const rem = caps.slice();
+            const bt = (idx) => {
+              if (idx >= cardsGroups.length) return true;
+              const groups = cardsGroups[idx] || [];
+              for (const g of groups) {
+                if (g >= 0 && g < rem.length && rem[g] > 0) {
+                  rem[g] -= 1;
+                  if (bt(idx + 1)) return true;
+                  rem[g] += 1;
+                }
+              }
+              return false;
+            };
+            return bt(0);
+          };
           const canSelectDeckCard = (candCard) => {
             if (selectedIds.length >= maxSelect) return false;
+            const revealedList = pd.options.revealedCards || [];
+            const chosenCards = revealedList.filter(c => selectedIds.includes(c.instanceId));
             if (distinctColors) {
-              const chosenCards = (pd.options.revealedCards || []).filter(c => selectedIds.includes(c.instanceId));
               const usedCols = new Set(chosenCards.flatMap(c => c.colors || []));
               if ((candCard.colors || []).some(col => usedCols.has(col))) return false;
+            }
+            if (groupCaps.length > 0) {
+              const candGroups = Array.isArray(candCard.matchedGroups) ? candCard.matchedGroups : [];
+              if (candGroups.length === 0) return false;
+              const trialGroups = chosenCards.map(c => Array.isArray(c.matchedGroups) ? c.matchedGroups : []);
+              trialGroups.push(candGroups);
+              if (!canAssignDeckFilterGroups(trialGroups, groupCaps)) return false;
             }
             return true;
           };
@@ -5694,8 +5721,11 @@
 
             const info = document.createElement('div');
             info.style.cssText = 'font-size:0.72rem; line-height:1.25;';
+            const groupBadgeStr = (filterGroups.length > 0 && Array.isArray(card.matchedGroups) && card.matchedGroups.length > 0)
+              ? card.matchedGroups.map(gi => filterGroups[gi] ? `[${filterGroups[gi].label}]` : '').filter(Boolean).join('')
+              : '';
             info.innerHTML = `
-              <div style="font-weight:bold; color:${isSelectable ? '#38bdf8' : '#94a3b8'}; word-break:break-word;">${colorsStr}${card.name}</div>
+              <div style="font-weight:bold; color:${isSelectable ? '#38bdf8' : '#94a3b8'}; word-break:break-word;">${colorsStr}${groupBadgeStr ? groupBadgeStr + ' ' : ''}${card.name}</div>
               <div style="font-size:0.65rem; color:#cbd5e1; margin-top:2px;">Lv.${card.level} / AP ${card.ap}</div>
               ${traitsStr ? `<div style="font-size:0.62rem; color:#94a3b8; margin-top:1px;">${traitsStr}</div>` : ''}
             `;
@@ -5726,6 +5756,7 @@
               deckTileUpdaters.push(updateBtnLabel);
               updateBtnLabel();
               actBtn.onclick = () => {
+                playSe('tap');
                 if (maxSelect > 1) {
                   const idx = selectedIds.indexOf(card.instanceId);
                   if (idx >= 0) {

@@ -1586,6 +1586,15 @@ impl RandomAgent {
         let actor_id = opts.get("actorId").and_then(|v| v.as_str()).unwrap_or("");
         let max_select = opts.get("maxSelect").and_then(|v| v.as_u64()).unwrap_or(1).max(1) as usize;
         let distinct_colors = opts.get("distinctColors").and_then(|v| v.as_bool()).unwrap_or(false);
+        let group_caps: Vec<usize> = opts
+            .get("filterGroups")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .map(|g| g.get("max").and_then(|m| m.as_u64()).unwrap_or(1).max(1) as usize)
+                    .collect()
+            })
+            .unwrap_or_default();
 
         if let Some(cards) = opts.get("revealedCards").and_then(|v| v.as_array()) {
             let eff_file = my_ps.effective_file_count() as i32;
@@ -1619,6 +1628,7 @@ impl RandomAgent {
 
             let mut chosen_ids: Vec<&str> = Vec::new();
             let mut used_colors = HashSet::new();
+            let mut accepted_groups: Vec<Vec<usize>> = Vec::new();
 
             for (c, cid, _) in scored {
                 if chosen_ids.len() >= max_select {
@@ -1631,6 +1641,22 @@ impl RandomAgent {
                     .unwrap_or_default();
                 if distinct_colors && ccols.iter().any(|col| used_colors.contains(*col)) {
                     continue;
+                }
+                if !group_caps.is_empty() {
+                    let mg: Vec<usize> = c
+                        .get("matchedGroups")
+                        .and_then(|v| v.as_array())
+                        .map(|arr| arr.iter().filter_map(|x| x.as_u64().map(|n| n as usize)).collect())
+                        .unwrap_or_default();
+                    if mg.is_empty() {
+                        continue;
+                    }
+                    let mut trial = accepted_groups.clone();
+                    trial.push(mg.clone());
+                    if !crate::engine::can_assign_deck_filter_groups(&trial, &group_caps) {
+                        continue;
+                    }
+                    accepted_groups.push(mg);
                 }
                 if distinct_colors {
                     for col in ccols {
@@ -3293,6 +3319,15 @@ impl RandomAgent {
                 let actor_id = opts.get("actorId").and_then(|v| v.as_str()).unwrap_or("");
                 let max_select = opts.get("maxSelect").and_then(|v| v.as_u64()).unwrap_or(1).max(1) as usize;
                 let distinct_colors = opts.get("distinctColors").and_then(|v| v.as_bool()).unwrap_or(false);
+                let group_caps: Vec<usize> = opts
+                    .get("filterGroups")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .map(|g| g.get("max").and_then(|m| m.as_u64()).unwrap_or(1).max(1) as usize)
+                            .collect()
+                    })
+                    .unwrap_or_default();
                 if let Some(cards) = opts.get("revealedCards").and_then(|v| v.as_array()) {
                     let mut selectable: Vec<&Value> = cards
                         .iter()
@@ -3301,6 +3336,7 @@ impl RandomAgent {
                     selectable.shuffle(&mut rng);
                     let mut chosen_ids: Vec<&str> = Vec::new();
                     let mut used_colors = HashSet::new();
+                    let mut accepted_groups: Vec<Vec<usize>> = Vec::new();
                     for c in selectable {
                         if chosen_ids.len() >= max_select {
                             break;
@@ -3315,6 +3351,22 @@ impl RandomAgent {
                             .unwrap_or_default();
                         if distinct_colors && ccols.iter().any(|col| used_colors.contains(*col)) {
                             continue;
+                        }
+                        if !group_caps.is_empty() {
+                            let mg: Vec<usize> = c
+                                .get("matchedGroups")
+                                .and_then(|v| v.as_array())
+                                .map(|arr| arr.iter().filter_map(|x| x.as_u64().map(|n| n as usize)).collect())
+                                .unwrap_or_default();
+                            if mg.is_empty() {
+                                continue;
+                            }
+                            let mut trial = accepted_groups.clone();
+                            trial.push(mg.clone());
+                            if !crate::engine::can_assign_deck_filter_groups(&trial, &group_caps) {
+                                continue;
+                            }
+                            accepted_groups.push(mg);
                         }
                         if distinct_colors {
                             for col in ccols {

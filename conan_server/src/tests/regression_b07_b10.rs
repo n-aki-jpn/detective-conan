@@ -881,8 +881,17 @@ fn test_b09078_deck_search_dual_pick_and_conditional_discard() {
     assert_eq!(dec["options"]["postAddDiscard"], 1);
     assert_eq!(dec["options"]["postAddDiscardMinPicked"], 2);
     assert_eq!(dec["options"]["maxSelect"], 2, "キャラ1枚とイベント1枚の計2枚まで選択可能であること");
+    let filter_groups = dec["options"]["filterGroups"].as_array().unwrap();
+    assert_eq!(filter_groups.len(), 2);
+    assert_eq!(filter_groups[0]["label"], "キャラ");
+    assert_eq!(filter_groups[0]["max"], 1);
+    assert_eq!(filter_groups[1]["label"], "イベント");
+    assert_eq!(filter_groups[1]["max"], 1);
     let revealed = dec["options"]["revealedCards"].as_array().unwrap();
     assert!(revealed.iter().all(|c| c["selectable"] == true), "黄キャラ・黄イベントすべてが選択可能であること");
+    assert_eq!(revealed[0]["matchedGroups"], serde_json::json!([0]), "d1(キャラ)はグループ0のみ一致");
+    assert_eq!(revealed[1]["matchedGroups"], serde_json::json!([1]), "d2(イベント)はグループ1のみ一致");
+    assert_eq!(revealed[2]["matchedGroups"], serde_json::json!([0]), "d3(キャラ)はグループ0のみ一致");
 
     // キャラ1枚(d1)とイベント1枚(d2)の2枚を選択
     let ds_id = dec["decisionId"].as_str().unwrap().to_string();
@@ -934,6 +943,125 @@ fn test_b09078_deck_search_dual_pick_and_conditional_discard() {
 
     let after_1 = engine2.pending_decision.as_ref().unwrap();
     assert_eq!(after_1["kind"], "mainAction", "1枚しか手札に加えていない場合は手札リムーブが発生せずメインアクションに戻ること");
+}
+
+#[test]
+fn test_b09078_rejects_two_characters_or_two_events_and_cpu_respects_groups() {
+    let catalog = load_test_catalog();
+
+    // ケース1: キャラ2枚(d1, d3)を送っても1枚しか手札に加わらず、2枚加算条件の手札リムーブも発動しないこと
+    let mut engine = MatchEngine::new(catalog.clone());
+    engine.phase = models::MatchPhase::MAIN;
+    engine.turn_player_id = "p1".to_string();
+    let mut ps1 = engine::PlayerState::new("p1".to_string());
+    ps1.partner = Some(test_inst("p1_p", "B01079", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps1.case = Some(test_inst("p1_c", "PR115", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    ps1.case_phase = models::CasePhase::INTRO;
+    for i in 0..4 {
+        ps1.file.push(test_inst(&format!("f{}", i), "B06089", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+    }
+    ps1.field.push(test_inst("b09078", "B09078", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+    ps1.hand.push(test_inst("h_keep", "B06089", "p1", models::Zone::HAND, models::CardOrientation::ACTIVE));
+    ps1.deck.push(test_inst("d3", "B06089", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    ps1.deck.push(test_inst("d2", "D05014", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    ps1.deck.push(test_inst("d1", "B08068P", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+
+    let mut ps2 = engine::PlayerState::new("p2".to_string());
+    ps2.partner = Some(test_inst("p2_p", "B01079", "p2", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps2.case = Some(test_inst("p2_c", "PR115", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    engine.player_order = vec!["p1".to_string(), "p2".to_string()];
+    engine.players.insert("p1".to_string(), ps1);
+    engine.players.insert("p2".to_string(), ps2);
+    engine.resolve_deployed_characters(
+        "p1",
+        None,
+        &[("b09078".to_string(), "B09078".to_string(), models::CardOrientation::ACTIVE)],
+        "MAIN",
+    );
+
+    let dec_id = engine.pending_decision.as_ref().unwrap()["decisionId"].as_str().unwrap().to_string();
+    engine.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec_id,
+        "revision": engine.revision,
+        "value": {"chosenCardIds": ["d1", "d3"]}
+    })).unwrap();
+
+    assert_eq!(engine.players["p1"].hand.len(), 2, "キャラ2枚指定時は1枚(d1)のみ手札に加わること");
+    assert_eq!(engine.players["p1"].remove.len(), 2, "選ばれなかったd2と上限超過のd3がリムーブエリアに移ること");
+    assert_eq!(engine.pending_decision.as_ref().unwrap()["kind"], "mainAction", "1枚しか手札に加えていないため手札リムーブは発生しないこと");
+
+    // ケース2: イベント2枚(e1, e2)を送っても1枚しか手札に加わらないこと
+    let mut engine_ev = MatchEngine::new(catalog.clone());
+    engine_ev.phase = models::MatchPhase::MAIN;
+    engine_ev.turn_player_id = "p1".to_string();
+    let mut ps1_ev = engine::PlayerState::new("p1".to_string());
+    ps1_ev.partner = Some(test_inst("p1_p", "B01079", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps1_ev.case = Some(test_inst("p1_c", "PR115", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    ps1_ev.case_phase = models::CasePhase::INTRO;
+    for i in 0..4 {
+        ps1_ev.file.push(test_inst(&format!("f{}", i), "B06089", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+    }
+    ps1_ev.field.push(test_inst("b09078", "B09078", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+    ps1_ev.deck.push(test_inst("e2", "D05014", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    ps1_ev.deck.push(test_inst("e1", "D05014", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    ps1_ev.deck.push(test_inst("c1", "B08068P", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    engine_ev.player_order = vec!["p1".to_string(), "p2".to_string()];
+    engine_ev.players.insert("p1".to_string(), ps1_ev);
+    let mut ps2_ev = engine::PlayerState::new("p2".to_string());
+    ps2_ev.partner = Some(test_inst("p2_p", "B01079", "p2", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps2_ev.case = Some(test_inst("p2_c", "PR115", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    engine_ev.players.insert("p2".to_string(), ps2_ev);
+    engine_ev.resolve_deployed_characters(
+        "p1",
+        None,
+        &[("b09078".to_string(), "B09078".to_string(), models::CardOrientation::ACTIVE)],
+        "MAIN",
+    );
+    let dec_ev_id = engine_ev.pending_decision.as_ref().unwrap()["decisionId"].as_str().unwrap().to_string();
+    engine_ev.submit_decision("p1", &serde_json::json!({
+        "decisionId": dec_ev_id,
+        "revision": engine_ev.revision,
+        "value": {"chosenCardIds": ["e1", "e2"]}
+    })).unwrap();
+    assert_eq!(engine_ev.players["p1"].hand.len(), 1, "イベント2枚指定時は1枚(e1)のみ手札に加わること");
+    assert_eq!(engine_ev.players["p1"].remove.len(), 2);
+
+    // ケース3: CPU (RandomAgent) がキャラ2枚+イベント1枚からキャラ1枚+イベント1枚を正しく選ぶこと
+    let mut engine_cpu = MatchEngine::new(catalog);
+    engine_cpu.phase = models::MatchPhase::MAIN;
+    engine_cpu.turn_player_id = "p1".to_string();
+    let mut ps1_cpu = engine::PlayerState::new("p1".to_string());
+    ps1_cpu.partner = Some(test_inst("p1_p", "B01079", "p1", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps1_cpu.case = Some(test_inst("p1_c", "PR115", "p1", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    ps1_cpu.case_phase = models::CasePhase::INTRO;
+    for i in 0..4 {
+        ps1_cpu.file.push(test_inst(&format!("f{}", i), "B06089", "p1", models::Zone::FILE, models::CardOrientation::ACTIVE));
+    }
+    ps1_cpu.field.push(test_inst("b09078", "B09078", "p1", models::Zone::FIELD, models::CardOrientation::ACTIVE));
+    ps1_cpu.deck.push(test_inst("d3", "B06089", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    ps1_cpu.deck.push(test_inst("d2", "D05014", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    ps1_cpu.deck.push(test_inst("d1", "B08068P", "p1", models::Zone::DECK, models::CardOrientation::ACTIVE));
+    engine_cpu.player_order = vec!["p1".to_string(), "p2".to_string()];
+    engine_cpu.players.insert("p1".to_string(), ps1_cpu);
+    let mut ps2_cpu = engine::PlayerState::new("p2".to_string());
+    ps2_cpu.partner = Some(test_inst("p2_p", "B01079", "p2", models::Zone::PARTNER, models::CardOrientation::ACTIVE));
+    ps2_cpu.case = Some(test_inst("p2_c", "PR115", "p2", models::Zone::CASE, models::CardOrientation::ACTIVE));
+    engine_cpu.players.insert("p2".to_string(), ps2_cpu);
+    engine_cpu.resolve_deployed_characters(
+        "p1",
+        None,
+        &[("b09078".to_string(), "B09078".to_string(), models::CardOrientation::ACTIVE)],
+        "MAIN",
+    );
+
+    let cpu = crate::agent::RandomAgent::with_seed("p1", crate::agent::CpuWeights::default(), 42);
+    let cpu_dec = engine_cpu.pending_decision.clone().unwrap();
+    let cpu_ans = cpu.choose_action_with_engine(&engine_cpu, &cpu_dec);
+    let chosen_arr = cpu_ans["value"]["chosenCardIds"].as_array().unwrap();
+    assert_eq!(chosen_arr.len(), 2, "CPUはキャラ1枚とイベント1枚の計2枚を選ぶこと");
+    assert!(chosen_arr.iter().any(|v| v == "d2"), "CPUがイベント(d2)を含めて選んでいること");
+    let char_picks = chosen_arr.iter().filter(|v| *v == "d1" || *v == "d3").count();
+    assert_eq!(char_picks, 1, "CPUがキャラを1枚だけ選んでいること");
 }
 
 #[test]

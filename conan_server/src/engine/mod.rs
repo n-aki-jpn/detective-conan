@@ -7,6 +7,7 @@ mod stats;
 mod target_ops;
 mod triggers;
 mod turn;
+pub(crate) use target_ops::can_assign_deck_filter_groups;
 
 use crate::catalog::CardCatalog;
 use crate::effects::{

@@ -1659,8 +1659,18 @@ impl MatchEngine {
         chosen_ids.truncate(max_select.max(1));
 
         let distinct_colors = opts.get("distinctColors").and_then(|v| v.as_bool()).unwrap_or(false);
+        let group_caps: Vec<usize> = opts
+            .get("filterGroups")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .map(|g| g.get("max").and_then(|m| m.as_u64()).unwrap_or(1).max(1) as usize)
+                    .collect()
+            })
+            .unwrap_or_default();
         let mut revealed_instances = vec![];
         let mut selectable_map: HashMap<String, Vec<String>> = HashMap::new();
+        let mut matched_groups_map: HashMap<String, Vec<usize>> = HashMap::new();
         if let Some(cards) = opts.get("revealedCards").and_then(|v| v.as_array()) {
             for c in cards {
                 if let Some(iid) = c.get("instanceId").and_then(|v| v.as_str()) {
@@ -1676,18 +1686,44 @@ impl MatchEngine {
                             })
                             .unwrap_or_default();
                         selectable_map.insert(iid.to_string(), cols);
+                        let mg: Vec<usize> = c
+                            .get("matchedGroups")
+                            .and_then(|v| v.as_array())
+                            .map(|arr| {
+                                arr.iter()
+                                    .filter_map(|x| x.as_u64().map(|n| n as usize))
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        matched_groups_map.insert(iid.to_string(), mg);
                     }
                 }
             }
         }
 
-        // 条件外カード・同色重複カードを選択した場合は無視
+        // 条件外カード・同色重複カード・フィルタグループ上限超過カードを選択した場合は無視
         let mut used_colors: HashSet<String> = HashSet::new();
         let mut chosen_set: HashSet<String> = HashSet::new();
+        let mut accepted_groups: Vec<Vec<usize>> = Vec::new();
         for id in chosen_ids {
+            if chosen_set.contains(&id) {
+                continue;
+            }
             if let Some(cols) = selectable_map.get(&id) {
                 if distinct_colors && cols.iter().any(|col| used_colors.contains(col)) {
                     continue;
+                }
+                if !group_caps.is_empty() {
+                    let mg = matched_groups_map.get(&id).cloned().unwrap_or_default();
+                    if mg.is_empty() {
+                        continue;
+                    }
+                    let mut trial = accepted_groups.clone();
+                    trial.push(mg.clone());
+                    if !super::target_ops::can_assign_deck_filter_groups(&trial, &group_caps) {
+                        continue;
+                    }
+                    accepted_groups.push(mg);
                 }
                 if distinct_colors {
                     for col in cols {

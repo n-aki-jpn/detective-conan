@@ -1,5 +1,50 @@
 use super::*;
 
+fn describe_deck_filter_group(filter: &TargetFilter) -> String {
+    if filter.card_type_filter == Some(CardType::EVENT)
+        || (!filter.branches.is_empty()
+            && filter
+                .branches
+                .iter()
+                .all(|b| !b.card_types.is_empty() && b.card_types.iter().all(|t| *t == CardType::EVENT)))
+    {
+        "イベント".to_string()
+    } else if filter.card_type_filter == Some(CardType::CHARACTER)
+        || (!filter.branches.is_empty()
+            && filter
+                .branches
+                .iter()
+                .all(|b| !b.card_types.is_empty() && b.card_types.iter().all(|t| *t == CardType::CHARACTER)))
+    {
+        "キャラ".to_string()
+    } else {
+        "カード".to_string()
+    }
+}
+
+pub(crate) fn can_assign_deck_filter_groups(cards_groups: &[Vec<usize>], caps: &[usize]) -> bool {
+    if caps.is_empty() {
+        return true;
+    }
+    fn backtrack(idx: usize, cards_groups: &[Vec<usize>], rem: &mut [usize]) -> bool {
+        if idx >= cards_groups.len() {
+            return true;
+        }
+        for &g in &cards_groups[idx] {
+            if g < rem.len() && rem[g] > 0 {
+                rem[g] -= 1;
+                if backtrack(idx + 1, cards_groups, rem) {
+                    return true;
+                }
+                rem[g] += 1;
+            }
+        }
+        false
+    }
+    let mut rem = caps.to_vec();
+    backtrack(0, cards_groups, &mut rem)
+}
+
 impl MatchEngine {
 
     pub(super) fn apply_single_target_action(
@@ -1335,31 +1380,55 @@ impl MatchEngine {
         if revealed.is_empty() {
             return false;
         }
+        let all_filters: Vec<&TargetFilter> = std::iter::once(&ds.filter)
+            .chain(ds.extra_filters.iter())
+            .collect();
+        let filter_groups: Vec<Value> = if ds.extra_filters.is_empty() {
+            vec![]
+        } else {
+            all_filters
+                .iter()
+                .map(|f| {
+                    json!({
+                        "label": describe_deck_filter_group(f),
+                        "max": f.count.max(1),
+                    })
+                })
+                .collect()
+        };
         let mut candidates = Vec::new();
         for c in &revealed {
-            let selectable = self
+            let matched_groups: Vec<usize> = self
                 .catalog
                 .get(&c.definition_id)
                 .map(|def| {
-                    ds.filter
-                        .branches
+                    all_filters
                         .iter()
-                        .any(|b| branch_matches_with_ctx(def, def.ap, b, self_file_count))
-                        || ds.extra_filters.iter().any(|ef| {
-                            ef.branches
+                        .enumerate()
+                        .filter_map(|(gi, f)| {
+                            if f.branches
                                 .iter()
                                 .any(|b| branch_matches_with_ctx(def, def.ap, b, self_file_count))
+                            {
+                                Some(gi)
+                            } else {
+                                None
+                            }
                         })
+                        .collect()
                 })
-                .unwrap_or(false);
+                .unwrap_or_default();
+            let selectable = !matched_groups.is_empty();
             candidates.push(json!({
                 "instanceId": c.instance_id,
                 "definitionId": c.definition_id,
                 "name": self.card_name_by_def(&c.definition_id),
+                "cardType": self.catalog.get(&c.definition_id).map(|d| format!("{:?}", d.card_type)).unwrap_or_default(),
                 "level": self.catalog.get(&c.definition_id).map(|d| d.level).unwrap_or(0),
                 "ap": self.catalog.get(&c.definition_id).map(|d| d.ap).unwrap_or(0),
                 "colors": self.catalog.get(&c.definition_id).map(|d| d.colors.clone()).unwrap_or_default(),
                 "traits": self.catalog.get(&c.definition_id).map(|d| d.traits.clone()).unwrap_or_default(),
+                "matchedGroups": matched_groups,
                 "selectable": selectable,
             }));
         }
@@ -1385,6 +1454,28 @@ impl MatchEngine {
         } else {
             "残りをデッキ下へ"
         };
+        let title_text = if filter_groups.is_empty() {
+            format!(
+                "山札の上から{}枚めくりました。条件に合うカードを{}枚まで選び{}（{}）",
+                ds.search_count, max_select, title_action, rem_label
+            )
+        } else {
+            let group_summary = filter_groups
+                .iter()
+                .map(|g| {
+                    format!(
+                        "{}を{}枚まで",
+                        g["label"].as_str().unwrap_or("カード"),
+                        g["max"].as_u64().unwrap_or(1)
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("・");
+            format!(
+                "山札の上から{}枚めくりました。{}選び{}（{}）",
+                ds.search_count, group_summary, title_action, rem_label
+            )
+        };
         let chooser_id = if ds.opponent_chooses {
             self.opponent_id_of(player_id)
         } else {
@@ -1404,6 +1495,7 @@ impl MatchEngine {
                 "searchCount": ds.search_count,
                 "maxSelect": max_select,
                 "distinctColors": ds.filter.distinct_colors,
+                "filterGroups": filter_groups,
                 "pickAction": pick_action_str,
                 "postAddDiscard": ds.post_add_discard,
                 "postAddDiscardMinPicked": ds.post_add_discard_min_picked,
@@ -1417,7 +1509,7 @@ impl MatchEngine {
                 "followUpTarget": follow_up_target,
                 "afterHintLevel": after_hint_level,
                 "resumeContext": resume_context,
-                "title": format!("山札の上から{}枚めくりました。条件に合うカードを{}枚まで選び{}（{}）", ds.search_count, max_select, title_action, rem_label),
+                "title": title_text,
                 "revealedCards": candidates,
                 "optional": true
             }
