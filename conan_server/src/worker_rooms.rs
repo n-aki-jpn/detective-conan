@@ -127,13 +127,32 @@ fn pick_best_action(opts: &[Value]) -> Value {
         .unwrap_or_else(|| json!({ "type": "END_TURN" }))
 }
 
-fn build_cpu_decision(pd: &Value) -> Value {
+fn build_cpu_decision(engine: &MatchEngine, pd: &Value) -> Value {
     let decision_id = pd.get("decisionId").and_then(|v| v.as_str()).unwrap_or("");
     let revision = pd.get("revision").and_then(|v| v.as_u64()).unwrap_or(0);
     let decision_type = pd.get("type").and_then(|v| v.as_str()).unwrap_or("");
 
     let mut val = json!({ "type": "END_TURN" });
-    if let Some(opts) = pd
+    if decision_type == "MAIN_ACTION" {
+        if let Some(ps) = engine.players.get("player2") {
+            let file_count = ps.file.len() as i32;
+            // 1. FILE数以下のキャラがいれば登場
+            let playable_char = ps.hand.iter().find(|c| {
+                engine
+                    .catalog
+                    .get(&c.definition_id)
+                    .map(|d| d.card_type == crate::models::CardType::CHARACTER && d.level <= file_count)
+                    .unwrap_or(false)
+            });
+            if let Some(c) = playable_char {
+                val = json!({ "type": "PLAY_CHAR", "cardId": c.instance_id });
+            } else if let Some(partner) = ps.partner.as_ref() {
+                if partner.orientation == crate::models::CardOrientation::ACTIVE {
+                    val = json!({ "type": "DEDUCE", "actorId": partner.instance_id });
+                }
+            }
+        }
+    } else if let Some(opts) = pd
         .get("options")
         .or_else(|| pd.get("actions"))
         .and_then(|v| v.as_array())
@@ -143,8 +162,6 @@ fn build_cpu_decision(pd: &Value) -> Value {
         }
     } else if decision_type == "MULLIGAN" {
         val = json!({ "discardIds": [] });
-    } else if decision_type == "MAIN_ACTION" {
-        val = json!({ "type": "END_TURN" });
     }
     json!({
         "decisionId": decision_id,
@@ -165,7 +182,7 @@ fn run_cpu_turns(engine: &mut MatchEngine, rec: &mut RoomStateRecord) -> bool {
         if pd.get("playerId").and_then(|v| v.as_str()) != Some("player2") {
             break;
         }
-        let dec = build_cpu_decision(&pd);
+        let dec = build_cpu_decision(engine, &pd);
         match engine.submit_decision("player2", &dec) {
             Ok(_) => {
                 rec.decisions.push(("player2".to_string(), dec));
