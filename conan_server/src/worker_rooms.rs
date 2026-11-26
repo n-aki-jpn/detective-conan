@@ -108,15 +108,38 @@ async fn save_room(room_id: &str, rec: &RoomStateRecord, env: &Env) -> Result<()
     Ok(())
 }
 
+fn pick_best_action(opts: &[Value]) -> Value {
+    // 優先順位: PLAY_CHAR > ASSIST > DEDUCE > CONTACT/CASE/EVENT > その他 > END_TURN
+    let priority = |v: &Value| -> u8 {
+        match v.get("type").and_then(|t| t.as_str()).unwrap_or("") {
+            "PLAY_CHAR" => 0,
+            "ASSIST" => 1,
+            "DEDUCE" => 2,
+            "EVENT" | "PLAY_EVENT" => 3,
+            "CONTACT" | "ATTACK" | "CASE_ACTION" | "RESOLVE_CASE" => 4,
+            "END_TURN" | "PASS" => 9,
+            _ => 5,
+        }
+    };
+    opts.iter()
+        .min_by_key(|v| priority(v))
+        .cloned()
+        .unwrap_or_else(|| json!({ "type": "END_TURN" }))
+}
+
 fn build_cpu_decision(pd: &Value) -> Value {
     let decision_id = pd.get("decisionId").and_then(|v| v.as_str()).unwrap_or("");
     let revision = pd.get("revision").and_then(|v| v.as_u64()).unwrap_or(0);
     let decision_type = pd.get("type").and_then(|v| v.as_str()).unwrap_or("");
 
     let mut val = json!({ "type": "END_TURN" });
-    if let Some(opts) = pd.get("options").and_then(|v| v.as_array()) {
-        if let Some(first) = opts.first() {
-            val = first.clone();
+    if let Some(opts) = pd
+        .get("options")
+        .or_else(|| pd.get("actions"))
+        .and_then(|v| v.as_array())
+    {
+        if !opts.is_empty() {
+            val = pick_best_action(opts);
         }
     } else if decision_type == "MULLIGAN" {
         val = json!({ "discardIds": [] });
@@ -143,24 +166,26 @@ fn run_cpu_turns(engine: &mut MatchEngine, rec: &mut RoomStateRecord) -> bool {
             break;
         }
         let dec = build_cpu_decision(&pd);
-        if engine.submit_decision("player2", &dec).is_ok() {
-            rec.decisions.push(("player2".to_string(), dec));
-            changed = true;
-        } else {
-            // フォールバック: 必ず END_TURN を試みて手番を進める
-            let decision_id = pd.get("decisionId").and_then(|v| v.as_str()).unwrap_or("");
-            let revision = pd.get("revision").and_then(|v| v.as_u64()).unwrap_or(0);
-            let fallback = json!({
-                "decisionId": decision_id,
-                "revision": revision,
-                "value": { "type": "END_TURN" }
-            });
-            engine.logs.push("⚠️ CPU思考フォールバック: ターン終了(END_TURN)を実行しました".to_string());
-            if engine.submit_decision("player2", &fallback).is_ok() {
-                rec.decisions.push(("player2".to_string(), fallback));
+        match engine.submit_decision("player2", &dec) {
+            Ok(_) => {
+                rec.decisions.push(("player2".to_string(), dec));
                 changed = true;
-            } else {
-                break;
+            }
+            Err(e) => {
+                let decision_id = pd.get("decisionId").and_then(|v| v.as_str()).unwrap_or("");
+                let revision = pd.get("revision").and_then(|v| v.as_u64()).unwrap_or(0);
+                let fallback = json!({
+                    "decisionId": decision_id,
+                    "revision": revision,
+                    "value": { "type": "END_TURN" }
+                });
+                engine.logs.push(format!("⚠️ CPU思考エラー ({}): ターン終了へフォールバック", e));
+                if engine.submit_decision("player2", &fallback).is_ok() {
+                    rec.decisions.push(("player2".to_string(), fallback));
+                    changed = true;
+                } else {
+                    break;
+                }
             }
         }
     }
