@@ -112,12 +112,12 @@ fn run_cpu_turns(engine: &mut MatchEngine, rec: &mut RoomStateRecord) -> bool {
     if !rec.is_cpu {
         return false;
     }
-    let mut agent = crate::agent::RandomAgent::with_difficulty(
+    let agent = crate::agent::RandomAgent::with_difficulty(
         "player2",
-        crate::agent::CpuDifficulty::Strongest,
+        crate::agent::CpuDifficulty::Normal,
     );
     let mut changed = false;
-    for _ in 0..30 {
+    for step in 0..30 {
         let Some(pd) = engine.pending_decision.clone() else {
             break;
         };
@@ -126,7 +126,9 @@ fn run_cpu_turns(engine: &mut MatchEngine, rec: &mut RoomStateRecord) -> bool {
         }
         let decision_id = pd.get("decisionId").and_then(|v| v.as_str()).unwrap_or("");
         let revision = pd.get("revision").and_then(|v| v.as_u64()).unwrap_or(0);
+        let dec_type = pd.get("type").and_then(|v| v.as_str()).unwrap_or("");
         let val = agent.choose_action_with_engine(engine, &pd);
+        let act_type = val.get("type").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
         let dec = json!({
             "decisionId": decision_id,
             "revision": revision,
@@ -143,7 +145,7 @@ fn run_cpu_turns(engine: &mut MatchEngine, rec: &mut RoomStateRecord) -> bool {
                     "revision": revision,
                     "value": { "type": "END_TURN" }
                 });
-                engine.logs.push(format!("⚠️ CPU思考エラー ({}): ターン終了へフォールバック", e));
+                engine.logs.push(format!("⚠️ CPU思考エラー(step={}, dec={}, act={}): {}", step, dec_type, act_type, e));
                 if engine.submit_decision("player2", &fallback).is_ok() {
                     rec.decisions.push(("player2".to_string(), fallback));
                     changed = true;
