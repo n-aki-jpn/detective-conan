@@ -204,6 +204,7 @@ pub fn check_action_trigger_match(
     kind: ActionEventKind,
     owner_is_acting: bool,
     self_instance_id: &str,
+    self_set_cards_len: usize,
     actor_instance_id: &str,
     actor_def: &CardDefinition,
     actor_ap: i32,
@@ -212,6 +213,16 @@ pub fn check_action_trigger_match(
     target_ap: Option<i32>,
 ) -> bool {
     let clean = strip_parens(clause);
+    let leading_tags = extract_leading_bracket_tags(&clean);
+    for tag in &leading_tags {
+        if let Some(num_s) = tag.strip_suffix("枚以上") {
+            if let Ok(req_under) = num_s.parse::<usize>() {
+                if self_set_cards_len < req_under {
+                    return false;
+                }
+            }
+        }
+    }
     let body = strip_leading_tags(&clean);
     let Some((trig, _)) = body.split_once("とき、") else {
         return false;

@@ -1026,11 +1026,18 @@ impl MatchEngine {
                     if in_partner && def.card_type != CardType::PARTNER && !allows_partner_area(&clause) {
                         continue;
                     }
+                    let watcher_under_len = self
+                        .players
+                        .get(&watch_pid)
+                        .and_then(|ps| ps.field.iter().find(|c| c.instance_id == watcher_id))
+                        .map(|c| c.set_cards.len())
+                        .unwrap_or(0);
                     if !check_action_trigger_match(
                         &clause,
                         kind,
                         owner_is_acting,
                         &watcher_id,
+                        watcher_under_len,
                         actor_id,
                         &actor_def,
                         actor_ap,
